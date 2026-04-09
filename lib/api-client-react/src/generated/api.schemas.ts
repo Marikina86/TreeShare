@@ -8,3 +8,397 @@
 export interface HealthStatus {
   status: string;
 }
+
+export interface Tree {
+  id: number;
+  userId: string;
+  username: string;
+  userPhotoUrl?: string | null;
+  photoUrl: string;
+  photoThumbnailUrl?: string | null;
+  plantName?: string | null;
+  caption?: string | null;
+  species?: string | null;
+  plantedAt?: string | null;
+  latitude: number;
+  longitude: number;
+  locationName?: string | null;
+  country?: string | null;
+  province?: string | null;
+  mapsUrl?: string | null;
+  verificationBypassed: boolean;
+  photoStatus: string;
+  updateCount: number;
+  sunCount: number;
+  userHasSunned: boolean;
+  isWeeklyWinner: boolean;
+  createdAt: string;
+}
+
+export interface PaginatedTrees {
+  trees: Tree[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
+export interface TreeUpdate {
+  id: number;
+  treeId: number;
+  photoUrl?: string | null;
+  note?: string | null;
+  photoStatus: string;
+  createdAt: string;
+}
+
+export interface CreateTreeBody {
+  photoUrl: string;
+  photoThumbnailUrl?: string | null;
+  plantName?: string | null;
+  caption?: string | null;
+  species?: string | null;
+  plantedAt?: string | null;
+  latitude: number;
+  longitude: number;
+  locationName?: string | null;
+  country?: string | null;
+  province?: string | null;
+  verificationBypassed?: boolean | null;
+  photoStatus?: string | null;
+}
+
+export interface PatchTreeBody {
+  plantName?: string | null;
+  caption?: string | null;
+  species?: string | null;
+  plantedAt?: string | null;
+  locationName?: string | null;
+  country?: string | null;
+  latitude?: number;
+  longitude?: number;
+}
+
+export interface AddTreeUpdateBody {
+  photoUrl?: string | null;
+  note?: string | null;
+}
+
+export interface UserProfile {
+  id: number;
+  clerkUserId: string;
+  username: string;
+  photoUrl?: string | null;
+  country?: string | null;
+  city?: string | null;
+  treesPlanted: number;
+  isBlocked: boolean;
+  isAdmin: boolean;
+  createdAt: string;
+}
+
+export interface UpsertMyProfileBody {
+  /** @maxLength 30 */
+  username: string;
+  photoUrl?: string | null;
+  country?: string | null;
+  city?: string | null;
+}
+
+export interface TopPlanter {
+  userId: string;
+  username: string;
+  photoUrl?: string | null;
+  city?: string | null;
+  country?: string | null;
+  treeCount: number;
+}
+
+export interface Event {
+  id: number;
+  userId: string;
+  username: string;
+  userPhotoUrl?: string | null;
+  title: string;
+  description?: string | null;
+  location: string;
+  address?: string | null;
+  city?: string | null;
+  province?: string | null;
+  eventDate: string;
+  eventTime: string;
+  endDate?: string | null;
+  endTime?: string | null;
+  participantCount: number;
+  isParticipating: boolean;
+  createdAt: string;
+}
+
+export interface CreateEventBody {
+  /** @maxLength 200 */
+  title: string;
+  description?: string | null;
+  /** @maxLength 200 */
+  location: string;
+  address?: string | null;
+  city?: string | null;
+  province?: string | null;
+  eventDate: string;
+  eventTime: string;
+  endDate?: string | null;
+  endTime?: string | null;
+}
+
+export interface UpdateEventBody {
+  /** @maxLength 200 */
+  title?: string;
+  description?: string | null;
+  /** @maxLength 200 */
+  location?: string;
+  address?: string | null;
+  city?: string | null;
+  province?: string | null;
+  eventDate?: string;
+  eventTime?: string;
+  endDate?: string | null;
+  endTime?: string | null;
+}
+
+export interface Alert {
+  id: number;
+  title: string;
+  message: string;
+  priority: string;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Tip {
+  id: number;
+  title: string;
+  description: string;
+  category: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Notification {
+  id: number;
+  userId: string;
+  title: string;
+  message: string;
+  isRead: boolean;
+  createdAt: string;
+}
+
+export interface Inbox {
+  alerts: Alert[];
+  notifications: Notification[];
+  tips: Tip[];
+}
+
+export interface CreateReportBody {
+  reportedUserId?: string | null;
+  treeId?: number | null;
+  eventId?: number | null;
+  reason: string;
+  notes?: string | null;
+}
+
+export interface CreateProblemReportBody {
+  category: string;
+  description: string;
+}
+
+export interface GlobalStats {
+  totalTrees: number;
+  totalUsers: number;
+  totalCountries: number;
+  recentPlanters: number;
+}
+
+export type MapMarkerTreesItem = { [key: string]: unknown };
+
+export interface MapMarker {
+  latitude: number;
+  longitude: number;
+  count: number;
+  locationName?: string | null;
+  trees: MapMarkerTreesItem[];
+}
+
+export interface RequestUploadUrlBody {
+  name: string;
+  size: number;
+  contentType: string;
+}
+
+export type UploadUrlResponseMetadata = {
+  name: string;
+  size: number;
+  contentType: string;
+};
+
+export interface UploadUrlResponse {
+  uploadURL: string;
+  metadata: UploadUrlResponseMetadata;
+}
+
+export interface RegisterEnteBody {
+  ragioneSociale: string;
+  partitaIva: string;
+  codiceFiscale: string;
+  codiceUnivoco: string;
+  formaGiuridica: string;
+  numeroRegistroImprese?: string | null;
+  indirizzoVia: string;
+  indirizzoCitta: string;
+  indirizzoCap: string;
+  indirizzoStato: string;
+  emailUfficiale: string;
+  telefono: string;
+  referenteNome: string;
+  referenteCognome: string;
+  username: string;
+  password: string;
+  ruoloUtente: string;
+  numeroLicenze: number;
+}
+
+export interface AdminStats {
+  totalUsers: number;
+  totalTrees: number;
+  blockedUsers: number;
+}
+
+export interface AdminUser {
+  id: number;
+  clerkUserId: string;
+  username: string;
+  photoUrl?: string | null;
+  country?: string | null;
+  city?: string | null;
+  treesPlanted: number;
+  isBlocked: boolean;
+  createdAt: string;
+}
+
+export interface CreateAlertBody {
+  title: string;
+  message: string;
+  priority?: string;
+}
+
+export interface UpdateAlertBody {
+  title?: string;
+  message?: string;
+  priority?: string;
+}
+
+export interface CreateTipBody {
+  title: string;
+  description: string;
+  category: string;
+}
+
+export interface UpdateTipBody {
+  title?: string;
+  description?: string;
+  category?: string;
+}
+
+export interface VerifyPlantBody {
+  imageBase64: string;
+  mimeType: string;
+}
+
+export interface PlantVerificationResult {
+  isPlant?: boolean | null;
+  label: string;
+  reason: string;
+  model?: string;
+  aiUnavailable?: boolean;
+}
+
+export type ListTreesParams = {
+  page?: number;
+  limit?: number;
+  userId?: string;
+  province?: string;
+};
+
+export type GetRecentTreesParams = {
+  limit?: number;
+};
+
+export type SunTree200 = {
+  sunCount: number;
+  userHasSunned: boolean;
+};
+
+export type UnsunTree200 = {
+  sunCount: number;
+  userHasSunned: boolean;
+};
+
+export type GetTopPlantersParams = {
+  limit?: number;
+};
+
+export type ListEventsParams = {
+  province?: string;
+  city?: string;
+};
+
+export type MarkAllNotificationsRead200 = {
+  success: boolean;
+};
+
+export type CreateReport201 = {
+  id: number;
+  status: string;
+};
+
+export type CreateProblemReport201 = {
+  id: number;
+};
+
+export type GetMapMarkersParams = {
+  precision?: number;
+};
+
+export type RegisterEnte201 = {
+  id: number;
+  ragioneSociale: string;
+  username: string;
+  emailUfficiale: string;
+  createdAt: string;
+};
+
+export type GetCurrentWeeklyWinners200 = { [key: string]: unknown };
+
+export type ListWeeklyWinners200Item = { [key: string]: unknown };
+
+export type ListAdminUsersParams = {
+  search?: string;
+};
+
+export type ListAdminTreesParams = {
+  search?: string;
+  page?: number;
+};
+
+export type ListAdminTrees200 = { [key: string]: unknown };
+
+export type ListAdminProblemReports200Item = { [key: string]: unknown };
+
+export type UpdateProblemReportStatusBody = {
+  status: string;
+  adminNote?: string;
+};
+
+export type ReplyToProblemReportBody = {
+  replyText: string;
+};
+
+export type ListAdminReports200Item = { [key: string]: unknown };

@@ -8,9 +8,894 @@
 import * as zod from "zod";
 
 /**
- * Returns server health status
  * @summary Health check
  */
 export const HealthCheckResponse = zod.object({
   status: zod.string(),
+});
+
+/**
+ * @summary List trees (feed)
+ */
+export const ListTreesQueryParams = zod.object({
+  page: zod.coerce.number().optional(),
+  limit: zod.coerce.number().optional(),
+  userId: zod.coerce.string().optional(),
+  province: zod.coerce.string().optional(),
+});
+
+export const ListTreesResponse = zod.object({
+  trees: zod.array(
+    zod.object({
+      id: zod.number(),
+      userId: zod.string(),
+      username: zod.string(),
+      userPhotoUrl: zod.string().nullish(),
+      photoUrl: zod.string(),
+      photoThumbnailUrl: zod.string().nullish(),
+      plantName: zod.string().nullish(),
+      caption: zod.string().nullish(),
+      species: zod.string().nullish(),
+      plantedAt: zod.string().nullish(),
+      latitude: zod.number(),
+      longitude: zod.number(),
+      locationName: zod.string().nullish(),
+      country: zod.string().nullish(),
+      province: zod.string().nullish(),
+      mapsUrl: zod.string().nullish(),
+      verificationBypassed: zod.boolean(),
+      photoStatus: zod.string(),
+      updateCount: zod.number(),
+      sunCount: zod.number(),
+      userHasSunned: zod.boolean(),
+      isWeeklyWinner: zod.boolean(),
+      createdAt: zod.string(),
+    }),
+  ),
+  total: zod.number(),
+  page: zod.number(),
+  limit: zod.number(),
+});
+
+/**
+ * @summary Create a tree
+ */
+export const CreateTreeBody = zod.object({
+  photoUrl: zod.string(),
+  photoThumbnailUrl: zod.string().nullish(),
+  plantName: zod.string().nullish(),
+  caption: zod.string().nullish(),
+  species: zod.string().nullish(),
+  plantedAt: zod.string().nullish(),
+  latitude: zod.number(),
+  longitude: zod.number(),
+  locationName: zod.string().nullish(),
+  country: zod.string().nullish(),
+  province: zod.string().nullish(),
+  verificationBypassed: zod.boolean().nullish(),
+  photoStatus: zod.string().nullish(),
+});
+
+/**
+ * @summary Get recent trees
+ */
+export const GetRecentTreesQueryParams = zod.object({
+  limit: zod.coerce.number().optional(),
+});
+
+export const GetRecentTreesResponseItem = zod.object({
+  id: zod.number(),
+  userId: zod.string(),
+  username: zod.string(),
+  userPhotoUrl: zod.string().nullish(),
+  photoUrl: zod.string(),
+  photoThumbnailUrl: zod.string().nullish(),
+  plantName: zod.string().nullish(),
+  caption: zod.string().nullish(),
+  species: zod.string().nullish(),
+  plantedAt: zod.string().nullish(),
+  latitude: zod.number(),
+  longitude: zod.number(),
+  locationName: zod.string().nullish(),
+  country: zod.string().nullish(),
+  province: zod.string().nullish(),
+  mapsUrl: zod.string().nullish(),
+  verificationBypassed: zod.boolean(),
+  photoStatus: zod.string(),
+  updateCount: zod.number(),
+  sunCount: zod.number(),
+  userHasSunned: zod.boolean(),
+  isWeeklyWinner: zod.boolean(),
+  createdAt: zod.string(),
+});
+export const GetRecentTreesResponse = zod.array(GetRecentTreesResponseItem);
+
+/**
+ * @summary Get a tree
+ */
+export const GetTreeParams = zod.object({
+  treeId: zod.coerce.number(),
+});
+
+export const GetTreeResponse = zod.object({
+  id: zod.number(),
+  userId: zod.string(),
+  username: zod.string(),
+  userPhotoUrl: zod.string().nullish(),
+  photoUrl: zod.string(),
+  photoThumbnailUrl: zod.string().nullish(),
+  plantName: zod.string().nullish(),
+  caption: zod.string().nullish(),
+  species: zod.string().nullish(),
+  plantedAt: zod.string().nullish(),
+  latitude: zod.number(),
+  longitude: zod.number(),
+  locationName: zod.string().nullish(),
+  country: zod.string().nullish(),
+  province: zod.string().nullish(),
+  mapsUrl: zod.string().nullish(),
+  verificationBypassed: zod.boolean(),
+  photoStatus: zod.string(),
+  updateCount: zod.number(),
+  sunCount: zod.number(),
+  userHasSunned: zod.boolean(),
+  isWeeklyWinner: zod.boolean(),
+  createdAt: zod.string(),
+});
+
+/**
+ * @summary Patch a tree
+ */
+export const PatchTreeParams = zod.object({
+  treeId: zod.coerce.number(),
+});
+
+export const PatchTreeBody = zod.object({
+  plantName: zod.string().nullish(),
+  caption: zod.string().nullish(),
+  species: zod.string().nullish(),
+  plantedAt: zod.string().nullish(),
+  locationName: zod.string().nullish(),
+  country: zod.string().nullish(),
+  latitude: zod.number().optional(),
+  longitude: zod.number().optional(),
+});
+
+export const PatchTreeResponse = zod.object({
+  id: zod.number(),
+  userId: zod.string(),
+  username: zod.string(),
+  userPhotoUrl: zod.string().nullish(),
+  photoUrl: zod.string(),
+  photoThumbnailUrl: zod.string().nullish(),
+  plantName: zod.string().nullish(),
+  caption: zod.string().nullish(),
+  species: zod.string().nullish(),
+  plantedAt: zod.string().nullish(),
+  latitude: zod.number(),
+  longitude: zod.number(),
+  locationName: zod.string().nullish(),
+  country: zod.string().nullish(),
+  province: zod.string().nullish(),
+  mapsUrl: zod.string().nullish(),
+  verificationBypassed: zod.boolean(),
+  photoStatus: zod.string(),
+  updateCount: zod.number(),
+  sunCount: zod.number(),
+  userHasSunned: zod.boolean(),
+  isWeeklyWinner: zod.boolean(),
+  createdAt: zod.string(),
+});
+
+/**
+ * @summary Delete a tree
+ */
+export const DeleteTreeParams = zod.object({
+  treeId: zod.coerce.number(),
+});
+
+/**
+ * @summary Get tree updates
+ */
+export const GetTreeUpdatesParams = zod.object({
+  treeId: zod.coerce.number(),
+});
+
+export const GetTreeUpdatesResponseItem = zod.object({
+  id: zod.number(),
+  treeId: zod.number(),
+  photoUrl: zod.string().nullish(),
+  note: zod.string().nullish(),
+  photoStatus: zod.string(),
+  createdAt: zod.string(),
+});
+export const GetTreeUpdatesResponse = zod.array(GetTreeUpdatesResponseItem);
+
+/**
+ * @summary Add a tree update
+ */
+export const AddTreeUpdateParams = zod.object({
+  treeId: zod.coerce.number(),
+});
+
+export const AddTreeUpdateBody = zod.object({
+  photoUrl: zod.string().nullish(),
+  note: zod.string().nullish(),
+});
+
+/**
+ * @summary Delete a tree update
+ */
+export const DeleteTreeUpdateParams = zod.object({
+  treeId: zod.coerce.number(),
+  updateId: zod.coerce.number(),
+});
+
+/**
+ * @summary Sun a tree
+ */
+export const SunTreeParams = zod.object({
+  treeId: zod.coerce.number(),
+});
+
+export const SunTreeResponse = zod.object({
+  sunCount: zod.number(),
+  userHasSunned: zod.boolean(),
+});
+
+/**
+ * @summary Unsun a tree
+ */
+export const UnsunTreeParams = zod.object({
+  treeId: zod.coerce.number(),
+});
+
+export const UnsunTreeResponse = zod.object({
+  sunCount: zod.number(),
+  userHasSunned: zod.boolean(),
+});
+
+/**
+ * @summary Get my profile
+ */
+export const GetMyProfileResponse = zod.object({
+  id: zod.number(),
+  clerkUserId: zod.string(),
+  username: zod.string(),
+  photoUrl: zod.string().nullish(),
+  country: zod.string().nullish(),
+  city: zod.string().nullish(),
+  treesPlanted: zod.number(),
+  isBlocked: zod.boolean(),
+  isAdmin: zod.boolean(),
+  createdAt: zod.string(),
+});
+
+/**
+ * @summary Upsert my profile
+ */
+export const upsertMyProfileBodyUsernameMax = 30;
+
+export const UpsertMyProfileBody = zod.object({
+  username: zod.string().max(upsertMyProfileBodyUsernameMax),
+  photoUrl: zod.string().nullish(),
+  country: zod.string().nullish(),
+  city: zod.string().nullish(),
+});
+
+export const UpsertMyProfileResponse = zod.object({
+  id: zod.number(),
+  clerkUserId: zod.string(),
+  username: zod.string(),
+  photoUrl: zod.string().nullish(),
+  country: zod.string().nullish(),
+  city: zod.string().nullish(),
+  treesPlanted: zod.number(),
+  isBlocked: zod.boolean(),
+  isAdmin: zod.boolean(),
+  createdAt: zod.string(),
+});
+
+/**
+ * @summary Get a user profile by ID
+ */
+export const GetUserProfileParams = zod.object({
+  userId: zod.coerce.string(),
+});
+
+export const GetUserProfileResponse = zod.object({
+  id: zod.number(),
+  clerkUserId: zod.string(),
+  username: zod.string(),
+  photoUrl: zod.string().nullish(),
+  country: zod.string().nullish(),
+  city: zod.string().nullish(),
+  treesPlanted: zod.number(),
+  isBlocked: zod.boolean(),
+  isAdmin: zod.boolean(),
+  createdAt: zod.string(),
+});
+
+/**
+ * @summary Get top planters
+ */
+export const GetTopPlantersQueryParams = zod.object({
+  limit: zod.coerce.number().optional(),
+});
+
+export const GetTopPlantersResponseItem = zod.object({
+  userId: zod.string(),
+  username: zod.string(),
+  photoUrl: zod.string().nullish(),
+  city: zod.string().nullish(),
+  country: zod.string().nullish(),
+  treeCount: zod.number(),
+});
+export const GetTopPlantersResponse = zod.array(GetTopPlantersResponseItem);
+
+/**
+ * @summary List events
+ */
+export const ListEventsQueryParams = zod.object({
+  province: zod.coerce.string().optional(),
+  city: zod.coerce.string().optional(),
+});
+
+export const ListEventsResponseItem = zod.object({
+  id: zod.number(),
+  userId: zod.string(),
+  username: zod.string(),
+  userPhotoUrl: zod.string().nullish(),
+  title: zod.string(),
+  description: zod.string().nullish(),
+  location: zod.string(),
+  address: zod.string().nullish(),
+  city: zod.string().nullish(),
+  province: zod.string().nullish(),
+  eventDate: zod.string(),
+  eventTime: zod.string(),
+  endDate: zod.string().nullish(),
+  endTime: zod.string().nullish(),
+  participantCount: zod.number(),
+  isParticipating: zod.boolean(),
+  createdAt: zod.string(),
+});
+export const ListEventsResponse = zod.array(ListEventsResponseItem);
+
+/**
+ * @summary Create an event
+ */
+export const createEventBodyTitleMax = 200;
+
+export const createEventBodyLocationMax = 200;
+
+export const CreateEventBody = zod.object({
+  title: zod.string().max(createEventBodyTitleMax),
+  description: zod.string().nullish(),
+  location: zod.string().max(createEventBodyLocationMax),
+  address: zod.string().nullish(),
+  city: zod.string().nullish(),
+  province: zod.string().nullish(),
+  eventDate: zod.string(),
+  eventTime: zod.string(),
+  endDate: zod.string().nullish(),
+  endTime: zod.string().nullish(),
+});
+
+/**
+ * @summary Get an event
+ */
+export const GetEventParams = zod.object({
+  eventId: zod.coerce.number(),
+});
+
+export const GetEventResponse = zod.object({
+  id: zod.number(),
+  userId: zod.string(),
+  username: zod.string(),
+  userPhotoUrl: zod.string().nullish(),
+  title: zod.string(),
+  description: zod.string().nullish(),
+  location: zod.string(),
+  address: zod.string().nullish(),
+  city: zod.string().nullish(),
+  province: zod.string().nullish(),
+  eventDate: zod.string(),
+  eventTime: zod.string(),
+  endDate: zod.string().nullish(),
+  endTime: zod.string().nullish(),
+  participantCount: zod.number(),
+  isParticipating: zod.boolean(),
+  createdAt: zod.string(),
+});
+
+/**
+ * @summary Update an event
+ */
+export const UpdateEventParams = zod.object({
+  eventId: zod.coerce.number(),
+});
+
+export const updateEventBodyTitleMax = 200;
+
+export const updateEventBodyLocationMax = 200;
+
+export const UpdateEventBody = zod.object({
+  title: zod.string().max(updateEventBodyTitleMax).optional(),
+  description: zod.string().nullish(),
+  location: zod.string().max(updateEventBodyLocationMax).optional(),
+  address: zod.string().nullish(),
+  city: zod.string().nullish(),
+  province: zod.string().nullish(),
+  eventDate: zod.string().optional(),
+  eventTime: zod.string().optional(),
+  endDate: zod.string().nullish(),
+  endTime: zod.string().nullish(),
+});
+
+export const UpdateEventResponse = zod.object({
+  id: zod.number(),
+  userId: zod.string(),
+  username: zod.string(),
+  userPhotoUrl: zod.string().nullish(),
+  title: zod.string(),
+  description: zod.string().nullish(),
+  location: zod.string(),
+  address: zod.string().nullish(),
+  city: zod.string().nullish(),
+  province: zod.string().nullish(),
+  eventDate: zod.string(),
+  eventTime: zod.string(),
+  endDate: zod.string().nullish(),
+  endTime: zod.string().nullish(),
+  participantCount: zod.number(),
+  isParticipating: zod.boolean(),
+  createdAt: zod.string(),
+});
+
+/**
+ * @summary Delete an event
+ */
+export const DeleteEventParams = zod.object({
+  eventId: zod.coerce.number(),
+});
+
+/**
+ * @summary Join an event
+ */
+export const JoinEventParams = zod.object({
+  eventId: zod.coerce.number(),
+});
+
+export const JoinEventResponse = zod.object({
+  id: zod.number(),
+  userId: zod.string(),
+  username: zod.string(),
+  userPhotoUrl: zod.string().nullish(),
+  title: zod.string(),
+  description: zod.string().nullish(),
+  location: zod.string(),
+  address: zod.string().nullish(),
+  city: zod.string().nullish(),
+  province: zod.string().nullish(),
+  eventDate: zod.string(),
+  eventTime: zod.string(),
+  endDate: zod.string().nullish(),
+  endTime: zod.string().nullish(),
+  participantCount: zod.number(),
+  isParticipating: zod.boolean(),
+  createdAt: zod.string(),
+});
+
+/**
+ * @summary Leave an event
+ */
+export const LeaveEventParams = zod.object({
+  eventId: zod.coerce.number(),
+});
+
+export const LeaveEventResponse = zod.object({
+  id: zod.number(),
+  userId: zod.string(),
+  username: zod.string(),
+  userPhotoUrl: zod.string().nullish(),
+  title: zod.string(),
+  description: zod.string().nullish(),
+  location: zod.string(),
+  address: zod.string().nullish(),
+  city: zod.string().nullish(),
+  province: zod.string().nullish(),
+  eventDate: zod.string(),
+  eventTime: zod.string(),
+  endDate: zod.string().nullish(),
+  endTime: zod.string().nullish(),
+  participantCount: zod.number(),
+  isParticipating: zod.boolean(),
+  createdAt: zod.string(),
+});
+
+/**
+ * @summary List alerts
+ */
+export const ListAlertsResponseItem = zod.object({
+  id: zod.number(),
+  title: zod.string(),
+  message: zod.string(),
+  priority: zod.string(),
+  createdBy: zod.string(),
+  createdAt: zod.string(),
+  updatedAt: zod.string(),
+});
+export const ListAlertsResponse = zod.array(ListAlertsResponseItem);
+
+/**
+ * @summary List tips
+ */
+export const ListTipsResponseItem = zod.object({
+  id: zod.number(),
+  title: zod.string(),
+  description: zod.string(),
+  category: zod.string(),
+  createdAt: zod.string(),
+  updatedAt: zod.string(),
+});
+export const ListTipsResponse = zod.array(ListTipsResponseItem);
+
+/**
+ * @summary Get inbox (alerts + notifications + tips)
+ */
+export const GetInboxResponse = zod.object({
+  alerts: zod.array(
+    zod.object({
+      id: zod.number(),
+      title: zod.string(),
+      message: zod.string(),
+      priority: zod.string(),
+      createdBy: zod.string(),
+      createdAt: zod.string(),
+      updatedAt: zod.string(),
+    }),
+  ),
+  notifications: zod.array(
+    zod.object({
+      id: zod.number(),
+      userId: zod.string(),
+      title: zod.string(),
+      message: zod.string(),
+      isRead: zod.boolean(),
+      createdAt: zod.string(),
+    }),
+  ),
+  tips: zod.array(
+    zod.object({
+      id: zod.number(),
+      title: zod.string(),
+      description: zod.string(),
+      category: zod.string(),
+      createdAt: zod.string(),
+      updatedAt: zod.string(),
+    }),
+  ),
+});
+
+/**
+ * @summary Mark all notifications as read
+ */
+export const MarkAllNotificationsReadResponse = zod.object({
+  success: zod.boolean(),
+});
+
+/**
+ * @summary Mark a notification as read
+ */
+export const MarkNotificationReadParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const MarkNotificationReadResponse = zod.object({
+  id: zod.number(),
+  userId: zod.string(),
+  title: zod.string(),
+  message: zod.string(),
+  isRead: zod.boolean(),
+  createdAt: zod.string(),
+});
+
+/**
+ * @summary Submit a report
+ */
+export const CreateReportBody = zod.object({
+  reportedUserId: zod.string().nullish(),
+  treeId: zod.number().nullish(),
+  eventId: zod.number().nullish(),
+  reason: zod.string(),
+  notes: zod.string().nullish(),
+});
+
+/**
+ * @summary Submit a problem report
+ */
+export const CreateProblemReportBody = zod.object({
+  category: zod.string(),
+  description: zod.string(),
+});
+
+/**
+ * @summary Global statistics
+ */
+export const GetGlobalStatsResponse = zod.object({
+  totalTrees: zod.number(),
+  totalUsers: zod.number(),
+  totalCountries: zod.number(),
+  recentPlanters: zod.number(),
+});
+
+/**
+ * @summary Get map markers
+ */
+export const GetMapMarkersQueryParams = zod.object({
+  precision: zod.coerce.number().optional(),
+});
+
+export const GetMapMarkersResponseItem = zod.object({
+  latitude: zod.number(),
+  longitude: zod.number(),
+  count: zod.number(),
+  locationName: zod.string().nullish(),
+  trees: zod.array(zod.object({}).passthrough()),
+});
+export const GetMapMarkersResponse = zod.array(GetMapMarkersResponseItem);
+
+/**
+ * @summary Request an upload URL
+ */
+export const RequestUploadUrlBody = zod.object({
+  name: zod.string(),
+  size: zod.number(),
+  contentType: zod.string(),
+});
+
+export const RequestUploadUrlResponse = zod.object({
+  uploadURL: zod.string(),
+  metadata: zod.object({
+    name: zod.string(),
+    size: zod.number(),
+    contentType: zod.string(),
+  }),
+});
+
+/**
+ * @summary Register an organization
+ */
+export const RegisterEnteBody = zod.object({
+  ragioneSociale: zod.string(),
+  partitaIva: zod.string(),
+  codiceFiscale: zod.string(),
+  codiceUnivoco: zod.string(),
+  formaGiuridica: zod.string(),
+  numeroRegistroImprese: zod.string().nullish(),
+  indirizzoVia: zod.string(),
+  indirizzoCitta: zod.string(),
+  indirizzoCap: zod.string(),
+  indirizzoStato: zod.string(),
+  emailUfficiale: zod.string(),
+  telefono: zod.string(),
+  referenteNome: zod.string(),
+  referenteCognome: zod.string(),
+  username: zod.string(),
+  password: zod.string(),
+  ruoloUtente: zod.string(),
+  numeroLicenze: zod.number(),
+});
+
+/**
+ * @summary Get current weekly winners
+ */
+export const GetCurrentWeeklyWinnersResponse = zod.object({}).passthrough();
+
+/**
+ * @summary List all weekly winners
+ */
+export const ListWeeklyWinnersResponseItem = zod.object({}).passthrough();
+export const ListWeeklyWinnersResponse = zod.array(
+  ListWeeklyWinnersResponseItem,
+);
+
+/**
+ * @summary Admin statistics
+ */
+export const GetAdminStatsResponse = zod.object({
+  totalUsers: zod.number(),
+  totalTrees: zod.number(),
+  blockedUsers: zod.number(),
+});
+
+/**
+ * @summary List all users (admin)
+ */
+export const ListAdminUsersQueryParams = zod.object({
+  search: zod.coerce.string().optional(),
+});
+
+export const ListAdminUsersResponseItem = zod.object({
+  id: zod.number(),
+  clerkUserId: zod.string(),
+  username: zod.string(),
+  photoUrl: zod.string().nullish(),
+  country: zod.string().nullish(),
+  city: zod.string().nullish(),
+  treesPlanted: zod.number(),
+  isBlocked: zod.boolean(),
+  createdAt: zod.string(),
+});
+export const ListAdminUsersResponse = zod.array(ListAdminUsersResponseItem);
+
+/**
+ * @summary Block a user
+ */
+export const BlockUserParams = zod.object({
+  clerkUserId: zod.coerce.string(),
+});
+
+/**
+ * @summary Unblock a user
+ */
+export const UnblockUserParams = zod.object({
+  clerkUserId: zod.coerce.string(),
+});
+
+/**
+ * @summary Delete a user (admin)
+ */
+export const DeleteAdminUserParams = zod.object({
+  clerkUserId: zod.coerce.string(),
+});
+
+/**
+ * @summary List trees for moderation (admin)
+ */
+export const ListAdminTreesQueryParams = zod.object({
+  search: zod.coerce.string().optional(),
+  page: zod.coerce.number().optional(),
+});
+
+export const ListAdminTreesResponse = zod.object({}).passthrough();
+
+/**
+ * @summary Approve a tree photo
+ */
+export const ApproveTreeParams = zod.object({
+  treeId: zod.coerce.number(),
+});
+
+/**
+ * @summary Reject a tree photo
+ */
+export const RejectTreeParams = zod.object({
+  treeId: zod.coerce.number(),
+});
+
+/**
+ * @summary Delete a tree (admin)
+ */
+export const DeleteAdminTreeParams = zod.object({
+  treeId: zod.coerce.number(),
+});
+
+/**
+ * @summary List problem reports (admin)
+ */
+export const ListAdminProblemReportsResponseItem = zod.object({}).passthrough();
+export const ListAdminProblemReportsResponse = zod.array(
+  ListAdminProblemReportsResponseItem,
+);
+
+/**
+ * @summary Update problem report status (admin)
+ */
+export const UpdateProblemReportStatusParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const UpdateProblemReportStatusBody = zod.object({
+  status: zod.string(),
+  adminNote: zod.string().optional(),
+});
+
+/**
+ * @summary Reply to a problem report (admin)
+ */
+export const ReplyToProblemReportParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const ReplyToProblemReportBody = zod.object({
+  replyText: zod.string(),
+});
+
+/**
+ * @summary List reports (admin)
+ */
+export const ListAdminReportsResponseItem = zod.object({}).passthrough();
+export const ListAdminReportsResponse = zod.array(ListAdminReportsResponseItem);
+
+/**
+ * @summary Resolve a report (admin)
+ */
+export const ResolveReportParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+/**
+ * @summary Create an alert (admin)
+ */
+export const CreateAlertBody = zod.object({
+  title: zod.string(),
+  message: zod.string(),
+  priority: zod.string().optional(),
+});
+
+/**
+ * @summary Update an alert (admin)
+ */
+export const UpdateAlertParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const UpdateAlertBody = zod.object({
+  title: zod.string().optional(),
+  message: zod.string().optional(),
+  priority: zod.string().optional(),
+});
+
+/**
+ * @summary Delete an alert (admin)
+ */
+export const DeleteAlertParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+/**
+ * @summary Create a tip (admin)
+ */
+export const CreateTipBody = zod.object({
+  title: zod.string(),
+  description: zod.string(),
+  category: zod.string(),
+});
+
+/**
+ * @summary Update a tip (admin)
+ */
+export const UpdateTipParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const UpdateTipBody = zod.object({
+  title: zod.string().optional(),
+  description: zod.string().optional(),
+  category: zod.string().optional(),
+});
+
+/**
+ * @summary Delete a tip (admin)
+ */
+export const DeleteTipParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+/**
+ * @summary Verify plant in image via AI
+ */
+export const VerifyPlantBody = zod.object({
+  imageBase64: zod.string(),
+  mimeType: zod.string(),
+});
+
+export const VerifyPlantResponse = zod.object({
+  isPlant: zod.boolean().nullish(),
+  label: zod.string(),
+  reason: zod.string(),
+  model: zod.string().optional(),
+  aiUnavailable: zod.boolean().optional(),
 });

@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/"
+title = "TreeShare"
+version = "1.0.0"
+id = "artifacts/treeshare"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 19256
+
+[services.development]
+run = "pnpm --filter @workspace/treeshare run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/treeshare", "run", "build" ]
+publicDir = "artifacts/treeshare/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "19256"
+BASE_PATH = "/"

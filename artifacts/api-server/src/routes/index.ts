@@ -1,8 +1,38 @@
 import { Router, type IRouter } from "express";
 import healthRouter from "./health";
+import storageRouter from "./storage";
+import usersRouter from "./users";
+import treesRouter from "./trees";
+import mapRouter from "./map";
+import eventsRouter from "./events";
+import adminRouter from "./admin";
+import reportsRouter from "./reports";
+import plantsRouter from "./plants";
+import organizationsRouter from "./organizations";
+import problemReportsRouter from "./problemReports";
+import alertsRouter from "./alerts";
+import tipsRouter from "./tips";
+import notificationsRouter from "./notifications";
+import weeklyWinnersRouter from "./weeklyWinners";
+import inboxRouter from "./inbox";
 
 const router: IRouter = Router();
 
 router.use(healthRouter);
+router.use(storageRouter);
+router.use(usersRouter);
+router.use(treesRouter);
+router.use(mapRouter);
+router.use(eventsRouter);
+router.use(adminRouter);
+router.use(reportsRouter);
+router.use(plantsRouter);
+router.use(organizationsRouter);
+router.use(problemReportsRouter);
+router.use(alertsRouter);
+router.use(tipsRouter);
+router.use(notificationsRouter);
+router.use(weeklyWinnersRouter);
+router.use(inboxRouter);
 
 export default router;

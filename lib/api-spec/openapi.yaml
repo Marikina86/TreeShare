@@ -9,14 +9,24 @@ servers:
     description: Base API path
 tags:
   - name: health
-    description: Health operations
+  - name: trees
+  - name: users
+  - name: events
+  - name: alerts
+  - name: tips
+  - name: notifications
+  - name: reports
+  - name: map
+  - name: storage
+  - name: admin
+  - name: organizations
+  - name: weeklyWinners
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,6 +34,1065 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /trees:
+    get:
+      operationId: listTrees
+      tags: [trees]
+      summary: List trees (feed)
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+        - name: limit
+          in: query
+          schema:
+            type: integer
+        - name: userId
+          in: query
+          schema:
+            type: string
+        - name: province
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Paginated list of trees
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedTrees"
+    post:
+      operationId: createTree
+      tags: [trees]
+      summary: Create a tree
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateTreeBody"
+      responses:
+        "201":
+          description: Created tree
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Tree"
+
+  /trees/recent:
+    get:
+      operationId: getRecentTrees
+      tags: [trees]
+      summary: Get recent trees
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Recent trees
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Tree"
+
+  /trees/{treeId}:
+    get:
+      operationId: getTree
+      tags: [trees]
+      summary: Get a tree
+      parameters:
+        - name: treeId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Tree
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Tree"
+    patch:
+      operationId: patchTree
+      tags: [trees]
+      summary: Patch a tree
+      parameters:
+        - name: treeId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PatchTreeBody"
+      responses:
+        "200":
+          description: Updated tree
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Tree"
+    delete:
+      operationId: deleteTree
+      tags: [trees]
+      summary: Delete a tree
+      parameters:
+        - name: treeId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /trees/{treeId}/updates:
+    get:
+      operationId: getTreeUpdates
+      tags: [trees]
+      summary: Get tree updates
+      parameters:
+        - name: treeId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Tree updates
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TreeUpdate"
+    post:
+      operationId: addTreeUpdate
+      tags: [trees]
+      summary: Add a tree update
+      parameters:
+        - name: treeId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AddTreeUpdateBody"
+      responses:
+        "201":
+          description: Created update
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TreeUpdate"
+
+  /trees/{treeId}/updates/{updateId}:
+    delete:
+      operationId: deleteTreeUpdate
+      tags: [trees]
+      summary: Delete a tree update
+      parameters:
+        - name: treeId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: updateId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /trees/{treeId}/sun:
+    post:
+      operationId: sunTree
+      tags: [trees]
+      summary: Sun a tree
+      parameters:
+        - name: treeId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Sun result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  sunCount:
+                    type: integer
+                  userHasSunned:
+                    type: boolean
+                required:
+                  - sunCount
+                  - userHasSunned
+    delete:
+      operationId: unsunTree
+      tags: [trees]
+      summary: Unsun a tree
+      parameters:
+        - name: treeId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Unsun result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  sunCount:
+                    type: integer
+                  userHasSunned:
+                    type: boolean
+                required:
+                  - sunCount
+                  - userHasSunned
+
+  /users/me:
+    get:
+      operationId: getMyProfile
+      tags: [users]
+      summary: Get my profile
+      responses:
+        "200":
+          description: User profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserProfile"
+    put:
+      operationId: upsertMyProfile
+      tags: [users]
+      summary: Upsert my profile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpsertMyProfileBody"
+      responses:
+        "200":
+          description: Updated profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserProfile"
+
+  /users/{userId}:
+    get:
+      operationId: getUserProfile
+      tags: [users]
+      summary: Get a user profile by ID
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: User profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserProfile"
+
+  /users/top-planters:
+    get:
+      operationId: getTopPlanters
+      tags: [users]
+      summary: Get top planters
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Top planters
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TopPlanter"
+
+  /events:
+    get:
+      operationId: listEvents
+      tags: [events]
+      summary: List events
+      parameters:
+        - name: province
+          in: query
+          schema:
+            type: string
+        - name: city
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Events
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Event"
+    post:
+      operationId: createEvent
+      tags: [events]
+      summary: Create an event
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateEventBody"
+      responses:
+        "201":
+          description: Created event
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Event"
+
+  /events/{eventId}:
+    get:
+      operationId: getEvent
+      tags: [events]
+      summary: Get an event
+      parameters:
+        - name: eventId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Event
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Event"
+    patch:
+      operationId: updateEvent
+      tags: [events]
+      summary: Update an event
+      parameters:
+        - name: eventId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateEventBody"
+      responses:
+        "200":
+          description: Updated event
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Event"
+    delete:
+      operationId: deleteEvent
+      tags: [events]
+      summary: Delete an event
+      parameters:
+        - name: eventId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /events/{eventId}/join:
+    post:
+      operationId: joinEvent
+      tags: [events]
+      summary: Join an event
+      parameters:
+        - name: eventId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Joined event
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Event"
+
+  /events/{eventId}/leave:
+    post:
+      operationId: leaveEvent
+      tags: [events]
+      summary: Leave an event
+      parameters:
+        - name: eventId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Left event
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Event"
+
+  /alerts:
+    get:
+      operationId: listAlerts
+      tags: [alerts]
+      summary: List alerts
+      responses:
+        "200":
+          description: Alerts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Alert"
+
+  /tips:
+    get:
+      operationId: listTips
+      tags: [tips]
+      summary: List tips
+      responses:
+        "200":
+          description: Tips
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Tip"
+
+  /inbox:
+    get:
+      operationId: getInbox
+      tags: [notifications]
+      summary: Get inbox (alerts + notifications + tips)
+      responses:
+        "200":
+          description: Inbox
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Inbox"
+
+  /notifications/read-all:
+    patch:
+      operationId: markAllNotificationsRead
+      tags: [notifications]
+      summary: Mark all notifications as read
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                required:
+                  - success
+
+  /notifications/{id}/read:
+    patch:
+      operationId: markNotificationRead
+      tags: [notifications]
+      summary: Mark a notification as read
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Notification
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Notification"
+
+  /reports:
+    post:
+      operationId: createReport
+      tags: [reports]
+      summary: Submit a report
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateReportBody"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                  status:
+                    type: string
+                required:
+                  - id
+                  - status
+
+  /problem-reports:
+    post:
+      operationId: createProblemReport
+      tags: [reports]
+      summary: Submit a problem report
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateProblemReportBody"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                required:
+                  - id
+
+  /stats/global:
+    get:
+      operationId: getGlobalStats
+      tags: [map]
+      summary: Global statistics
+      responses:
+        "200":
+          description: Stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GlobalStats"
+
+  /map/markers:
+    get:
+      operationId: getMapMarkers
+      tags: [map]
+      summary: Get map markers
+      parameters:
+        - name: precision
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Markers
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/MapMarker"
+
+  /storage/uploads/request-url:
+    post:
+      operationId: requestUploadUrl
+      tags: [storage]
+      summary: Request an upload URL
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RequestUploadUrlBody"
+      responses:
+        "200":
+          description: Upload URL
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UploadUrlResponse"
+
+  /register-ente:
+    post:
+      operationId: registerEnte
+      tags: [organizations]
+      summary: Register an organization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterEnteBody"
+      responses:
+        "201":
+          description: Created organization
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                  ragioneSociale:
+                    type: string
+                  username:
+                    type: string
+                  emailUfficiale:
+                    type: string
+                  createdAt:
+                    type: string
+                required:
+                  - id
+                  - ragioneSociale
+                  - username
+                  - emailUfficiale
+                  - createdAt
+
+  /weekly-winners/current:
+    get:
+      operationId: getCurrentWeeklyWinners
+      tags: [weeklyWinners]
+      summary: Get current weekly winners
+      responses:
+        "200":
+          description: Weekly winners
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /weekly-winners:
+    get:
+      operationId: listWeeklyWinners
+      tags: [weeklyWinners]
+      summary: List all weekly winners
+      responses:
+        "200":
+          description: Weekly winners history
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+
+  /admin/stats:
+    get:
+      operationId: getAdminStats
+      tags: [admin]
+      summary: Admin statistics
+      responses:
+        "200":
+          description: Stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminStats"
+
+  /admin/users:
+    get:
+      operationId: listAdminUsers
+      tags: [admin]
+      summary: List all users (admin)
+      parameters:
+        - name: search
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Users
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AdminUser"
+
+  /admin/users/{clerkUserId}/block:
+    patch:
+      operationId: blockUser
+      tags: [admin]
+      summary: Block a user
+      parameters:
+        - name: clerkUserId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Updated
+
+  /admin/users/{clerkUserId}/unblock:
+    patch:
+      operationId: unblockUser
+      tags: [admin]
+      summary: Unblock a user
+      parameters:
+        - name: clerkUserId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Updated
+
+  /admin/users/{clerkUserId}:
+    delete:
+      operationId: deleteAdminUser
+      tags: [admin]
+      summary: Delete a user (admin)
+      parameters:
+        - name: clerkUserId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Deleted
+
+  /admin/trees:
+    get:
+      operationId: listAdminTrees
+      tags: [admin]
+      summary: List trees for moderation (admin)
+      parameters:
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: page
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Trees
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /admin/trees/{treeId}/approve:
+    patch:
+      operationId: approveTree
+      tags: [admin]
+      summary: Approve a tree photo
+      parameters:
+        - name: treeId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Updated
+
+  /admin/trees/{treeId}/reject:
+    patch:
+      operationId: rejectTree
+      tags: [admin]
+      summary: Reject a tree photo
+      parameters:
+        - name: treeId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Updated
+
+  /admin/trees/{treeId}:
+    delete:
+      operationId: deleteAdminTree
+      tags: [admin]
+      summary: Delete a tree (admin)
+      parameters:
+        - name: treeId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /admin/problem-reports:
+    get:
+      operationId: listAdminProblemReports
+      tags: [admin]
+      summary: List problem reports (admin)
+      responses:
+        "200":
+          description: Problem reports
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+
+  /admin/problem-reports/{id}/status:
+    patch:
+      operationId: updateProblemReportStatus
+      tags: [admin]
+      summary: Update problem report status (admin)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status:
+                  type: string
+                adminNote:
+                  type: string
+              required:
+                - status
+      responses:
+        "200":
+          description: Updated
+
+  /admin/problem-reports/{id}/reply:
+    patch:
+      operationId: replyToProblemReport
+      tags: [admin]
+      summary: Reply to a problem report (admin)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                replyText:
+                  type: string
+              required:
+                - replyText
+      responses:
+        "200":
+          description: Updated
+
+  /admin/reports:
+    get:
+      operationId: listAdminReports
+      tags: [admin]
+      summary: List reports (admin)
+      responses:
+        "200":
+          description: Reports
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+
+  /admin/reports/{id}/resolve:
+    patch:
+      operationId: resolveReport
+      tags: [admin]
+      summary: Resolve a report (admin)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Updated
+
+  /admin/alerts:
+    post:
+      operationId: createAlert
+      tags: [admin]
+      summary: Create an alert (admin)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateAlertBody"
+      responses:
+        "201":
+          description: Created
+
+  /admin/alerts/{id}:
+    patch:
+      operationId: updateAlert
+      tags: [admin]
+      summary: Update an alert (admin)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateAlertBody"
+      responses:
+        "200":
+          description: Updated
+    delete:
+      operationId: deleteAlert
+      tags: [admin]
+      summary: Delete an alert (admin)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /admin/tips:
+    post:
+      operationId: createTip
+      tags: [admin]
+      summary: Create a tip (admin)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateTipBody"
+      responses:
+        "201":
+          description: Created
+
+  /admin/tips/{id}:
+    patch:
+      operationId: updateTip
+      tags: [admin]
+      summary: Update a tip (admin)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateTipBody"
+      responses:
+        "200":
+          description: Updated
+    delete:
+      operationId: deleteTip
+      tags: [admin]
+      summary: Delete a tip (admin)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /admin/weekly-winners/calculate:
+    post:
+      operationId: triggerWeeklyWinnerCalculation
+      tags: [admin]
+      summary: Trigger weekly winner calculation (admin)
+      responses:
+        "200":
+          description: Success
+
+  /plants/verify:
+    post:
+      operationId: verifyPlant
+      tags: [trees]
+      summary: Verify plant in image via AI
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VerifyPlantBody"
+      responses:
+        "200":
+          description: Verification result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlantVerificationResult"
+
 components:
   schemas:
     HealthStatus:
@@ -34,3 +1103,779 @@ components:
       required:
         - status
 
+    PaginatedTrees:
+      type: object
+      properties:
+        trees:
+          type: array
+          items:
+            $ref: "#/components/schemas/Tree"
+        total:
+          type: integer
+        page:
+          type: integer
+        limit:
+          type: integer
+      required:
+        - trees
+        - total
+        - page
+        - limit
+
+    Tree:
+      type: object
+      properties:
+        id:
+          type: integer
+        userId:
+          type: string
+        username:
+          type: string
+        userPhotoUrl:
+          type: string
+          nullable: true
+        photoUrl:
+          type: string
+        photoThumbnailUrl:
+          type: string
+          nullable: true
+        plantName:
+          type: string
+          nullable: true
+        caption:
+          type: string
+          nullable: true
+        species:
+          type: string
+          nullable: true
+        plantedAt:
+          type: string
+          nullable: true
+        latitude:
+          type: number
+        longitude:
+          type: number
+        locationName:
+          type: string
+          nullable: true
+        country:
+          type: string
+          nullable: true
+        province:
+          type: string
+          nullable: true
+        mapsUrl:
+          type: string
+          nullable: true
+        verificationBypassed:
+          type: boolean
+        photoStatus:
+          type: string
+        updateCount:
+          type: integer
+        sunCount:
+          type: integer
+        userHasSunned:
+          type: boolean
+        isWeeklyWinner:
+          type: boolean
+        createdAt:
+          type: string
+      required:
+        - id
+        - userId
+        - username
+        - photoUrl
+        - latitude
+        - longitude
+        - verificationBypassed
+        - photoStatus
+        - updateCount
+        - sunCount
+        - userHasSunned
+        - isWeeklyWinner
+        - createdAt
+
+    TreeUpdate:
+      type: object
+      properties:
+        id:
+          type: integer
+        treeId:
+          type: integer
+        photoUrl:
+          type: string
+          nullable: true
+        note:
+          type: string
+          nullable: true
+        photoStatus:
+          type: string
+        createdAt:
+          type: string
+      required:
+        - id
+        - treeId
+        - photoStatus
+        - createdAt
+
+    CreateTreeBody:
+      type: object
+      properties:
+        photoUrl:
+          type: string
+        photoThumbnailUrl:
+          type: string
+          nullable: true
+        plantName:
+          type: string
+          nullable: true
+        caption:
+          type: string
+          nullable: true
+        species:
+          type: string
+          nullable: true
+        plantedAt:
+          type: string
+          nullable: true
+        latitude:
+          type: number
+        longitude:
+          type: number
+        locationName:
+          type: string
+          nullable: true
+        country:
+          type: string
+          nullable: true
+        province:
+          type: string
+          nullable: true
+        verificationBypassed:
+          type: boolean
+          nullable: true
+        photoStatus:
+          type: string
+          nullable: true
+      required:
+        - photoUrl
+        - latitude
+        - longitude
+
+    PatchTreeBody:
+      type: object
+      properties:
+        plantName:
+          type: string
+          nullable: true
+        caption:
+          type: string
+          nullable: true
+        species:
+          type: string
+          nullable: true
+        plantedAt:
+          type: string
+          nullable: true
+        locationName:
+          type: string
+          nullable: true
+        country:
+          type: string
+          nullable: true
+        latitude:
+          type: number
+        longitude:
+          type: number
+
+    AddTreeUpdateBody:
+      type: object
+      properties:
+        photoUrl:
+          type: string
+          nullable: true
+        note:
+          type: string
+          nullable: true
+      required: []
+
+    UserProfile:
+      type: object
+      properties:
+        id:
+          type: integer
+        clerkUserId:
+          type: string
+        username:
+          type: string
+        photoUrl:
+          type: string
+          nullable: true
+        country:
+          type: string
+          nullable: true
+        city:
+          type: string
+          nullable: true
+        treesPlanted:
+          type: integer
+        isBlocked:
+          type: boolean
+        isAdmin:
+          type: boolean
+        createdAt:
+          type: string
+      required:
+        - id
+        - clerkUserId
+        - username
+        - treesPlanted
+        - isBlocked
+        - isAdmin
+        - createdAt
+
+    UpsertMyProfileBody:
+      type: object
+      properties:
+        username:
+          type: string
+          maxLength: 30
+        photoUrl:
+          type: string
+          nullable: true
+        country:
+          type: string
+          nullable: true
+        city:
+          type: string
+          nullable: true
+      required:
+        - username
+
+    TopPlanter:
+      type: object
+      properties:
+        userId:
+          type: string
+        username:
+          type: string
+        photoUrl:
+          type: string
+          nullable: true
+        city:
+          type: string
+          nullable: true
+        country:
+          type: string
+          nullable: true
+        treeCount:
+          type: integer
+      required:
+        - userId
+        - username
+        - treeCount
+
+    Event:
+      type: object
+      properties:
+        id:
+          type: integer
+        userId:
+          type: string
+        username:
+          type: string
+        userPhotoUrl:
+          type: string
+          nullable: true
+        title:
+          type: string
+        description:
+          type: string
+          nullable: true
+        location:
+          type: string
+        address:
+          type: string
+          nullable: true
+        city:
+          type: string
+          nullable: true
+        province:
+          type: string
+          nullable: true
+        eventDate:
+          type: string
+        eventTime:
+          type: string
+        endDate:
+          type: string
+          nullable: true
+        endTime:
+          type: string
+          nullable: true
+        participantCount:
+          type: integer
+        isParticipating:
+          type: boolean
+        createdAt:
+          type: string
+      required:
+        - id
+        - userId
+        - username
+        - title
+        - location
+        - eventDate
+        - eventTime
+        - participantCount
+        - isParticipating
+        - createdAt
+
+    CreateEventBody:
+      type: object
+      properties:
+        title:
+          type: string
+          maxLength: 200
+        description:
+          type: string
+          nullable: true
+        location:
+          type: string
+          maxLength: 200
+        address:
+          type: string
+          nullable: true
+        city:
+          type: string
+          nullable: true
+        province:
+          type: string
+          nullable: true
+        eventDate:
+          type: string
+        eventTime:
+          type: string
+        endDate:
+          type: string
+          nullable: true
+        endTime:
+          type: string
+          nullable: true
+      required:
+        - title
+        - location
+        - eventDate
+        - eventTime
+
+    UpdateEventBody:
+      type: object
+      properties:
+        title:
+          type: string
+          maxLength: 200
+        description:
+          type: string
+          nullable: true
+        location:
+          type: string
+          maxLength: 200
+        address:
+          type: string
+          nullable: true
+        city:
+          type: string
+          nullable: true
+        province:
+          type: string
+          nullable: true
+        eventDate:
+          type: string
+        eventTime:
+          type: string
+        endDate:
+          type: string
+          nullable: true
+        endTime:
+          type: string
+          nullable: true
+
+    Alert:
+      type: object
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        message:
+          type: string
+        priority:
+          type: string
+        createdBy:
+          type: string
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+      required:
+        - id
+        - title
+        - message
+        - priority
+        - createdBy
+        - createdAt
+        - updatedAt
+
+    Tip:
+      type: object
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        description:
+          type: string
+        category:
+          type: string
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+      required:
+        - id
+        - title
+        - description
+        - category
+        - createdAt
+        - updatedAt
+
+    Notification:
+      type: object
+      properties:
+        id:
+          type: integer
+        userId:
+          type: string
+        title:
+          type: string
+        message:
+          type: string
+        isRead:
+          type: boolean
+        createdAt:
+          type: string
+      required:
+        - id
+        - userId
+        - title
+        - message
+        - isRead
+        - createdAt
+
+    Inbox:
+      type: object
+      properties:
+        alerts:
+          type: array
+          items:
+            $ref: "#/components/schemas/Alert"
+        notifications:
+          type: array
+          items:
+            $ref: "#/components/schemas/Notification"
+        tips:
+          type: array
+          items:
+            $ref: "#/components/schemas/Tip"
+      required:
+        - alerts
+        - notifications
+        - tips
+
+    CreateReportBody:
+      type: object
+      properties:
+        reportedUserId:
+          type: string
+          nullable: true
+        treeId:
+          type: integer
+          nullable: true
+        eventId:
+          type: integer
+          nullable: true
+        reason:
+          type: string
+        notes:
+          type: string
+          nullable: true
+      required:
+        - reason
+
+    CreateProblemReportBody:
+      type: object
+      properties:
+        category:
+          type: string
+        description:
+          type: string
+      required:
+        - category
+        - description
+
+    GlobalStats:
+      type: object
+      properties:
+        totalTrees:
+          type: integer
+        totalUsers:
+          type: integer
+        totalCountries:
+          type: integer
+        recentPlanters:
+          type: integer
+      required:
+        - totalTrees
+        - totalUsers
+        - totalCountries
+        - recentPlanters
+
+    MapMarker:
+      type: object
+      properties:
+        latitude:
+          type: number
+        longitude:
+          type: number
+        count:
+          type: integer
+        locationName:
+          type: string
+          nullable: true
+        trees:
+          type: array
+          items:
+            type: object
+      required:
+        - latitude
+        - longitude
+        - count
+        - trees
+
+    RequestUploadUrlBody:
+      type: object
+      properties:
+        name:
+          type: string
+        size:
+          type: integer
+        contentType:
+          type: string
+      required:
+        - name
+        - size
+        - contentType
+
+    UploadUrlResponse:
+      type: object
+      properties:
+        uploadURL:
+          type: string
+        metadata:
+          type: object
+          properties:
+            name:
+              type: string
+            size:
+              type: integer
+            contentType:
+              type: string
+          required:
+            - name
+            - size
+            - contentType
+      required:
+        - uploadURL
+        - metadata
+
+    RegisterEnteBody:
+      type: object
+      properties:
+        ragioneSociale:
+          type: string
+        partitaIva:
+          type: string
+        codiceFiscale:
+          type: string
+        codiceUnivoco:
+          type: string
+        formaGiuridica:
+          type: string
+        numeroRegistroImprese:
+          type: string
+          nullable: true
+        indirizzoVia:
+          type: string
+        indirizzoCitta:
+          type: string
+        indirizzoCap:
+          type: string
+        indirizzoStato:
+          type: string
+        emailUfficiale:
+          type: string
+        telefono:
+          type: string
+        referenteNome:
+          type: string
+        referenteCognome:
+          type: string
+        username:
+          type: string
+        password:
+          type: string
+        ruoloUtente:
+          type: string
+        numeroLicenze:
+          type: integer
+      required:
+        - ragioneSociale
+        - partitaIva
+        - codiceFiscale
+        - codiceUnivoco
+        - formaGiuridica
+        - indirizzoVia
+        - indirizzoCitta
+        - indirizzoCap
+        - indirizzoStato
+        - emailUfficiale
+        - telefono
+        - referenteNome
+        - referenteCognome
+        - username
+        - password
+        - ruoloUtente
+        - numeroLicenze
+
+    AdminStats:
+      type: object
+      properties:
+        totalUsers:
+          type: integer
+        totalTrees:
+          type: integer
+        blockedUsers:
+          type: integer
+      required:
+        - totalUsers
+        - totalTrees
+        - blockedUsers
+
+    AdminUser:
+      type: object
+      properties:
+        id:
+          type: integer
+        clerkUserId:
+          type: string
+        username:
+          type: string
+        photoUrl:
+          type: string
+          nullable: true
+        country:
+          type: string
+          nullable: true
+        city:
+          type: string
+          nullable: true
+        treesPlanted:
+          type: integer
+        isBlocked:
+          type: boolean
+        createdAt:
+          type: string
+      required:
+        - id
+        - clerkUserId
+        - username
+        - treesPlanted
+        - isBlocked
+        - createdAt
+
+    CreateAlertBody:
+      type: object
+      properties:
+        title:
+          type: string
+        message:
+          type: string
+        priority:
+          type: string
+      required:
+        - title
+        - message
+
+    UpdateAlertBody:
+      type: object
+      properties:
+        title:
+          type: string
+        message:
+          type: string
+        priority:
+          type: string
+
+    CreateTipBody:
+      type: object
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+        category:
+          type: string
+      required:
+        - title
+        - description
+        - category
+
+    UpdateTipBody:
+      type: object
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+        category:
+          type: string
+
+    VerifyPlantBody:
+      type: object
+      properties:
+        imageBase64:
+          type: string
+        mimeType:
+          type: string
+      required:
+        - imageBase64
+        - mimeType
+
+    PlantVerificationResult:
+      type: object
+      properties:
+        isPlant:
+          type: boolean
+          nullable: true
+        label:
+          type: string
+        reason:
+          type: string
+        model:
+          type: string
+        aiUnavailable:
+          type: boolean
+      required:
+        - label
+        - reason
