@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { useLocation, Link } from "wouter";
 import { useUser, useClerk, useAuth } from "@clerk/react";
 import { useLang } from "@/lib/i18n";
-import { useListEvents, getListEventsQueryKey } from "@workspace/api-client-react";
+import { useListEvents, getListEventsQueryKey, useGetMyProfile } from "@workspace/api-client-react";
 import { getEventsLastSeenAt } from "@/pages/EventsPage";
 import { getAlertsLastReadAt, getNotifsLastReadAt } from "@/pages/AlertsPage";
 import { getTipsLastReadAt } from "@/pages/TipsPage";
