@@ -15,6 +15,9 @@ import tipsRouter from "./tips";
 import notificationsRouter from "./notifications";
 import weeklyWinnersRouter from "./weeklyWinners";
 import inboxRouter from "./inbox";
+import policiesRouter from "./policies";
+import consentsRouter from "./consents";
+import cookieConsentRouter from "./cookieConsent";
 
 const router: IRouter = Router();
 
@@ -34,5 +37,8 @@ router.use(tipsRouter);
 router.use(notificationsRouter);
 router.use(weeklyWinnersRouter);
 router.use(inboxRouter);
+router.use(policiesRouter);
+router.use(consentsRouter);
+router.use(cookieConsentRouter);
 
 export default router;

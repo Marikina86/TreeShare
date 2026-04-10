@@ -1,4 +1,5 @@
-import { pgTable, text, serial, integer, boolean, real, timestamp, index } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, boolean, real, timestamp, index, varchar } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -171,6 +172,48 @@ export const weeklyWinnersTable = pgTable("weekly_winners", {
   sunCount: integer("sun_count").notNull(),
   weekStart: timestamp("week_start").notNull(),
 });
+
+// ── GDPR ────────────────────────────────────────────────────────────────────
+
+export const policiesTable = pgTable("policies", {
+  id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
+  type: text("type").notNull(), // "privacy" | "terms"
+  version: text("version").notNull(),
+  content: text("content").notNull(),
+  isActive: boolean("is_active").notNull().default(false),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (table) => [
+  index("policies_type_active_idx").on(table.type, table.isActive),
+]);
+
+export const userConsentsTable = pgTable("user_consents", {
+  id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
+  userId: text("user_id").notNull(), // clerk_user_id
+  policyId: varchar("policy_id", { length: 36 }).notNull(),
+  accepted: boolean("accepted").notNull(),
+  acceptedAt: timestamp("accepted_at").notNull().defaultNow(),
+  ipAddress: text("ip_address"),
+  userAgent: text("user_agent"),
+}, (table) => [
+  index("user_consents_user_id_idx").on(table.userId),
+  index("user_consents_policy_id_idx").on(table.policyId),
+]);
+
+export const cookieConsentsTable = pgTable("cookie_consents", {
+  id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
+  userId: text("user_id"), // nullable — utenti anonimi
+  sessionId: text("session_id").notNull(),
+  necessary: boolean("necessary").notNull().default(true),
+  analytics: boolean("analytics").notNull().default(false),
+  marketing: boolean("marketing").notNull().default(false),
+  preferences: boolean("preferences").notNull().default(false),
+  accepted: boolean("accepted").notNull(),
+  acceptedAt: timestamp("accepted_at").notNull().defaultNow(),
+  ipAddress: text("ip_address"),
+  userAgent: text("user_agent"),
+}, (table) => [
+  index("cookie_consents_session_id_idx").on(table.sessionId),
+]);
 
 export const insertUserSchema = createInsertSchema(usersTable).omit({ id: true, createdAt: true });
 export type InsertUser = z.infer<typeof insertUserSchema>;
