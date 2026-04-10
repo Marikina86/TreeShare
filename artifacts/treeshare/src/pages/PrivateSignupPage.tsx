@@ -56,6 +56,8 @@ export default function PrivateSignupPage() {
     password: "",
     confirmPassword: "",
   });
+  const [acceptPrivacy, setAcceptPrivacy] = useState(false);
+  const [acceptTerms, setAcceptTerms] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const errorRef = useRef<HTMLDivElement>(null);
 
@@ -82,6 +84,8 @@ export default function PrivateSignupPage() {
     if (fields.password.length < 8) e.password = "Password minimo 8 caratteri";
     if (!fields.confirmPassword) e.confirmPassword = "Ripeti la password";
     else if (fields.confirmPassword !== fields.password) e.confirmPassword = "Le password non coincidono";
+    if (!acceptPrivacy) e.acceptPrivacy = lang === "en" ? "You must accept the privacy policy" : "Devi accettare l'informativa sulla privacy";
+    if (!acceptTerms) e.acceptTerms = lang === "en" ? "You must accept the terms and conditions" : "Devi accettare i termini e condizioni";
     setErrors(e);
     return Object.keys(e).length === 0;
   }
@@ -550,6 +554,57 @@ export default function PrivateSignupPage() {
               <FieldError message={errors.confirmPassword} />
             </div>
 
+            {/* Checkbox consensi obbligatori */}
+            <div className="space-y-3 pt-1">
+              <label className={`flex items-start gap-3 cursor-pointer group ${errors.acceptPrivacy ? "text-destructive" : ""}`}>
+                <input
+                  type="checkbox"
+                  checked={acceptPrivacy}
+                  onChange={(e) => {
+                    setAcceptPrivacy(e.target.checked);
+                    setErrors((prev) => ({ ...prev, acceptPrivacy: "" }));
+                  }}
+                  className="mt-0.5 h-4 w-4 shrink-0 rounded border-border accent-primary cursor-pointer"
+                />
+                <span className="text-sm leading-snug text-foreground">
+                  {lang === "en"
+                    ? <>I have read and accept the <Link href="/privacy" className="underline text-primary font-medium">privacy policy</Link> <span className="text-destructive">*</span></>
+                    : <>Ho letto e accetto l&rsquo;<Link href="/privacy" className="underline text-primary font-medium">informativa sulla privacy</Link> <span className="text-destructive">*</span></>
+                  }
+                </span>
+              </label>
+              {errors.acceptPrivacy && (
+                <p className="flex items-center gap-1 text-xs text-destructive -mt-1 ml-7">
+                  <AlertCircle className="h-3 w-3 flex-shrink-0" />
+                  {errors.acceptPrivacy}
+                </p>
+              )}
+
+              <label className={`flex items-start gap-3 cursor-pointer group ${errors.acceptTerms ? "text-destructive" : ""}`}>
+                <input
+                  type="checkbox"
+                  checked={acceptTerms}
+                  onChange={(e) => {
+                    setAcceptTerms(e.target.checked);
+                    setErrors((prev) => ({ ...prev, acceptTerms: "" }));
+                  }}
+                  className="mt-0.5 h-4 w-4 shrink-0 rounded border-border accent-primary cursor-pointer"
+                />
+                <span className="text-sm leading-snug text-foreground">
+                  {lang === "en"
+                    ? <>I have read and accept the <Link href="/terms" className="underline text-primary font-medium">terms and conditions</Link> <span className="text-destructive">*</span></>
+                    : <>Ho letto e accetto i <Link href="/terms" className="underline text-primary font-medium">termini e condizioni</Link> <span className="text-destructive">*</span></>
+                  }
+                </span>
+              </label>
+              {errors.acceptTerms && (
+                <p className="flex items-center gap-1 text-xs text-destructive -mt-1 ml-7">
+                  <AlertCircle className="h-3 w-3 flex-shrink-0" />
+                  {errors.acceptTerms}
+                </p>
+              )}
+            </div>
+
             {serverError && (
               <div ref={errorRef} className="bg-destructive/10 border border-destructive/30 rounded-xl px-4 py-3 text-sm text-destructive flex items-start gap-2">
                 <AlertCircle className="h-4 w-4 flex-shrink-0 mt-0.5" />
@@ -567,13 +622,6 @@ export default function PrivateSignupPage() {
               )}
               {lang === "en" ? "Create account" : "Crea account"}
             </button>
-
-            <p className="text-center text-xs text-muted-foreground leading-relaxed px-2">
-              {lang === "en"
-                ? <>By clicking "Create account" I accept the <Link href="/privacy" className="underline text-primary">privacy policy</Link> and <Link href="/terms" className="underline text-primary">terms and conditions</Link>.</>
-                : <>Cliccando su &ldquo;Crea account&rdquo; accetto l&rsquo;<Link href="/privacy" className="underline text-primary">informativa sulla privacy</Link> e i <Link href="/terms" className="underline text-primary">termini e condizioni</Link>.</>
-              }
-            </p>
 
             <div className="relative flex items-center gap-3 py-1">
               <div className="flex-1 h-px bg-border" />
