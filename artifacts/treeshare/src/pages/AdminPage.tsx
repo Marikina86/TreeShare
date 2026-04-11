@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useAuth } from "@clerk/react";
 import { useLocation } from "wouter";
 import { useLang } from "@/lib/i18n";
@@ -162,8 +162,15 @@ export default function AdminPage() {
   const [replyText, setReplyText] = useState("");
   const [pendingTrees, setPendingTrees] = useState<PendingTree[]>([]);
   const [pendingLoading, setPendingLoading] = useState(false);
+  const [pendingTreesHasMore, setPendingTreesHasMore] = useState(false);
+  const [pendingTreesPage, setPendingTreesPage] = useState(1);
   const [pendingUpdates, setPendingUpdates] = useState<PendingTreeUpdate[]>([]);
   const [pendingUpdatesLoading, setPendingUpdatesLoading] = useState(false);
+  const [pendingUpdatesHasMore, setPendingUpdatesHasMore] = useState(false);
+  const [pendingUpdatesPage, setPendingUpdatesPage] = useState(1);
+  const [pendingCounts, setPendingCounts] = useState<{ pendingTrees: number; pendingUpdates: number }>({ pendingTrees: 0, pendingUpdates: 0 });
+  const pendingTreesSentinel = useRef<HTMLDivElement>(null);
+  const pendingUpdatesSentinel = useRef<HTMLDivElement>(null);
 
   // ── Stato consigli admin ──────────────────────────────────────────────────
   interface AdminTipItem { id: number; title: string; description: string; category: string; createdAt: string; updatedAt: string; }
@@ -330,11 +337,29 @@ export default function AdminPage() {
     finally { setActionLoading(null); }
   }
 
-  async function loadPendingTrees() {
+  async function loadPendingCounts() {
+    try {
+      const res = await authFetch("/api/admin/pending-counts");
+      if (res.ok) setPendingCounts(await res.json());
+    } catch {}
+  }
+
+  async function loadPendingTrees(page = 1) {
+    if (pendingLoading) return;
     setPendingLoading(true);
     try {
-      const res = await authFetch("/api/admin/trees/pending");
-      if (res.ok) setPendingTrees(await res.json());
+      const res = await authFetch(`/api/admin/trees/pending?page=${page}&limit=10`);
+      if (res.ok) {
+        const data = await res.json();
+        if (page === 1) {
+          setPendingTrees(data.items);
+        } else {
+          setPendingTrees((prev) => [...prev, ...data.items]);
+        }
+        setPendingTreesHasMore(data.hasMore);
+        setPendingTreesPage(page);
+        setPendingCounts((c) => ({ ...c, pendingTrees: data.total }));
+      }
     } catch { toast({ title: T.errors.load, variant: "destructive" }); }
     finally { setPendingLoading(false); }
   }
@@ -345,6 +370,7 @@ export default function AdminPage() {
       const res = await authFetch(`/api/admin/trees/${tree.id}/approve`, { method: "PATCH" });
       if (!res.ok) throw new Error();
       setPendingTrees((p) => p.filter((t) => t.id !== tree.id));
+      setPendingCounts((c) => ({ ...c, pendingTrees: Math.max(0, c.pendingTrees - 1) }));
       toast({ title: lang === "it" ? "✅ Foto approvata" : "✅ Photo approved" });
     } catch { toast({ title: lang === "it" ? "Errore approvazione" : "Approval error", variant: "destructive" }); }
     finally { setActionLoading(null); }
@@ -356,16 +382,28 @@ export default function AdminPage() {
       const res = await authFetch(`/api/admin/trees/${tree.id}`, { method: "DELETE" });
       if (!res.ok) throw new Error();
       setPendingTrees((p) => p.filter((t) => t.id !== tree.id));
+      setPendingCounts((c) => ({ ...c, pendingTrees: Math.max(0, c.pendingTrees - 1) }));
       toast({ title: lang === "it" ? "🗑️ Contenuto eliminato" : "🗑️ Content deleted" });
     } catch { toast({ title: lang === "it" ? "Errore eliminazione" : "Delete error", variant: "destructive" }); }
     finally { setActionLoading(null); }
   }
 
-  async function loadPendingUpdates() {
+  async function loadPendingUpdates(page = 1) {
+    if (pendingUpdatesLoading) return;
     setPendingUpdatesLoading(true);
     try {
-      const res = await authFetch("/api/admin/tree-updates/pending");
-      if (res.ok) setPendingUpdates(await res.json());
+      const res = await authFetch(`/api/admin/tree-updates/pending?page=${page}&limit=10`);
+      if (res.ok) {
+        const data = await res.json();
+        if (page === 1) {
+          setPendingUpdates(data.items);
+        } else {
+          setPendingUpdates((prev) => [...prev, ...data.items]);
+        }
+        setPendingUpdatesHasMore(data.hasMore);
+        setPendingUpdatesPage(page);
+        setPendingCounts((c) => ({ ...c, pendingUpdates: data.total }));
+      }
     } catch { toast({ title: T.errors.load, variant: "destructive" }); }
     finally { setPendingUpdatesLoading(false); }
   }
@@ -376,6 +414,7 @@ export default function AdminPage() {
       const res = await authFetch(`/api/admin/tree-updates/${update.id}/approve`, { method: "PATCH" });
       if (!res.ok) throw new Error();
       setPendingUpdates((p) => p.filter((u) => u.id !== update.id));
+      setPendingCounts((c) => ({ ...c, pendingUpdates: Math.max(0, c.pendingUpdates - 1) }));
       toast({ title: lang === "it" ? "✅ Aggiornamento approvato" : "✅ Update approved" });
     } catch { toast({ title: lang === "it" ? "Errore approvazione" : "Approval error", variant: "destructive" }); }
     finally { setActionLoading(null); }
@@ -387,6 +426,7 @@ export default function AdminPage() {
       const res = await authFetch(`/api/admin/tree-updates/${update.id}/reject`, { method: "PATCH" });
       if (!res.ok) throw new Error();
       setPendingUpdates((p) => p.filter((u) => u.id !== update.id));
+      setPendingCounts((c) => ({ ...c, pendingUpdates: Math.max(0, c.pendingUpdates - 1) }));
       toast({ title: lang === "it" ? "🗑️ Aggiornamento eliminato" : "🗑️ Update deleted" });
     } catch { toast({ title: lang === "it" ? "Errore eliminazione" : "Delete error", variant: "destructive" }); }
     finally { setActionLoading(null); }
@@ -532,12 +572,38 @@ export default function AdminPage() {
   useEffect(() => { if (activeTab === "trees") loadTrees(1, treeSearch); }, [activeTab]);
   useEffect(() => { if (activeTab === "trees") loadTrees(treePage, treeSearch); }, [treePage]);
   useEffect(() => { if (activeTab === "problems") loadProblemReports(); }, [activeTab]);
-  useEffect(() => { if (activeTab === "pending_photos") loadPendingTrees(); }, [activeTab]);
-  useEffect(() => { if (activeTab === "pending_updates") loadPendingUpdates(); }, [activeTab]);
+  useEffect(() => { if (activeTab === "pending_photos") loadPendingTrees(1); }, [activeTab]);
+  useEffect(() => { if (activeTab === "pending_updates") loadPendingUpdates(1); }, [activeTab]);
   useEffect(() => { if (activeTab === "alerts") loadAdminAlerts(); }, [activeTab]);
   useEffect(() => { if (activeTab === "tips") loadAdminTips(); }, [activeTab]);
-  // Preload problem reports count on mount so badge is visible immediately
   useEffect(() => { loadProblemReports(); }, []);
+  useEffect(() => { loadPendingCounts(); }, []);
+
+  useEffect(() => {
+    if (activeTab !== "pending_photos" || !pendingTreesHasMore || pendingLoading) return;
+    const el = pendingTreesSentinel.current;
+    if (!el) return;
+    const obs = new IntersectionObserver(([entry]) => {
+      if (entry.isIntersecting && pendingTreesHasMore && !pendingLoading) {
+        loadPendingTrees(pendingTreesPage + 1);
+      }
+    }, { rootMargin: "200px" });
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [activeTab, pendingTreesHasMore, pendingLoading, pendingTreesPage]);
+
+  useEffect(() => {
+    if (activeTab !== "pending_updates" || !pendingUpdatesHasMore || pendingUpdatesLoading) return;
+    const el = pendingUpdatesSentinel.current;
+    if (!el) return;
+    const obs = new IntersectionObserver(([entry]) => {
+      if (entry.isIntersecting && pendingUpdatesHasMore && !pendingUpdatesLoading) {
+        loadPendingUpdates(pendingUpdatesPage + 1);
+      }
+    }, { rootMargin: "200px" });
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [activeTab, pendingUpdatesHasMore, pendingUpdatesLoading, pendingUpdatesPage]);
 
   async function handleBlock(user: AdminUser) {
     setActionLoading(user.clerkUserId + ":block");
@@ -686,9 +752,9 @@ export default function AdminPage() {
           >
             <svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z" strokeLinecap="round" strokeLinejoin="round"/><circle cx="12" cy="13" r="4"/></svg>
             {lang === "it" ? "Da approvare" : "Pending Review"}
-            {pendingTrees.length > 0 && (
-              <span className="bg-amber-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full leading-none">
-                {pendingTrees.length}
+            {pendingCounts.pendingTrees > 0 && (
+              <span className="bg-amber-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full leading-none animate-pulse">
+                {pendingCounts.pendingTrees}
               </span>
             )}
           </button>
@@ -698,9 +764,9 @@ export default function AdminPage() {
           >
             <svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path d="M12 8v4l3 3"/><circle cx="12" cy="12" r="10"/></svg>
             {lang === "it" ? "Aggiorn. in attesa" : "Pending Updates"}
-            {pendingUpdates.length > 0 && (
-              <span className="bg-amber-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full leading-none">
-                {pendingUpdates.length}
+            {pendingCounts.pendingUpdates > 0 && (
+              <span className="bg-amber-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full leading-none animate-pulse">
+                {pendingCounts.pendingUpdates}
               </span>
             )}
           </button>
@@ -1074,7 +1140,7 @@ export default function AdminPage() {
               <div>
                 <h2 className="font-bold text-foreground text-lg">
                   {lang === "it" ? "Foto da approvare" : "Photos Pending Review"}
-                  <span className="ml-2 text-sm font-normal text-muted-foreground">({pendingTrees.length})</span>
+                  <span className="ml-2 text-sm font-normal text-muted-foreground">({pendingCounts.pendingTrees})</span>
                 </h2>
                 <p className="text-xs text-muted-foreground mt-0.5">
                   {lang === "it"
@@ -1082,12 +1148,12 @@ export default function AdminPage() {
                     : "AI could not verify these images. Manually review and approve or reject."}
                 </p>
               </div>
-              <button onClick={loadPendingTrees} className="text-xs text-primary hover:underline">
+              <button onClick={() => loadPendingTrees(1)} className="text-xs text-primary hover:underline">
                 {lang === "it" ? "Aggiorna" : "Refresh"}
               </button>
             </div>
 
-            {pendingLoading ? (
+            {pendingLoading && pendingTrees.length === 0 ? (
               <div className="flex items-center justify-center py-20">
                 <div className="w-8 h-8 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
               </div>
@@ -1102,70 +1168,79 @@ export default function AdminPage() {
                 <p className="text-sm text-muted-foreground mt-1">{lang === "it" ? "Tutte le immagini sono state revisionate" : "All images have been reviewed"}</p>
               </div>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {pendingTrees.map((tree) => {
-                  const isActing = actionLoading?.startsWith(`pending:${tree.id}:`);
-                  const photoSrc = tree.photoUrl.startsWith("/objects/") ? `/api/storage${tree.photoUrl}` : tree.photoUrl;
-                  return (
-                    <div key={tree.id} className="bg-card border border-amber-200 dark:border-amber-800/50 rounded-2xl overflow-hidden shadow-sm">
-                      <div className="relative aspect-video bg-black/5">
-                        <img
-                          src={photoSrc}
-                          alt={tree.plantName ?? "Foto in attesa"}
-                          className="w-full h-full object-cover"
-                        />
-                        <div className="absolute top-2 left-2 bg-amber-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
-                          <svg width="9" height="9" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12" strokeLinecap="round"/><line x1="12" y1="16" x2="12.01" y2="16" strokeLinecap="round"/></svg>
-                          {lang === "it" ? "In attesa" : "Pending"}
+              <>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {pendingTrees.map((tree) => {
+                    const isActing = actionLoading?.startsWith(`pending:${tree.id}:`);
+                    const photoSrc = tree.photoUrl.startsWith("/objects/") ? `/api/storage${tree.photoUrl}` : tree.photoUrl;
+                    return (
+                      <div key={tree.id} className="bg-card border border-amber-200 dark:border-amber-800/50 rounded-2xl overflow-hidden shadow-sm">
+                        <div className="relative aspect-video bg-black/5">
+                          <img
+                            src={photoSrc}
+                            alt={tree.plantName ?? "Foto in attesa"}
+                            className="w-full h-full object-cover"
+                          />
+                          <div className="absolute top-2 left-2 bg-amber-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
+                            <svg width="9" height="9" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12" strokeLinecap="round"/><line x1="12" y1="16" x2="12.01" y2="16" strokeLinecap="round"/></svg>
+                            {lang === "it" ? "In attesa" : "Pending"}
+                          </div>
+                        </div>
+                        <div className="p-4 space-y-2">
+                          <div className="flex items-center gap-2">
+                            <span className="font-semibold text-sm text-foreground truncate">
+                              {tree.plantName ?? tree.species ?? (lang === "it" ? "Senza nome" : "No name")}
+                            </span>
+                            <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-full flex-shrink-0">#{tree.id}</span>
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            @{tree.username ?? "?"} · {[tree.locationName, tree.country].filter(Boolean).join(", ") || "—"}
+                          </div>
+                          {tree.caption && (
+                            <p className="text-xs text-muted-foreground line-clamp-2 italic">"{tree.caption}"</p>
+                          )}
+                          <div className="text-xs text-muted-foreground">
+                            {new Date(tree.createdAt).toLocaleDateString(lang === "it" ? "it-IT" : "en-GB", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}
+                          </div>
+                          <div className="flex gap-2 pt-1">
+                            <button
+                              onClick={() => handleApprovePendingTree(tree)}
+                              disabled={!!isActing}
+                              className="flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-semibold bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 rounded-xl hover:bg-green-200 transition-colors disabled:opacity-50"
+                            >
+                              {isActing && actionLoading === `pending:${tree.id}:approve` ? (
+                                <span className="w-3 h-3 border-2 border-green-500 border-t-transparent rounded-full animate-spin" />
+                              ) : (
+                                <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path d="M5 13l4 4L19 7" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                              )}
+                              {lang === "it" ? "Approva" : "Approve"}
+                            </button>
+                            <button
+                              onClick={() => handleRejectPendingTree(tree)}
+                              disabled={!!isActing}
+                              className="flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-semibold bg-destructive/10 text-destructive rounded-xl hover:bg-destructive/20 transition-colors disabled:opacity-50"
+                            >
+                              {isActing && actionLoading === `pending:${tree.id}:reject` ? (
+                                <span className="w-3 h-3 border-2 border-destructive border-t-transparent rounded-full animate-spin" />
+                              ) : (
+                                <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path d="M6 18L18 6M6 6l12 12" strokeLinecap="round"/></svg>
+                              )}
+                              {lang === "it" ? "Elimina" : "Delete"}
+                            </button>
+                          </div>
                         </div>
                       </div>
-                      <div className="p-4 space-y-2">
-                        <div className="flex items-center gap-2">
-                          <span className="font-semibold text-sm text-foreground truncate">
-                            {tree.plantName ?? tree.species ?? (lang === "it" ? "Senza nome" : "No name")}
-                          </span>
-                          <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-full flex-shrink-0">#{tree.id}</span>
-                        </div>
-                        <div className="text-xs text-muted-foreground">
-                          @{tree.username ?? "?"} · {[tree.locationName, tree.country].filter(Boolean).join(", ") || "—"}
-                        </div>
-                        {tree.caption && (
-                          <p className="text-xs text-muted-foreground line-clamp-2 italic">"{tree.caption}"</p>
-                        )}
-                        <div className="text-xs text-muted-foreground">
-                          {new Date(tree.createdAt).toLocaleDateString(lang === "it" ? "it-IT" : "en-GB", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}
-                        </div>
-                        <div className="flex gap-2 pt-1">
-                          <button
-                            onClick={() => handleApprovePendingTree(tree)}
-                            disabled={!!isActing}
-                            className="flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-semibold bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 rounded-xl hover:bg-green-200 transition-colors disabled:opacity-50"
-                          >
-                            {isActing && actionLoading === `pending:${tree.id}:approve` ? (
-                              <span className="w-3 h-3 border-2 border-green-500 border-t-transparent rounded-full animate-spin" />
-                            ) : (
-                              <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path d="M5 13l4 4L19 7" strokeLinecap="round" strokeLinejoin="round"/></svg>
-                            )}
-                            {lang === "it" ? "Approva" : "Approve"}
-                          </button>
-                          <button
-                            onClick={() => handleRejectPendingTree(tree)}
-                            disabled={!!isActing}
-                            className="flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-semibold bg-destructive/10 text-destructive rounded-xl hover:bg-destructive/20 transition-colors disabled:opacity-50"
-                          >
-                            {isActing && actionLoading === `pending:${tree.id}:reject` ? (
-                              <span className="w-3 h-3 border-2 border-destructive border-t-transparent rounded-full animate-spin" />
-                            ) : (
-                              <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path d="M6 18L18 6M6 6l12 12" strokeLinecap="round"/></svg>
-                            )}
-                            {lang === "it" ? "Elimina" : "Delete"}
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+                    );
+                  })}
+                </div>
+                {pendingTreesHasMore && (
+                  <div ref={pendingTreesSentinel} className="flex items-center justify-center py-6">
+                    {pendingLoading && (
+                      <div className="w-6 h-6 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
+                    )}
+                  </div>
+                )}
+              </>
             )}
           </>
         )}
@@ -1177,7 +1252,7 @@ export default function AdminPage() {
               <div>
                 <h2 className="font-bold text-foreground text-lg">
                   {lang === "it" ? "Aggiornamenti in attesa" : "Pending Updates"}
-                  <span className="ml-2 text-sm font-normal text-muted-foreground">({pendingUpdates.length})</span>
+                  <span className="ml-2 text-sm font-normal text-muted-foreground">({pendingCounts.pendingUpdates})</span>
                 </h2>
                 <p className="text-xs text-muted-foreground mt-0.5">
                   {lang === "it"
@@ -1185,12 +1260,12 @@ export default function AdminPage() {
                     : "AI could not verify these update photos. Manually review and approve or delete."}
                 </p>
               </div>
-              <button onClick={loadPendingUpdates} className="text-xs text-primary hover:underline">
+              <button onClick={() => loadPendingUpdates(1)} className="text-xs text-primary hover:underline">
                 {lang === "it" ? "Aggiorna" : "Refresh"}
               </button>
             </div>
 
-            {pendingUpdatesLoading ? (
+            {pendingUpdatesLoading && pendingUpdates.length === 0 ? (
               <div className="flex items-center justify-center py-20">
                 <div className="w-8 h-8 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
               </div>
@@ -1205,69 +1280,78 @@ export default function AdminPage() {
                 <p className="text-sm text-muted-foreground mt-1">{lang === "it" ? "Tutti gli aggiornamenti sono stati revisionati" : "All updates have been reviewed"}</p>
               </div>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {pendingUpdates.map((update) => {
-                  const isActing = actionLoading?.startsWith(`update:${update.id}:`);
-                  const src = update.photoUrl.startsWith("/objects/") ? `/api/storage${update.photoUrl}` : update.photoUrl;
-                  return (
-                    <div key={update.id} className="bg-card border border-amber-200 dark:border-amber-800/50 rounded-2xl overflow-hidden shadow-sm">
-                      <div className="relative aspect-video bg-black/5">
-                        <img
-                          src={src}
-                          alt="Aggiornamento in attesa"
-                          className="w-full h-full object-cover"
-                        />
-                        <div className="absolute top-2 left-2 bg-amber-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
-                          <svg width="9" height="9" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12" strokeLinecap="round"/><line x1="12" y1="16" x2="12.01" y2="16" strokeLinecap="round"/></svg>
-                          {lang === "it" ? "Aggiornamento" : "Update"}
+              <>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {pendingUpdates.map((update) => {
+                    const isActing = actionLoading?.startsWith(`update:${update.id}:`);
+                    const src = update.photoUrl.startsWith("/objects/") ? `/api/storage${update.photoUrl}` : update.photoUrl;
+                    return (
+                      <div key={update.id} className="bg-card border border-amber-200 dark:border-amber-800/50 rounded-2xl overflow-hidden shadow-sm">
+                        <div className="relative aspect-video bg-black/5">
+                          <img
+                            src={src}
+                            alt="Aggiornamento in attesa"
+                            className="w-full h-full object-cover"
+                          />
+                          <div className="absolute top-2 left-2 bg-amber-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
+                            <svg width="9" height="9" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12" strokeLinecap="round"/><line x1="12" y1="16" x2="12.01" y2="16" strokeLinecap="round"/></svg>
+                            {lang === "it" ? "Aggiornamento" : "Update"}
+                          </div>
+                        </div>
+                        <div className="p-4 space-y-2">
+                          <div className="flex items-center gap-2">
+                            <span className="font-semibold text-sm text-foreground truncate">
+                              {update.plantName ?? update.species ?? (lang === "it" ? "Senza nome" : "No name")}
+                            </span>
+                            <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-full flex-shrink-0">
+                              {lang === "it" ? "Albero" : "Tree"} #{update.treeId}
+                            </span>
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            @{update.username ?? "?"} · {new Date(update.createdAt).toLocaleDateString(lang === "it" ? "it-IT" : "en-GB", { day: "2-digit", month: "short", year: "numeric" })}
+                          </div>
+                          {update.note && (
+                            <p className="text-xs text-muted-foreground line-clamp-2 italic">"{update.note}"</p>
+                          )}
+                          <div className="flex gap-2 pt-1">
+                            <button
+                              onClick={() => handleApprovePendingUpdate(update)}
+                              disabled={!!isActing}
+                              className="flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-semibold bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 rounded-xl hover:bg-green-200 transition-colors disabled:opacity-50"
+                            >
+                              {isActing && actionLoading === `update:${update.id}:approve` ? (
+                                <span className="w-3 h-3 border-2 border-green-500 border-t-transparent rounded-full animate-spin" />
+                              ) : (
+                                <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path d="M5 13l4 4L19 7" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                              )}
+                              {lang === "it" ? "Approva" : "Approve"}
+                            </button>
+                            <button
+                              onClick={() => handleRejectPendingUpdate(update)}
+                              disabled={!!isActing}
+                              className="flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-semibold bg-destructive/10 text-destructive rounded-xl hover:bg-destructive/20 transition-colors disabled:opacity-50"
+                            >
+                              {isActing && actionLoading === `update:${update.id}:reject` ? (
+                                <span className="w-3 h-3 border-2 border-destructive border-t-transparent rounded-full animate-spin" />
+                              ) : (
+                                <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path d="M6 18L18 6M6 6l12 12" strokeLinecap="round"/></svg>
+                              )}
+                              {lang === "it" ? "Elimina" : "Delete"}
+                            </button>
+                          </div>
                         </div>
                       </div>
-                      <div className="p-4 space-y-2">
-                        <div className="flex items-center gap-2">
-                          <span className="font-semibold text-sm text-foreground truncate">
-                            {update.plantName ?? update.species ?? (lang === "it" ? "Senza nome" : "No name")}
-                          </span>
-                          <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-full flex-shrink-0">
-                            {lang === "it" ? "Albero" : "Tree"} #{update.treeId}
-                          </span>
-                        </div>
-                        <div className="text-xs text-muted-foreground">
-                          @{update.username ?? "?"} · {new Date(update.createdAt).toLocaleDateString(lang === "it" ? "it-IT" : "en-GB", { day: "2-digit", month: "short", year: "numeric" })}
-                        </div>
-                        {update.note && (
-                          <p className="text-xs text-muted-foreground line-clamp-2 italic">"{update.note}"</p>
-                        )}
-                        <div className="flex gap-2 pt-1">
-                          <button
-                            onClick={() => handleApprovePendingUpdate(update)}
-                            disabled={!!isActing}
-                            className="flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-semibold bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 rounded-xl hover:bg-green-200 transition-colors disabled:opacity-50"
-                          >
-                            {isActing && actionLoading === `update:${update.id}:approve` ? (
-                              <span className="w-3 h-3 border-2 border-green-500 border-t-transparent rounded-full animate-spin" />
-                            ) : (
-                              <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path d="M5 13l4 4L19 7" strokeLinecap="round" strokeLinejoin="round"/></svg>
-                            )}
-                            {lang === "it" ? "Approva" : "Approve"}
-                          </button>
-                          <button
-                            onClick={() => handleRejectPendingUpdate(update)}
-                            disabled={!!isActing}
-                            className="flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-semibold bg-destructive/10 text-destructive rounded-xl hover:bg-destructive/20 transition-colors disabled:opacity-50"
-                          >
-                            {isActing && actionLoading === `update:${update.id}:reject` ? (
-                              <span className="w-3 h-3 border-2 border-destructive border-t-transparent rounded-full animate-spin" />
-                            ) : (
-                              <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path d="M6 18L18 6M6 6l12 12" strokeLinecap="round"/></svg>
-                            )}
-                            {lang === "it" ? "Elimina" : "Delete"}
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+                    );
+                  })}
+                </div>
+                {pendingUpdatesHasMore && (
+                  <div ref={pendingUpdatesSentinel} className="flex items-center justify-center py-6">
+                    {pendingUpdatesLoading && (
+                      <div className="w-6 h-6 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
+                    )}
+                  </div>
+                )}
+              </>
             )}
           </>
         )}

@@ -205,30 +205,61 @@ router.get("/admin/trees", requireAuth, requireAdmin, async (req, res) => {
   }
 });
 
-// GET /admin/trees/pending — list trees waiting for manual review
-router.get("/admin/trees/pending", requireAuth, requireAdmin, async (req, res) => {
+// GET /admin/pending-counts — lightweight counts for badges (no heavy data)
+router.get("/admin/pending-counts", requireAuth, requireAdmin, async (req, res) => {
   try {
-    const trees = await db
-      .select({
-        id: treesTable.id,
-        userId: treesTable.userId,
-        photoUrl: treesTable.photoUrl,
-        plantName: treesTable.plantName,
-        caption: treesTable.caption,
-        species: treesTable.species,
-        locationName: treesTable.locationName,
-        country: treesTable.country,
-        photoStatus: treesTable.photoStatus,
-        createdAt: treesTable.createdAt,
-        username: usersTable.username,
-        userPhotoUrl: usersTable.photoUrl,
-      })
-      .from(treesTable)
-      .leftJoin(usersTable, eq(treesTable.userId, usersTable.clerkUserId))
-      .where(eq(treesTable.photoStatus, "pending"))
-      .orderBy(desc(treesTable.createdAt));
+    const [[treesCount], [updatesCount]] = await Promise.all([
+      db.select({ total: count() }).from(treesTable).where(eq(treesTable.photoStatus, "pending")),
+      db.select({ total: count() }).from(treeUpdatesTable).where(eq(treeUpdatesTable.photoStatus, "pending")),
+    ]);
+    res.json({
+      pendingTrees: Number(treesCount?.total ?? 0),
+      pendingUpdates: Number(updatesCount?.total ?? 0),
+    });
+  } catch (err) {
+    req.log.error({ err }, "Error fetching pending counts");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
 
-    res.json(trees.map((t) => ({ ...t, createdAt: t.createdAt.toISOString() })));
+// GET /admin/trees/pending — list trees waiting for manual review (paginated)
+router.get("/admin/trees/pending", requireAuth, requireAdmin, async (req, res) => {
+  const page = Math.max(1, parseInt(req.query.page as string, 10) || 1);
+  const limit = Math.min(50, Math.max(1, parseInt(req.query.limit as string, 10) || 10));
+  const offset = (page - 1) * limit;
+  try {
+    const [trees, [totalRow]] = await Promise.all([
+      db
+        .select({
+          id: treesTable.id,
+          userId: treesTable.userId,
+          photoUrl: treesTable.photoUrl,
+          plantName: treesTable.plantName,
+          caption: treesTable.caption,
+          species: treesTable.species,
+          locationName: treesTable.locationName,
+          country: treesTable.country,
+          photoStatus: treesTable.photoStatus,
+          createdAt: treesTable.createdAt,
+          username: usersTable.username,
+          userPhotoUrl: usersTable.photoUrl,
+        })
+        .from(treesTable)
+        .leftJoin(usersTable, eq(treesTable.userId, usersTable.clerkUserId))
+        .where(eq(treesTable.photoStatus, "pending"))
+        .orderBy(desc(treesTable.createdAt))
+        .limit(limit)
+        .offset(offset),
+      db.select({ total: count() }).from(treesTable).where(eq(treesTable.photoStatus, "pending")),
+    ]);
+    const total = Number(totalRow?.total ?? 0);
+    res.json({
+      items: trees.map((t) => ({ ...t, createdAt: t.createdAt.toISOString() })),
+      total,
+      page,
+      limit,
+      hasMore: offset + trees.length < total,
+    });
   } catch (err) {
     req.log.error({ err }, "Error listing pending trees");
     res.status(500).json({ error: "Internal server error" });
@@ -291,27 +322,42 @@ router.delete("/admin/trees/:treeId", requireAuth, requireAdmin, async (req, res
   }
 });
 
-// GET /admin/tree-updates/pending — list tree updates waiting for manual review
+// GET /admin/tree-updates/pending — list tree updates waiting for manual review (paginated)
 router.get("/admin/tree-updates/pending", requireAuth, requireAdmin, async (req, res) => {
+  const page = Math.max(1, parseInt(req.query.page as string, 10) || 1);
+  const limit = Math.min(50, Math.max(1, parseInt(req.query.limit as string, 10) || 10));
+  const offset = (page - 1) * limit;
   try {
-    const updates = await db
-      .select({
-        id: treeUpdatesTable.id,
-        treeId: treeUpdatesTable.treeId,
-        photoUrl: treeUpdatesTable.photoUrl,
-        note: treeUpdatesTable.note,
-        photoStatus: treeUpdatesTable.photoStatus,
-        createdAt: treeUpdatesTable.createdAt,
-        username: usersTable.username,
-        plantName: treesTable.plantName,
-        species: treesTable.species,
-      })
-      .from(treeUpdatesTable)
-      .innerJoin(treesTable, eq(treeUpdatesTable.treeId, treesTable.id))
-      .leftJoin(usersTable, eq(treesTable.userId, usersTable.clerkUserId))
-      .where(eq(treeUpdatesTable.photoStatus, "pending"))
-      .orderBy(desc(treeUpdatesTable.createdAt));
-    res.json(updates.map((u) => ({ ...u, createdAt: u.createdAt.toISOString() })));
+    const [updates, [totalRow]] = await Promise.all([
+      db
+        .select({
+          id: treeUpdatesTable.id,
+          treeId: treeUpdatesTable.treeId,
+          photoUrl: treeUpdatesTable.photoUrl,
+          note: treeUpdatesTable.note,
+          photoStatus: treeUpdatesTable.photoStatus,
+          createdAt: treeUpdatesTable.createdAt,
+          username: usersTable.username,
+          plantName: treesTable.plantName,
+          species: treesTable.species,
+        })
+        .from(treeUpdatesTable)
+        .innerJoin(treesTable, eq(treeUpdatesTable.treeId, treesTable.id))
+        .leftJoin(usersTable, eq(treesTable.userId, usersTable.clerkUserId))
+        .where(eq(treeUpdatesTable.photoStatus, "pending"))
+        .orderBy(desc(treeUpdatesTable.createdAt))
+        .limit(limit)
+        .offset(offset),
+      db.select({ total: count() }).from(treeUpdatesTable).where(eq(treeUpdatesTable.photoStatus, "pending")),
+    ]);
+    const total = Number(totalRow?.total ?? 0);
+    res.json({
+      items: updates.map((u) => ({ ...u, createdAt: u.createdAt.toISOString() })),
+      total,
+      page,
+      limit,
+      hasMore: offset + updates.length < total,
+    });
   } catch (err) {
     req.log.error({ err }, "Error listing pending tree updates");
     res.status(500).json({ error: "Internal server error" });
