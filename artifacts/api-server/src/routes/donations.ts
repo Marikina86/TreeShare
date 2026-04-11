@@ -13,7 +13,7 @@ import { eq, and, desc, sql } from "drizzle-orm";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth";
 import { getUncachableStripeClient, getStripePublishableKey } from "../lib/stripe";
 
-const PLATFORM_FEE_RATE = 0.20;
+const PLATFORM_FEE_RATE = 0.30;
 const PAYOUT_FEE_CENTS = 25;
 const MIN_PAYOUT_BALANCE_CENTS = 125;
 

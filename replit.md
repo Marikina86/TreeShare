@@ -76,11 +76,11 @@ A plant/tree sharing social app. Community members document trees/plants they pl
 ### Donation System (Stripe) — Fund Separation Architecture
 - **Account types**: Users can be `"user"` (default) or `"organization"` — only orgs can create campaigns
 - **Stripe integration**: Uses Replit Stripe connector (NOT env vars); `getUncachableStripeClient()` called fresh each request
-- **Platform model**: Platform collects all funds; 20% platform fee, 80% to org; payout fee €0.25 (25 cents)
+- **Platform model**: Platform collects all funds; 30% platform fee, 70% to org; payout fee €0.25 (25 cents)
 - **Amounts**: All stored in cents (integer) — `goalAmount`, `amountTotal`, `amountOrg`, `amountPlatform`
 - **FUND SEPARATION** (critical design constraint):
-  - `org_balances` table: ONLY org data — `total_org_received` (cumulative 80% share), `available_balance`, `total_paid_out`
-  - `platform_revenue` table: ONLY platform data — `total_commissions` (cumulative 20% fees), `total_payout_fees`, `transaction_count`
+  - `org_balances` table: ONLY org data — `total_org_received` (cumulative 70% share), `available_balance`, `total_paid_out`
+  - `platform_revenue` table: ONLY platform data — `total_commissions` (cumulative 30% fees), `total_payout_fees`, `transaction_count`
   - `ledger_entries` table: Full audit trail — every credit/debit logged with `entry_type`, `amount_cents`, `org_user_id`, `donation_id`/`payout_id`, `description`
   - Org balance NEVER includes platform commission; platform revenue NEVER includes org funds
   - Payouts calculated ONLY from `available_balance` (org funds); platform fee deducted and credited to `platform_revenue.total_payout_fees`
