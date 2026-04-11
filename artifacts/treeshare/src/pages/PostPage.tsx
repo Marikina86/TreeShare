@@ -104,8 +104,7 @@ export default function PostPage() {
       });
 
       if (!verifyRes.ok) {
-        // Risposta HTTP non 2xx inattesa: blocca upload
-        throw new Error(`Verifica fallita: HTTP ${verifyRes.status}`);
+        throw new Error(`HTTP ${verifyRes.status}`);
       }
 
       const verifyData = (await verifyRes.json()) as {
@@ -149,17 +148,14 @@ export default function PostPage() {
         return;
       }
     } catch {
-      // Errore di rete verso il server: blocca upload
-      setVerifyState("rejected");
-      setPhotoPreview(null);
-      setPhotoFile(null);
+      canUpload = true;
+      setPhotoStatusForUpload("pending");
+      setVerifyState("pending");
       toast({
-        title: "❌ Verifica fallita",
-        description: "Impossibile verificare l'immagine. Controlla la connessione e riprova.",
-        variant: "destructive",
-        duration: 5000,
+        title: "⏳ Verifica manuale richiesta",
+        description: "Impossibile verificare l'immagine automaticamente. La tua foto sarà pubblicata dopo la revisione da parte degli amministratori.",
+        duration: 6000,
       });
-      return;
     }
 
     // STEP 2: upload avviene SOLO se canUpload === true

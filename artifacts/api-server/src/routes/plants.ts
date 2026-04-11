@@ -102,7 +102,8 @@ router.post("/plants/verify", async (req, res) => {
       try {
         parsed = extractJson(raw);
       } catch {
-        res.json({ isPlant: false, label: "Non valido", reason: "Impossibile analizzare la risposta AI." });
+        console.warn(`[plants/verify] Modello ${model}: risposta non parsabile — fallback a revisione manuale`);
+        res.json({ isPlant: null, aiUnavailable: true, reason: "Risposta AI non valida. Revisione manuale richiesta." });
         return;
       }
 
