@@ -431,7 +431,7 @@ router.get("/trees/:treeId/updates", async (req, res) => {
   }
 });
 
-// ── POST /trees/:treeId/updates — aggiunge aggiornamento (max 3) ──────────────
+// ── POST /trees/:treeId/updates — aggiunge aggiornamento (max 2) ──────────────
 router.post("/trees/:treeId/updates", requireAuth, async (req, res) => {
   const userId = (req as AuthenticatedRequest).userId;
   const paramsResult = AddTreeUpdateParams.safeParse(req.params);
@@ -460,13 +460,13 @@ router.post("/trees/:treeId/updates", requireAuth, async (req, res) => {
       .select({ id: treeUpdatesTable.id })
       .from(treeUpdatesTable)
       .where(eq(treeUpdatesTable.treeId, treeId));
-    if (existingUpdates.length >= 3) {
-      res.status(422).json({ error: "Limite raggiunto: puoi aggiungere al massimo 3 aggiornamenti per pianta." });
+    if (existingUpdates.length >= 2) {
+      res.status(422).json({ error: "Limite raggiunto: puoi aggiungere al massimo 2 aggiornamenti per pianta." });
       return;
     }
     const [update] = await db
       .insert(treeUpdatesTable)
-      .values({ treeId, photoUrl, note: note ?? null, photoStatus: photoStatus ?? "approved" })
+      .values({ treeId, userId, photoUrl, note: note ?? null, photoStatus: photoStatus ?? "approved" })
       .returning();
     res.status(201).json({
       id: update!.id,

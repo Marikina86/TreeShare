@@ -370,17 +370,17 @@ export default function TreeDetailPage() {
               </button>
               {(() => {
                 const updateCount = updates.data?.length ?? 0;
-                const atLimit = updateCount >= 3;
+                const atLimit = updateCount >= 2;
                 return (
                   <button
                     onClick={() => !atLimit && setShowUpdateForm(!showUpdateForm)}
                     disabled={atLimit}
-                    title={atLimit ? "Limite di 3 aggiornamenti raggiunto" : "Aggiungi aggiornamento fotografico"}
+                    title={atLimit ? "Limite di 2 aggiornamenti raggiunto" : "Aggiungi aggiornamento fotografico"}
                     className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-opacity flex items-center gap-1.5 ${atLimit ? "bg-muted text-muted-foreground cursor-not-allowed" : "bg-primary text-primary-foreground hover:opacity-90"}`}
                   >
                     + Aggiorna
                     <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${atLimit ? "bg-destructive/20 text-destructive" : "bg-white/20"}`}>
-                      {updateCount}/3
+                      {updateCount}/2
                     </span>
                   </button>
                 );
