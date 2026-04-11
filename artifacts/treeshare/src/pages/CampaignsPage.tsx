@@ -1,5 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Link } from "wouter";
+import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@clerk/react";
 import Layout from "@/components/Layout";
 import { useLang } from "@/lib/i18n";
@@ -111,26 +112,24 @@ export default function CampaignsPage() {
   const { lang } = useLang();
   const l = t[lang as Lang] || t.en;
 
-  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
-  const [loading, setLoading] = useState(true);
   const [sort, setSort] = useState<"recent" | "popular" | "funded">("recent");
 
-  async function loadCampaigns(sortBy: string) {
-    setLoading(true);
-    try {
+  const { data: campaigns = [], isLoading: loading } = useQuery<Campaign[]>({
+    queryKey: ["campaigns-active", sort],
+    queryFn: async () => {
       const token = await getToken();
-      const res = await fetch(`/api/donations/campaigns/active?sort=${sortBy}`, {
+      const res = await fetch(`/api/donations/campaigns/active?sort=${sort}`, {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
-      if (res.ok) setCampaigns(await res.json());
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  useEffect(() => {
-    loadCampaigns(sort);
-  }, [sort]);
+      if (!res.ok) return [];
+      return res.json();
+    },
+    staleTime: Infinity,
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
+    refetchOnReconnect: false,
+    refetchInterval: false,
+  });
 
   function progressPercent(c: Campaign): number | null {
     if (!c.goalAmount || c.goalAmount <= 0) return null;
