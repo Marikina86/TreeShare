@@ -13,9 +13,9 @@ import { eq, and, desc, sql } from "drizzle-orm";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth";
 import { getUncachableStripeClient, getStripePublishableKey } from "../lib/stripe";
 
-const PLATFORM_FEE_RATE = 0.30;
-const PAYOUT_FEE_CENTS = 25;
-const MIN_PAYOUT_BALANCE_CENTS = 125;
+const PLATFORM_FEE_RATE = 0.20;
+const PAYOUT_FEE_CENTS = 500;
+const MIN_PAYOUT_BALANCE_CENTS = 600;
 
 async function ensurePlatformRevenueRow(tx: any) {
   const [existing] = await tx.select({ id: platformRevenueTable.id }).from(platformRevenueTable).where(eq(platformRevenueTable.id, 1));
@@ -339,7 +339,7 @@ router.post("/donations/request-payout", requireAuth, async (req, res) => {
       .where(eq(orgBalancesTable.userId, userId));
 
     if (!balanceRow || balanceRow.availableBalance < MIN_PAYOUT_BALANCE_CENTS) {
-      res.status(400).json({ error: `Insufficient balance (min €${(MIN_PAYOUT_BALANCE_CENTS / 100).toFixed(2)} including €0.25 fee)` });
+      res.status(400).json({ error: `Insufficient balance (min €${(MIN_PAYOUT_BALANCE_CENTS / 100).toFixed(2)} including €5.00 fee)` });
       return;
     }
 

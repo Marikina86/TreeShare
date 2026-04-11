@@ -39,8 +39,8 @@ const t = {
     totalPaidOut: "Totale erogato",
     requestPayout: "Richiedi pagamento",
     payoutRequested: "Pagamento richiesto",
-    payoutFee: "Costo payout: €0,25",
-    minPayout: "Saldo minimo per payout: €1,25",
+    payoutFee: "Costo payout: €5,00",
+    minPayout: "Saldo minimo per payout: €6,00",
     noData: "Nessuna campagna creata",
   },
   en: {
@@ -68,8 +68,8 @@ const t = {
     totalPaidOut: "Total paid out",
     requestPayout: "Request payout",
     payoutRequested: "Payout requested",
-    payoutFee: "Payout fee: €0.25",
-    minPayout: "Minimum payout balance: €1.25",
+    payoutFee: "Payout fee: €5.00",
+    minPayout: "Minimum payout balance: €6.00",
     noData: "No campaigns created",
   },
 };
