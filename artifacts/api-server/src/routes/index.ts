@@ -18,6 +18,7 @@ import inboxRouter from "./inbox";
 import policiesRouter from "./policies";
 import consentsRouter from "./consents";
 import cookieConsentRouter from "./cookieConsent";
+import donationsRouter from "./donations";
 
 const router: IRouter = Router();
 
@@ -40,5 +41,6 @@ router.use(inboxRouter);
 router.use(policiesRouter);
 router.use(consentsRouter);
 router.use(cookieConsentRouter);
+router.use(donationsRouter);
 
 export default router;

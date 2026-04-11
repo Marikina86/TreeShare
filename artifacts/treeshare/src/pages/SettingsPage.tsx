@@ -7,6 +7,7 @@ import { useLang, type Lang } from "@/lib/i18n";
 import { useToast } from "@/hooks/use-toast";
 import { useGetMyProfile } from "@workspace/api-client-react";
 import { useGps, getPlatformInstructions } from "@/hooks/useGps";
+import DonationCampaignManager from "@/components/DonationCampaignManager";
 
 export default function SettingsPage() {
   const { lang, setLang, t } = useLang();
@@ -652,6 +653,12 @@ export default function SettingsPage() {
             </div>
           </section>
         )}
+
+        <DonationCampaignManager
+          accountType={(myProfile as any)?.accountType ?? "user"}
+          stripeAccountId={(myProfile as any)?.stripeAccountId ?? null}
+          onRefreshProfile={() => queryClient.invalidateQueries({ queryKey: ["/api/users/me"] })}
+        />
 
         {/* Account section */}
         <section className="mb-8">

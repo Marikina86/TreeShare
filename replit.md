@@ -73,5 +73,22 @@ A plant/tree sharing social app. Community members document trees/plants they pl
 - **Smart feed refresh**: `useFeed` hook checks lightweight `GET /api/trees/feed-meta` before full feed fetch
 - **Badge counts**: Shown in nav, only update on app open or manual refresh
 
-### DB Schema (16 tables)
-`users`, `trees`, `treeUpdates`, `treeSuns`, `events`, `eventParticipants`, `alerts`, `tips`, `problemReports`, `userNotifications`, `organizations`, `reports`, `weeklyWinners`, `policies`, `userConsents`, `cookieConsents`
+### Donation System (Stripe)
+- **Account types**: Users can be `"user"` (default) or `"organization"` — only orgs can create campaigns
+- **Stripe integration**: Uses Replit Stripe connector (NOT env vars); `getUncachableStripeClient()` called fresh each request
+- **Platform model**: Platform collects all funds; 20% platform fee, 80% to org; payout fee €0.25 (25 cents)
+- **Amounts**: All stored in cents (integer) — `goalAmount`, `amountTotal`, `amountOrg`, `amountPlatform`
+- **Webhook security**: Raw body via `express.raw()` mounted before `express.json()`; strict signature verification; rejects unsigned events
+- **Idempotency**: Webhook uses conditional UPDATE (`WHERE status != 'completed'`) — no double-crediting
+- **Payout safety**: Atomic balance deduction via conditional UPDATE with balance rollback if Stripe transfer fails
+- **Webhook handler**: Exported as `webhookHandler` from donations.ts, mounted directly in app.ts at `/api/donations/webhook`
+- **Frontend**: `DonationCampaignManager` in SettingsPage (org management); `DonateSection` on ProfilePage (visitor donation)
+- **Stripe Connect**: Express accounts for orgs; onboarding via account links
+
+### CO₂ Environmental Impact
+- Computed client-side from `trees.data` using `plantedAt` field
+- Formula: `Σ(years_since_plantedAt × 22 kg)`, fallback to `createdAt` if `plantedAt` null
+- Emerald UI card on profile pages; multilingual (6 languages); no new API calls
+
+### DB Schema (20 tables)
+`users`, `trees`, `treeUpdates`, `treeSuns`, `events`, `eventParticipants`, `alerts`, `tips`, `problemReports`, `userNotifications`, `organizations`, `reports`, `weeklyWinners`, `policies`, `userConsents`, `cookieConsents`, `donationCampaigns`, `donations`, `orgBalances`, `payouts`

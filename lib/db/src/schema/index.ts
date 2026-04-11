@@ -10,6 +10,8 @@ export const usersTable = pgTable("users", {
   photoUrl: text("photo_url"),
   country: text("country"),
   city: text("city"),
+  accountType: text("account_type").notNull().default("user"),
+  stripeAccountId: text("stripe_account_id"),
   treesPlanted: integer("trees_planted").notNull().default(0),
   isBlocked: boolean("is_blocked").notNull().default(false),
   createdAt: timestamp("created_at").notNull().defaultNow(),
@@ -213,6 +215,65 @@ export const cookieConsentsTable = pgTable("cookie_consents", {
   userAgent: text("user_agent"),
 }, (table) => [
   index("cookie_consents_session_id_idx").on(table.sessionId),
+]);
+
+// ── Donations ─────────────────────────────────────────────────────────────────
+
+export const donationCampaignsTable = pgTable("donation_campaigns", {
+  id: serial("id").primaryKey(),
+  userId: text("user_id").notNull(),
+  title: text("title").notNull(),
+  description: text("description").notNull(),
+  goalAmount: integer("goal_amount"),
+  isActive: boolean("is_active").notNull().default(true),
+  totalRaised: integer("total_raised").notNull().default(0),
+  donationCount: integer("donation_count").notNull().default(0),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (table) => [
+  index("donation_campaigns_user_id_idx").on(table.userId),
+]);
+
+export const donationsTable = pgTable("donations", {
+  id: serial("id").primaryKey(),
+  donorUserId: text("donor_user_id").notNull(),
+  recipientUserId: text("recipient_user_id").notNull(),
+  campaignId: integer("campaign_id").notNull(),
+  amountTotal: integer("amount_total").notNull(),
+  amountOrg: integer("amount_org").notNull(),
+  amountPlatform: integer("amount_platform").notNull(),
+  currency: text("currency").notNull().default("eur"),
+  status: text("status").notNull().default("pending"),
+  stripePaymentIntentId: text("stripe_payment_intent_id").unique(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (table) => [
+  index("donations_donor_idx").on(table.donorUserId),
+  index("donations_recipient_idx").on(table.recipientUserId),
+  index("donations_campaign_idx").on(table.campaignId),
+  index("donations_stripe_pi_idx").on(table.stripePaymentIntentId),
+]);
+
+export const orgBalancesTable = pgTable("org_balances", {
+  id: serial("id").primaryKey(),
+  userId: text("user_id").notNull().unique(),
+  totalReceived: integer("total_received").notNull().default(0),
+  totalCommissions: integer("total_commissions").notNull().default(0),
+  availableBalance: integer("available_balance").notNull().default(0),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const payoutsTable = pgTable("payouts", {
+  id: serial("id").primaryKey(),
+  userId: text("user_id").notNull(),
+  amountGross: integer("amount_gross").notNull(),
+  payoutFee: integer("payout_fee").notNull().default(25),
+  amountNet: integer("amount_net").notNull(),
+  status: text("status").notNull().default("pending"),
+  stripeTransferId: text("stripe_transfer_id"),
+  requestedAt: timestamp("requested_at").notNull().defaultNow(),
+  executedAt: timestamp("executed_at"),
+}, (table) => [
+  index("payouts_user_id_idx").on(table.userId),
 ]);
 
 export const insertUserSchema = createInsertSchema(usersTable).omit({ id: true, createdAt: true });

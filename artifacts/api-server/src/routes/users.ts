@@ -27,6 +27,8 @@ router.get("/users/me", requireAuth, async (req, res) => {
       photoUrl: user.photoUrl ?? null,
       country: user.country ?? null,
       city: user.city ?? null,
+      accountType: user.accountType ?? "user",
+      stripeAccountId: user.stripeAccountId ?? null,
       treesPlanted: user.treesPlanted,
       isBlocked: user.isBlocked,
       isAdmin: isAdmin(user.clerkUserId),
@@ -145,6 +147,7 @@ router.get("/users/:userId", async (req, res) => {
       photoUrl: user.photoUrl ?? null,
       country: user.country ?? null,
       city: user.city ?? null,
+      accountType: user.accountType ?? "user",
       treesPlanted: user.treesPlanted,
       createdAt: user.createdAt.toISOString(),
     });

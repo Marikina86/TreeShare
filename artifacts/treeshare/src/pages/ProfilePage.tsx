@@ -13,6 +13,7 @@ import TreeCard from "@/components/TreeCard";
 import { useToast } from "@/hooks/use-toast";
 import { useLang, type Lang } from "@/lib/i18n";
 import ReportProblemButton from "@/components/ReportProblemButton";
+import DonateSection from "@/components/DonateSection";
 
 const BADGES = [
   { min: 100, label: "Spirito delle foreste", emoji: "🌳", color: "bg-emerald-50 text-emerald-800 border-emerald-200" },
@@ -573,6 +574,13 @@ export default function ProfilePage() {
             )}
           </div>
         </div>
+
+        {!isOwnProfile && (profile as any)?.accountType === "organization" && (
+          <DonateSection
+            profileUserId={profile!.clerkUserId}
+            profileUsername={profile!.username}
+          />
+        )}
 
         {co2Data.treeCount > 0 && (
           <div className="mb-6 p-5 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 rounded-2xl">
