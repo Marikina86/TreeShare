@@ -84,6 +84,38 @@ async function batchLoadUsers(userIds: string[]): Promise<Map<string, { username
   return new Map(rows.map((r) => [r.clerkUserId, { username: r.username, photoUrl: r.photoUrl }]));
 }
 
+// ── GET /trees/feed-meta — versione leggera per smart-refresh ─────────────────
+// Restituisce solo total + lastUpdatedAt (timestamp più recente tra creazione e
+// aggiornamento degli alberi approvati). Il client confronta lastUpdatedAt con
+// il valore in cache: se è uguale, evita la chiamata completa al feed.
+// Costo: 2 query aggregate COUNT + MAX su indici, nessun join, nessun dato pesante.
+router.get("/trees/feed-meta", async (req, res) => {
+  try {
+    const [{ cnt }] = await db
+      .select({ cnt: count() })
+      .from(treesTable)
+      .where(eq(treesTable.photoStatus, "approved"));
+
+    const [{ latest }] = await db
+      .select({ latest: sql<string>`COALESCE(MAX(${treesTable.createdAt}), '1970-01-01')` })
+      .from(treesTable)
+      .where(eq(treesTable.photoStatus, "approved"));
+
+    const [{ latestUpdate }] = await db
+      .select({ latestUpdate: sql<string>`COALESCE(MAX(${treeUpdatesTable.createdAt}), '1970-01-01')` })
+      .from(treeUpdatesTable);
+
+    const latestTree = new Date(latest).getTime();
+    const latestUpd = new Date(latestUpdate).getTime();
+    const lastUpdatedAt = new Date(Math.max(latestTree, latestUpd)).toISOString();
+
+    res.json({ total: Number(cnt), lastUpdatedAt });
+  } catch (err) {
+    req.log.error({ err }, "Error fetching feed meta");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 // ── GET /trees — feed paginato ────────────────────────────────────────────────
 // Query: 1 per alberi + 1 per conteggio + 1 per winner IDs + 1 batch utenti
 //        + 1 GROUP BY update scoped ai soli ID della pagina

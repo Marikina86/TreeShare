@@ -56,5 +56,18 @@ A plant/tree sharing social app. Community members document trees/plants they pl
 - `GEMINI_API_KEY` — (optional) for AI plant verification
 - `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET` — (optional) for cloud image uploads
 
-### DB Schema (13 tables)
-`users`, `trees`, `treeUpdates`, `treeSuns`, `events`, `eventParticipants`, `alerts`, `tips`, `problemReports`, `userNotifications`, `organizations`, `reports`, `weeklyWinners`
+### GDPR Consent System
+- DB tables: `policies`, `user_consents`, `cookie_consents`
+- Active policies: Privacy v1.0, Terms v1.0 (Italian content)
+- Consent enforced for both private users (Clerk-based, `userId` = clerk ID) and organizations (`userId` = `org:<orgId>`)
+- Endpoints: `GET /policies/:type`, `POST /consent`, `GET /consent/status`, `DELETE /consent/:policyId`, `GET /users/:id/consents`
+- Cookie consent: `POST /cookie-consent`, `GET /cookie-consent/:sessionId`, `PATCH /cookie-consent/:sessionId`
+
+### Feed Performance Optimization
+- **QueryClient**: `staleTime: Infinity`, all auto-refetch disabled (focus, mount, reconnect, interval)
+- **Smart refresh**: `useFeed` hook checks lightweight `GET /api/trees/feed-meta` (returns `{total, lastUpdatedAt}`) before fetching full feed
+- **Pull-to-refresh**: Touch-based on mobile, button on desktop — both use smart refresh
+- **Cache version control**: `lastUpdatedAt` compared between server meta and cached meta; full feed fetch only if changed
+
+### DB Schema (16 tables)
+`users`, `trees`, `treeUpdates`, `treeSuns`, `events`, `eventParticipants`, `alerts`, `tips`, `problemReports`, `userNotifications`, `organizations`, `reports`, `weeklyWinners`, `policies`, `userConsents`, `cookieConsents`

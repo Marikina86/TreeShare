@@ -1,10 +1,11 @@
-import { useState, useEffect, useRef } from "react";
-import { useListTrees, getListTreesQueryKey } from "@workspace/api-client-react";
+import { useState, useEffect, useRef, useCallback } from "react";
+import { getListTreesQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import Layout from "@/components/Layout";
 import TreeCard from "@/components/TreeCard";
 import { Link } from "wouter";
 import { useAdaptiveQuality } from "@/hooks/useAdaptiveQuality";
+import { useFeed } from "@/hooks/useFeed";
 
 interface WeeklyWinnerTree {
   treeId: number;
@@ -28,7 +29,6 @@ interface WeeklyWinnerTree {
   createdAt: string;
 }
 
-/** Detect province from GPS + Nominatim reverse geocoding */
 async function detectProvince(): Promise<string | null> {
   return new Promise((resolve) => {
     if (!("geolocation" in navigator)) { resolve(null); return; }
@@ -58,28 +58,21 @@ async function detectProvince(): Promise<string | null> {
 
 export default function FeedPage() {
   const [page, setPage] = useState(1);
-
-  // Adaptive quality engine
   const adaptiveQuality = useAdaptiveQuality();
-  const limit = adaptiveQuality.batch_size; // dynamic batch size
+  const limit = adaptiveQuality.batch_size;
 
-  const { data, isLoading, isError } = useListTrees(
-    { page, limit },
-    { query: { queryKey: getListTreesQueryKey({ page, limit }) } }
-  );
+  const { data, isLoading, isError, refreshing, lastRefreshResult, smartRefresh } =
+    useFeed({ page, limit });
 
   const qualitySettings = {
     image_quality: adaptiveQuality.image_quality,
     upgrade_on_pause: adaptiveQuality.upgrade_on_pause,
   };
 
-  // Province filter state
   const [provinceFilter, setProvinceFilter] = useState<string | null>(null);
   const [detectingProvince, setDetectingProvince] = useState(false);
   const provinceDetectedRef = useRef(false);
 
-  // Weekly winner for the current province
-  // weeklyWinners is kept for province-filter compatibility (button removed, always empty)
   const [weeklyWinners] = useState<Record<string, WeeklyWinnerTree>>({});
   const loadingWinners = false;
 
@@ -101,7 +94,6 @@ export default function FeedPage() {
     }
   }
 
-  // Filter trees by province when filter is active
   const allTrees = data?.trees ?? [];
   const filteredTrees = provinceFilter
     ? allTrees.filter((t) => {
@@ -110,23 +102,139 @@ export default function FeedPage() {
       })
     : allTrees;
 
-  // Get this province's weekly winner (if filter active)
   const provinceWinner: WeeklyWinnerTree | null = provinceFilter
     ? (weeklyWinners[provinceFilter] ?? null)
     : null;
 
-  // Deduplicate: if winner is already in the filtered list, don't show it twice
   const winnerAlreadyInFeed = provinceWinner
     ? filteredTrees.some((t) => t.id === provinceWinner.treeId)
     : false;
 
   const showPinnedWinner = provinceWinner && !winnerAlreadyInFeed;
 
+  // ── Pull-to-refresh touch handling ──────────────────────────────────────────
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const touchStartY = useRef(0);
+  const [pullDistance, setPullDistance] = useState(0);
+  const [pullState, setPullState] = useState<"idle" | "pulling" | "refreshing" | "done">("idle");
+  const pullThreshold = 80;
+  const noChangeTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
+
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    if (window.scrollY > 0 || refreshing) return;
+    touchStartY.current = e.touches[0].clientY;
+    setPullState("pulling");
+  }, [refreshing]);
+
+  const handleTouchMove = useCallback((e: React.TouchEvent) => {
+    if (pullState !== "pulling") return;
+    const diff = Math.max(0, e.touches[0].clientY - touchStartY.current);
+    const dampened = Math.min(diff * 0.5, 140);
+    setPullDistance(dampened);
+  }, [pullState]);
+
+  const handleTouchEnd = useCallback(async () => {
+    if (pullState !== "pulling") return;
+    if (pullDistance >= pullThreshold) {
+      setPullState("refreshing");
+      setPullDistance(pullThreshold);
+      await smartRefresh();
+      setPullState("done");
+      setTimeout(() => {
+        setPullDistance(0);
+        setPullState("idle");
+      }, 600);
+    } else {
+      setPullDistance(0);
+      setPullState("idle");
+    }
+  }, [pullState, pullDistance, smartRefresh]);
+
+  useEffect(() => {
+    if (lastRefreshResult === "no-change") {
+      if (noChangeTimeoutRef.current) clearTimeout(noChangeTimeoutRef.current);
+      noChangeTimeoutRef.current = setTimeout(() => {
+      }, 2000);
+    }
+    return () => {
+      if (noChangeTimeoutRef.current) clearTimeout(noChangeTimeoutRef.current);
+    };
+  }, [lastRefreshResult]);
+
+  const pullIndicatorText = () => {
+    if (pullState === "refreshing") return "Aggiornamento...";
+    if (pullState === "done" && lastRefreshResult === "no-change") return "Nessun aggiornamento";
+    if (pullState === "done" && lastRefreshResult === "updated") return "Feed aggiornato!";
+    if (pullDistance >= pullThreshold) return "Rilascia per aggiornare";
+    return "Scorri per aggiornare";
+  };
+
   return (
     <Layout>
-      <div className="max-w-6xl mx-auto px-4 py-6">
+      <div
+        ref={scrollContainerRef}
+        className="max-w-6xl mx-auto px-4 py-6 relative"
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+      >
+        {/* Pull-to-refresh indicator */}
+        {(pullState !== "idle" || pullDistance > 0) && (
+          <div
+            className="flex items-center justify-center gap-2 transition-all duration-200 overflow-hidden"
+            style={{ height: pullDistance, marginBottom: pullDistance > 0 ? 8 : 0 }}
+          >
+            {pullState === "refreshing" ? (
+              <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+            ) : pullState === "done" ? (
+              lastRefreshResult === "no-change" ? (
+                <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" className="text-muted-foreground">
+                  <path d="M5 13l4 4L19 7" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              ) : (
+                <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" className="text-green-500">
+                  <path d="M5 13l4 4L19 7" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              )
+            ) : (
+              <svg
+                width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"
+                className={`text-muted-foreground transition-transform ${pullDistance >= pullThreshold ? "rotate-180" : ""}`}
+              >
+                <path d="M12 5v14M5 12l7 7 7-7" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            )}
+            <span className={`text-xs font-medium ${pullState === "done" && lastRefreshResult === "no-change" ? "text-muted-foreground" : pullState === "done" ? "text-green-600" : "text-muted-foreground"}`}>
+              {pullIndicatorText()}
+            </span>
+          </div>
+        )}
+
         <div className="flex items-center justify-between mb-6">
-          <h1 className="text-2xl font-bold text-foreground">Feed</h1>
+          <div className="flex items-center gap-3">
+            <h1 className="text-2xl font-bold text-foreground">Feed</h1>
+            {/* Desktop refresh button */}
+            <button
+              onClick={smartRefresh}
+              disabled={refreshing}
+              className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground border border-border rounded-lg hover:bg-muted transition-colors disabled:opacity-50"
+              title="Aggiorna feed"
+            >
+              <svg
+                width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"
+                className={refreshing ? "animate-spin" : ""}
+              >
+                <path d="M1 4v6h6M23 20v-6h-6" strokeLinecap="round" strokeLinejoin="round"/>
+                <path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+              {refreshing ? "..." : "Aggiorna"}
+            </button>
+            {lastRefreshResult === "no-change" && !refreshing && (
+              <span className="text-xs text-muted-foreground bg-muted px-2 py-1 rounded-full animate-in fade-in duration-300">
+                Nessun aggiornamento
+              </span>
+            )}
+          </div>
           <Link
             href="/post"
             data-testid="link-create-post"
@@ -139,7 +247,6 @@ export default function FeedPage() {
           </Link>
         </div>
 
-        {/* Pinned weekly winner banner */}
         {showPinnedWinner && (
           <div className="mb-6">
             <div className="flex items-center gap-2 mb-3">
@@ -181,7 +288,6 @@ export default function FeedPage() {
           </div>
         )}
 
-        {/* Show winners inline (already in feed) */}
         {provinceFilter && !loadingWinners && !provinceWinner && (
           <div className="mb-4 text-sm text-muted-foreground text-center py-2">
             Nessuna Pianta della Settimana per {provinceFilter} questa settimana.
@@ -257,7 +363,6 @@ export default function FeedPage() {
               ))}
             </div>
 
-            {/* Pagination (hidden when province filter active — all results shown) */}
             {!provinceFilter && data.total > limit && (
               <div className="flex items-center justify-center gap-3 mt-8">
                 <button
