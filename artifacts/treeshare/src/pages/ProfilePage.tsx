@@ -298,14 +298,6 @@ export default function ProfilePage() {
     return { treeCount: treeList.length, co2Kg: Math.round(totalCo2 * 10) / 10 };
   })();
 
-  useEffect(() => {
-    if (window.location.hash) {
-      const id = window.location.hash.slice(1);
-      const el = document.getElementById(id);
-      if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
-    }
-  }, [co2Data.treeCount]);
-
   return (
     <Layout>
       <div className="max-w-4xl mx-auto px-4 py-6">
@@ -583,7 +575,7 @@ export default function ProfilePage() {
         </div>
 
         {co2Data.treeCount > 0 && (
-          <div id="co2" className="mb-6 p-5 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 rounded-2xl scroll-mt-20">
+          <div className="mb-6 p-5 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 rounded-2xl">
             <div className="flex items-start gap-3 mb-3">
               <div className="w-10 h-10 rounded-full bg-emerald-100 dark:bg-emerald-900/50 flex items-center justify-center flex-shrink-0">
                 <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" className="text-emerald-600 dark:text-emerald-400">
