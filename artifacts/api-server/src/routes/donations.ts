@@ -130,6 +130,42 @@ router.patch("/donations/campaigns/:campaignId", requireAuth, async (req, res) =
   }
 });
 
+router.get("/donations/campaigns/active", async (req, res) => {
+  try {
+    const sortBy = req.query.sort as string || "recent";
+
+    const campaigns = await db
+      .select({
+        id: donationCampaignsTable.id,
+        userId: donationCampaignsTable.userId,
+        title: donationCampaignsTable.title,
+        description: donationCampaignsTable.description,
+        goalAmount: donationCampaignsTable.goalAmount,
+        totalRaised: donationCampaignsTable.totalRaised,
+        donationCount: donationCampaignsTable.donationCount,
+        createdAt: donationCampaignsTable.createdAt,
+        orgUsername: usersTable.username,
+        orgPhotoUrl: usersTable.photoUrl,
+      })
+      .from(donationCampaignsTable)
+      .innerJoin(usersTable, eq(donationCampaignsTable.userId, usersTable.clerkUserId))
+      .where(eq(donationCampaignsTable.isActive, true))
+      .orderBy(
+        sortBy === "popular"
+          ? desc(donationCampaignsTable.donationCount)
+          : sortBy === "funded"
+            ? desc(donationCampaignsTable.totalRaised)
+            : desc(donationCampaignsTable.createdAt)
+      )
+      .limit(50);
+
+    res.json(campaigns);
+  } catch (err) {
+    console.error("[donations] active campaigns error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 router.get("/donations/campaigns/user/:userId", async (req, res) => {
   const targetUserId = req.params.userId;
   try {
@@ -297,27 +333,37 @@ router.post("/donations/request-payout", requireAuth, async (req, res) => {
       return;
     }
 
+    const [balanceRow] = await db
+      .select({ availableBalance: orgBalancesTable.availableBalance })
+      .from(orgBalancesTable)
+      .where(eq(orgBalancesTable.userId, userId));
+
+    if (!balanceRow || balanceRow.availableBalance < MIN_PAYOUT_BALANCE_CENTS) {
+      res.status(400).json({ error: `Insufficient balance (min €${(MIN_PAYOUT_BALANCE_CENTS / 100).toFixed(2)} including €0.25 fee)` });
+      return;
+    }
+
+    const grossAmount = balanceRow.availableBalance;
+    const amountNet = grossAmount - PAYOUT_FEE_CENTS;
+
     const deducted = await db
       .update(orgBalancesTable)
       .set({
-        availableBalance: 0,
+        availableBalance: sql`${orgBalancesTable.availableBalance} - ${grossAmount}`,
         updatedAt: new Date(),
       })
       .where(
         and(
           eq(orgBalancesTable.userId, userId),
-          sql`${orgBalancesTable.availableBalance} >= ${MIN_PAYOUT_BALANCE_CENTS}`
+          sql`${orgBalancesTable.availableBalance} >= ${grossAmount}`
         )
       )
-      .returning({ previousBalance: orgBalancesTable.availableBalance });
+      .returning({ id: orgBalancesTable.id });
 
     if (deducted.length === 0) {
-      res.status(400).json({ error: `Insufficient balance (min €${(MIN_PAYOUT_BALANCE_CENTS / 100).toFixed(2)} including €0.25 fee)` });
+      res.status(400).json({ error: "Balance changed during payout, please retry" });
       return;
     }
-
-    const grossAmount = deducted[0].previousBalance;
-    const amountNet = grossAmount - PAYOUT_FEE_CENTS;
 
     let transfer;
     try {
@@ -328,7 +374,7 @@ router.post("/donations/request-payout", requireAuth, async (req, res) => {
         destination: user.stripeAccountId,
         metadata: { userId },
       });
-    } catch (stripeErr) {
+    } catch (stripeErr: any) {
       await db
         .update(orgBalancesTable)
         .set({
@@ -336,6 +382,7 @@ router.post("/donations/request-payout", requireAuth, async (req, res) => {
           updatedAt: new Date(),
         })
         .where(eq(orgBalancesTable.userId, userId));
+      console.error("[donations] Stripe transfer failed, balance rolled back:", stripeErr.message);
       throw stripeErr;
     }
 
@@ -474,7 +521,6 @@ export async function webhookHandler(req: Request, res: Response) {
     if (event.type === "payment_intent.succeeded") {
       const paymentIntent = event.data.object as any;
       const piId = paymentIntent.id;
-      const meta = paymentIntent.metadata || {};
 
       const result = await db.transaction(async (tx) => {
         const updatedRows = await tx
@@ -486,18 +532,19 @@ export async function webhookHandler(req: Request, res: Response) {
               sql`${donationsTable.status} != 'completed'`
             )
           )
-          .returning({ id: donationsTable.id });
+          .returning();
 
         if (updatedRows.length === 0) {
           return { idempotent: true };
         }
 
-        const donationId = updatedRows[0].id;
-        const campaignId = Number(meta.campaignId);
-        const recipientUserId = meta.recipientUserId;
-        const amountOrg = Number(meta.amountOrg) || 0;
-        const amountPlatform = Number(meta.amountPlatform) || 0;
-        const amountTotal = amountOrg + amountPlatform;
+        const donation = updatedRows[0];
+        const donationId = donation.id;
+        const campaignId = donation.campaignId;
+        const recipientUserId = donation.recipientUserId;
+        const amountOrg = donation.amountOrg ?? 0;
+        const amountPlatform = donation.amountPlatform ?? 0;
+        const amountTotal = donation.amountTotal ?? (amountOrg + amountPlatform);
 
         if (campaignId) {
           await tx

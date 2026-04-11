@@ -27,6 +27,7 @@ import OrganizationSignupPage from "@/pages/OrganizationSignupPage";
 import RegisterChoicePage from "@/pages/RegisterChoicePage";
 import PrivateSignupPage from "@/pages/PrivateSignupPage";
 import SSOCallbackPage from "@/pages/SSOCallbackPage";
+import CampaignsPage from "@/pages/CampaignsPage";
 import NotFound from "@/pages/not-found";
 import InstallPrompt from "@/components/InstallPrompt";
 
@@ -225,6 +226,7 @@ function ClerkProviderWithRoutes() {
             <Route path="/alerts" component={() => <ProtectedRoute component={AlertsPage} />} />
             <Route path="/tips" component={() => <ProtectedRoute component={TipsPage} />} />
             <Route path="/settings" component={() => <ProtectedRoute component={SettingsPage} />} />
+            <Route path="/campaigns" component={CampaignsPage} />
             <Route path="/admin" component={() => <AdminRoute component={AdminPage} />} />
             <Route path="/privacy" component={PrivacyPage} />
             <Route path="/terms" component={TermsPage} />

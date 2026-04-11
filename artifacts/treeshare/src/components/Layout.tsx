@@ -333,6 +333,16 @@ export default function Layout({ children }: LayoutProps) {
             {user?.username || user?.firstName}
           </span>
           <Link
+            href="/campaigns"
+            className={`p-2 rounded-lg transition-colors ${
+              location === "/campaigns" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground"
+            }`}
+          >
+            <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+              <path d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          </Link>
+          <Link
             href="/settings"
             title={t.settings.title}
             className={`p-2 rounded-lg transition-colors ${
@@ -368,7 +378,16 @@ export default function Layout({ children }: LayoutProps) {
           TreeShare
         </Link>
         <div className="flex items-center gap-1">
-          {/* Icona Avvisi con badge nella top bar mobile */}
+          <Link
+            href="/campaigns"
+            className={`p-2 rounded-lg transition-colors ${
+              location === "/campaigns" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"
+            }`}
+          >
+            <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+              <path d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          </Link>
           <Link
             href="/alerts"
             className={`relative p-2 rounded-lg transition-colors ${

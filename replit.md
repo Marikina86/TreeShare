@@ -98,5 +98,10 @@ A plant/tree sharing social app. Community members document trees/plants they pl
 - Formula: `Σ(years_since_plantedAt × 22 kg)`, fallback to `createdAt` if `plantedAt` null
 - Emerald UI card on profile pages; multilingual (6 languages); no new API calls
 
-### DB Schema (20 tables)
-`users`, `trees`, `treeUpdates`, `treeSuns`, `events`, `eventParticipants`, `alerts`, `tips`, `problemReports`, `userNotifications`, `organizations`, `reports`, `weeklyWinners`, `policies`, `userConsents`, `cookieConsents`, `donationCampaigns`, `donations`, `orgBalances`, `payouts`
+### Public CampaignsPage
+- Route `/campaigns` — public (no auth required), lists active campaigns with sort filters (Recent/Popular/Most funded)
+- API: `GET /api/donations/campaigns/active` — public endpoint
+- Heart icon in both desktop and mobile headers links to campaigns page
+
+### DB Schema (22 tables)
+`users`, `trees`, `treeUpdates`, `treeSuns`, `events`, `eventParticipants`, `alerts`, `tips`, `problemReports`, `userNotifications`, `organizations`, `reports`, `weeklyWinners`, `policies`, `userConsents`, `cookieConsents`, `donationCampaigns`, `donations`, `orgBalances`, `payouts`, `platformRevenue`, `ledgerEntries`
