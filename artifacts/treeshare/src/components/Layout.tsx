@@ -38,7 +38,7 @@ export default function Layout({ children }: LayoutProps) {
     return createdMs > lastSeenAt;
   }).length;
 
-  // ── Badge avvisi / notifiche / consigli — UN SOLO polling via /api/inbox ──
+  // ── Badge avvisi / notifiche / consigli (fetch singolo all'avvio) ──
   const [newAlertsCount, setNewAlertsCount] = useState(0);
   const [newNotifsCount, setNewNotifsCount] = useState(0);
   const [latestAlertTime, setLatestAlertTime] = useState<number>(0);
