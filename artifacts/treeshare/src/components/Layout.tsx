@@ -15,12 +15,24 @@ interface LayoutProps {
 }
 
 export default function Layout({ children }: LayoutProps) {
-  const [location] = useLocation();
+  const [location, setLocation] = useLocation();
   const { user } = useUser();
   const { signOut } = useClerk();
   const { getToken } = useAuth();
   const { t, lang } = useLang();
   const [showLogoutModal, setShowLogoutModal] = useState(false);
+  const [currentHash, setCurrentHash] = useState(() => window.location.hash);
+  useEffect(() => {
+    const onHash = () => setCurrentHash(window.location.hash);
+    window.addEventListener("hashchange", onHash);
+    return () => window.removeEventListener("hashchange", onHash);
+  }, []);
+  useEffect(() => {
+    if (!location.startsWith("/profile")) {
+      if (window.location.hash) window.history.replaceState(null, "", window.location.pathname);
+      setCurrentHash("");
+    }
+  }, [location]);
   const [signingOut, setSigningOut] = useState(false);
 
   // ── Badge nuovi eventi ────────────────────────────────────────────────────
@@ -271,6 +283,16 @@ export default function Layout({ children }: LayoutProps) {
     },
     {
       path: "/profile",
+      hash: "co2",
+      label: "CO₂",
+      icon: (
+        <svg width="22" height="22" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" className="text-emerald-600 dark:text-emerald-400">
+          <path d="M12 22V8M12 8C12 8 8 4 4 6C4 6 3 10 8 12C8 12 6 6 12 2C18 6 16 12 16 12C21 10 20 6 20 6C16 4 12 8 12 8Z" strokeLinecap="round" strokeLinejoin="round"/>
+        </svg>
+      ),
+    },
+    {
+      path: "/profile",
       label: t.nav.profile,
       icon: (
         <svg width="22" height="22" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
@@ -308,24 +330,48 @@ export default function Layout({ children }: LayoutProps) {
         </Link>
 
         <nav className="flex items-center gap-1">
-          {navItems.map((item) => (
-            <Link
-              key={item.path}
-              href={item.path}
-              className={`relative px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                location.startsWith(item.path)
-                  ? "bg-primary text-primary-foreground"
-                  : "text-foreground hover:bg-muted"
-              }`}
-            >
-              {item.label}
-              {"badge" in item && item.badge > 0 && (
-                <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center px-0.5 leading-none">
-                  {item.badge > 9 ? "9+" : item.badge}
-                </span>
-              )}
-            </Link>
-          ))}
+          {navItems.map((item) => {
+            const isActive = "hash" in item
+              ? location.startsWith(item.path) && currentHash === `#${item.hash}`
+              : location.startsWith(item.path) && !currentHash;
+            if ("hash" in item) {
+              return (
+                <a
+                  key={item.path + "#" + item.hash}
+                  href={`${item.path}#${item.hash}`}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    setLocation(item.path);
+                    setTimeout(() => {
+                      window.location.hash = item.hash!;
+                      document.getElementById(item.hash!)?.scrollIntoView({ behavior: "smooth", block: "start" });
+                    }, 100);
+                  }}
+                  className={`relative px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    isActive ? "bg-primary text-primary-foreground" : "text-foreground hover:bg-muted"
+                  }`}
+                >
+                  {item.label}
+                </a>
+              );
+            }
+            return (
+              <Link
+                key={item.path}
+                href={item.path}
+                className={`relative px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  isActive ? "bg-primary text-primary-foreground" : "text-foreground hover:bg-muted"
+                }`}
+              >
+                {item.label}
+                {"badge" in item && item.badge > 0 && (
+                  <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center px-0.5 leading-none">
+                    {item.badge > 9 ? "9+" : item.badge}
+                  </span>
+                )}
+              </Link>
+            );
+          })}
         </nav>
 
         <div className="flex items-center gap-2">
@@ -414,23 +460,49 @@ export default function Layout({ children }: LayoutProps) {
         {children}
       </main>
 
-      {/* Mobile bottom nav — 6 voci (Avvisi è nella top bar) */}
+      {/* Mobile bottom nav (Avvisi è nella top bar) */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-card border-t border-border z-50">
-        <div className="grid grid-cols-6">
-          {navItems.filter((item) => item.path !== "/alerts").map((item) => (
-            <Link
-              key={item.path}
-              href={item.path}
-              className={`flex flex-col items-center py-2 gap-0.5 text-[9px] font-medium transition-colors ${
-                location.startsWith(item.path)
-                  ? "text-primary"
-                  : "text-muted-foreground"
-              }`}
-            >
-              {item.icon}
-              {item.label}
-            </Link>
-          ))}
+        <div className="grid grid-cols-7">
+          {navItems.filter((item) => item.path !== "/alerts").map((item) => {
+            const itemKey = "hash" in item ? item.path + "#" + item.hash : item.path;
+            const isActive = "hash" in item
+              ? location.startsWith(item.path) && currentHash === `#${item.hash}`
+              : location.startsWith(item.path) && !currentHash;
+            if ("hash" in item) {
+              return (
+                <a
+                  key={itemKey}
+                  href={`${item.path}#${item.hash}`}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    setLocation(item.path);
+                    setTimeout(() => {
+                      window.location.hash = item.hash!;
+                      document.getElementById(item.hash!)?.scrollIntoView({ behavior: "smooth", block: "start" });
+                    }, 100);
+                  }}
+                  className={`flex flex-col items-center py-2 gap-0.5 text-[9px] font-medium transition-colors ${
+                    isActive ? "text-primary" : "text-muted-foreground"
+                  }`}
+                >
+                  {item.icon}
+                  {item.label}
+                </a>
+              );
+            }
+            return (
+              <Link
+                key={itemKey}
+                href={item.path}
+                className={`flex flex-col items-center py-2 gap-0.5 text-[9px] font-medium transition-colors ${
+                  isActive ? "text-primary" : "text-muted-foreground"
+                }`}
+              >
+                {item.icon}
+                {item.label}
+              </Link>
+            );
+          })}
         </div>
       </nav>
 
