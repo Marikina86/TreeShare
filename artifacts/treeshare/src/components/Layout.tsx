@@ -6,8 +6,6 @@ import { useListEvents, getListEventsQueryKey, useGetMyProfile } from "@workspac
 import { getEventsLastSeenAt } from "@/pages/EventsPage";
 import { getAlertsLastReadAt, getNotifsLastReadAt } from "@/pages/AlertsPage";
 import { getTipsLastReadAt } from "@/pages/TipsPage";
-import { useAlertSSE } from "@/hooks/useAlertSSE";
-import { useToast } from "@/hooks/use-toast";
 import { useGps, getPlatformInstructions } from "@/hooks/useGps";
 
 interface LayoutProps {
@@ -20,7 +18,6 @@ export default function Layout({ children }: LayoutProps) {
   const { signOut } = useClerk();
   const { getToken } = useAuth();
   const { t, lang } = useLang();
-  const { toast } = useToast();
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
 
@@ -45,87 +42,56 @@ export default function Layout({ children }: LayoutProps) {
   const [newNotifsCount, setNewNotifsCount] = useState(0);
   const [latestAlertTime, setLatestAlertTime] = useState<number>(0);
   const prevLatestAlertTimeRef = useRef<number>(0);
-  const isFirstPollRef = useRef<boolean>(true);
 
   const [newTipsCount, setNewTipsCount] = useState(0);
   const [latestTipTime, setLatestTipTime] = useState<number>(0);
   const prevLatestTipTimeRef = useRef<number>(0);
-  const isFirstTipPollRef = useRef<boolean>(true);
 
-  // Unico polling ogni 30s — sostituisce /api/alerts (15s) + /api/notifications (20s) + /api/tips (15s)
+  const fetchInbox = useRef(async () => {
+    try {
+      const token = await getToken();
+      if (!token) return;
+      const res = await fetch("/api/inbox", { headers: { Authorization: `Bearer ${token}` } });
+      if (!res.ok) return;
+      const inbox: {
+        alerts: Array<{ id: number; title: string; message: string; createdAt: string }>;
+        notifications: Array<{ isRead: boolean; createdAt: string }>;
+        tips: Array<{ id: number; title: string; createdAt: string }>;
+      } = await res.json();
+
+      const alertsLastRead = getAlertsLastReadAt();
+      const unreadAlerts = inbox.alerts.filter(
+        (a) => new Date(a.createdAt).getTime() > alertsLastRead
+      ).length;
+      setNewAlertsCount(unreadAlerts);
+      const latestAlert = inbox.alerts.length > 0
+        ? new Date(inbox.alerts[0].createdAt).getTime() : 0;
+      setLatestAlertTime(latestAlert);
+      prevLatestAlertTimeRef.current = latestAlert;
+
+      const notifsLastRead = getNotifsLastReadAt();
+      setNewNotifsCount(
+        inbox.notifications.filter(
+          (n) => !n.isRead || new Date(n.createdAt).getTime() > notifsLastRead
+        ).length
+      );
+
+      const tipsLastRead = getTipsLastReadAt();
+      setNewTipsCount(
+        inbox.tips.filter((t) => new Date(t.createdAt).getTime() > tipsLastRead).length
+      );
+      const latestTip = inbox.tips.length > 0
+        ? new Date(inbox.tips[0].createdAt).getTime() : 0;
+      setLatestTipTime(latestTip);
+      prevLatestTipTimeRef.current = latestTip;
+    } catch { /* silenzioso */ }
+  }).current;
+
   useEffect(() => {
-    async function fetchInbox() {
-      try {
-        const token = await getToken();
-        if (!token) return;
-        const res = await fetch("/api/inbox", { headers: { Authorization: `Bearer ${token}` } });
-        if (!res.ok) return;
-        const inbox: {
-          alerts: Array<{ id: number; title: string; message: string; createdAt: string }>;
-          notifications: Array<{ isRead: boolean; createdAt: string }>;
-          tips: Array<{ id: number; title: string; createdAt: string }>;
-        } = await res.json();
-
-        // ── Alerts ──────────────────────────────────────────────────────────
-        const alertsLastRead = getAlertsLastReadAt();
-        const unreadAlerts = inbox.alerts.filter(
-          (a) => new Date(a.createdAt).getTime() > alertsLastRead
-        ).length;
-        setNewAlertsCount(unreadAlerts);
-        const latestAlert = inbox.alerts.length > 0
-          ? new Date(inbox.alerts[0].createdAt).getTime() : 0;
-        setLatestAlertTime(latestAlert);
-        if (!isFirstPollRef.current && latestAlert > prevLatestAlertTimeRef.current) {
-          inbox.alerts
-            .filter((a) =>
-              new Date(a.createdAt).getTime() > prevLatestAlertTimeRef.current &&
-              new Date(a.createdAt).getTime() > alertsLastRead
-            )
-            .forEach((a) => {
-              if (!window.location.pathname.startsWith("/alerts")) {
-                toast({ title: `🔔 ${a.title}`, description: a.message.slice(0, 80) });
-              }
-            });
-        }
-        prevLatestAlertTimeRef.current = latestAlert;
-        isFirstPollRef.current = false;
-
-        // ── Notifications ────────────────────────────────────────────────────
-        const notifsLastRead = getNotifsLastReadAt();
-        setNewNotifsCount(
-          inbox.notifications.filter(
-            (n) => !n.isRead || new Date(n.createdAt).getTime() > notifsLastRead
-          ).length
-        );
-
-        // ── Tips ─────────────────────────────────────────────────────────────
-        const tipsLastRead = getTipsLastReadAt();
-        setNewTipsCount(
-          inbox.tips.filter((t) => new Date(t.createdAt).getTime() > tipsLastRead).length
-        );
-        const latestTip = inbox.tips.length > 0
-          ? new Date(inbox.tips[0].createdAt).getTime() : 0;
-        setLatestTipTime(latestTip);
-        if (!isFirstTipPollRef.current && latestTip > prevLatestTipTimeRef.current) {
-          inbox.tips
-            .filter((t) =>
-              new Date(t.createdAt).getTime() > prevLatestTipTimeRef.current &&
-              new Date(t.createdAt).getTime() > tipsLastRead
-            )
-            .forEach((t) => {
-              if (!window.location.pathname.startsWith("/tips")) {
-                toast({ title: `💡 ${t.title}` });
-              }
-            });
-        }
-        prevLatestTipTimeRef.current = latestTip;
-        isFirstTipPollRef.current = false;
-      } catch { /* silenzioso */ }
-    }
-
     fetchInbox();
-    const iv = setInterval(fetchInbox, 30_000);
-    return () => clearInterval(iv);
+    const handler = () => fetchInbox();
+    window.addEventListener("treeshare:refresh-inbox", handler);
+    return () => window.removeEventListener("treeshare:refresh-inbox", handler);
   }, []);
 
   // Azzeramento badge da localStorage (visita pagine)
@@ -142,23 +108,6 @@ export default function Layout({ children }: LayoutProps) {
     return () => window.removeEventListener("storage", onStorage);
   }, [latestAlertTime, latestTipTime]);
 
-  // SSE: aggiorna badge e mostra toast quando arriva un nuovo avviso
-  useAlertSSE({
-    onNewAlert(alert) {
-      const alertTime = new Date(alert.createdAt).getTime();
-      setNewAlertsCount((n) => n + 1);
-      setLatestAlertTime(alertTime);
-      // Aggiorna il ref così il polling non mostra un toast duplicato
-      prevLatestAlertTimeRef.current = Math.max(prevLatestAlertTimeRef.current, alertTime);
-      // Non mostrare il toast se l'utente è già nella pagina avvisi
-      if (!location.startsWith("/alerts")) {
-        toast({
-          title: `🔔 ${alert.title}`,
-          description: alert.message.slice(0, 80),
-        });
-      }
-    },
-  });
 
   // ── Prompt autorizzazione GPS ─────────────────────────────────────────────
   const GPS_ASKED_KEY = "treeshare_gps_asked";

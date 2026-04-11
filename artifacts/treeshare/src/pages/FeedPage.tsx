@@ -139,6 +139,7 @@ export default function FeedPage() {
       setPullState("refreshing");
       setPullDistance(pullThreshold);
       await smartRefresh();
+      window.dispatchEvent(new Event("treeshare:refresh-inbox"));
       setPullState("done");
       setTimeout(() => {
         setPullDistance(0);
@@ -215,7 +216,7 @@ export default function FeedPage() {
             <h1 className="text-2xl font-bold text-foreground">Feed</h1>
             {/* Desktop refresh button */}
             <button
-              onClick={smartRefresh}
+              onClick={() => { smartRefresh(); window.dispatchEvent(new Event("treeshare:refresh-inbox")); }}
               disabled={refreshing}
               className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground border border-border rounded-lg hover:bg-muted transition-colors disabled:opacity-50"
               title="Aggiorna feed"
