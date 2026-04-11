@@ -708,6 +708,84 @@ router.get("/donations/audit", requireAuth, async (req, res) => {
   }
 });
 
+router.get("/donations/admin-finance", requireAuth, async (req, res) => {
+  const userId = (req as AuthenticatedRequest).userId;
+  const adminIds = (process.env.ADMIN_CLERK_USER_IDS || "").split(",");
+  if (!adminIds.includes(userId)) {
+    res.status(403).json({ error: "Admin only" });
+    return;
+  }
+
+  try {
+    await ensurePlatformRevenueRow(db);
+    const [revenue] = await db.select().from(platformRevenueTable).where(eq(platformRevenueTable.id, 1));
+
+    const recentLedger = await db
+      .select()
+      .from(ledgerEntriesTable)
+      .orderBy(desc(ledgerEntriesTable.createdAt))
+      .limit(50);
+
+    const orgBalances = await db
+      .select({
+        username: usersTable.username,
+        totalOrgReceived: orgBalancesTable.totalOrgReceived,
+        availableBalance: orgBalancesTable.availableBalance,
+        totalPaidOut: orgBalancesTable.totalPaidOut,
+      })
+      .from(orgBalancesTable)
+      .innerJoin(usersTable, eq(orgBalancesTable.userId, usersTable.clerkUserId));
+
+    const recentDonations = await db
+      .select({
+        id: donationsTable.id,
+        donorUsername: sql<string>`donor.username`,
+        recipientUsername: sql<string>`recipient.username`,
+        amountTotal: donationsTable.amountTotal,
+        amountOrg: donationsTable.amountOrg,
+        amountPlatform: donationsTable.amountPlatform,
+        status: donationsTable.status,
+        createdAt: donationsTable.createdAt,
+      })
+      .from(donationsTable)
+      .innerJoin(sql`users AS donor`, sql`donor.clerk_user_id = ${donationsTable.donorUserId}`)
+      .innerJoin(sql`users AS recipient`, sql`recipient.clerk_user_id = ${donationsTable.recipientUserId}`)
+      .orderBy(desc(donationsTable.createdAt))
+      .limit(30);
+
+    const recentPayouts = await db
+      .select({
+        id: payoutsTable.id,
+        username: usersTable.username,
+        amountGross: payoutsTable.amountGross,
+        payoutFee: payoutsTable.payoutFee,
+        amountNet: payoutsTable.amountNet,
+        status: payoutsTable.status,
+        executedAt: payoutsTable.executedAt,
+      })
+      .from(payoutsTable)
+      .innerJoin(usersTable, eq(payoutsTable.userId, usersTable.clerkUserId))
+      .orderBy(desc(payoutsTable.createdAt))
+      .limit(20);
+
+    res.json({
+      platformRevenue: {
+        totalCommissions: revenue?.totalCommissions ?? 0,
+        totalPayoutFees: revenue?.totalPayoutFees ?? 0,
+        totalRevenue: (revenue?.totalCommissions ?? 0) + (revenue?.totalPayoutFees ?? 0),
+        transactionCount: revenue?.transactionCount ?? 0,
+      },
+      recentLedger,
+      orgBalances,
+      recentDonations,
+      recentPayouts,
+    });
+  } catch (err) {
+    console.error("[donations] admin-finance error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 router.put("/users/me/account-type", requireAuth, async (req, res) => {
   const userId = (req as AuthenticatedRequest).userId;
   const { accountType } = req.body;
