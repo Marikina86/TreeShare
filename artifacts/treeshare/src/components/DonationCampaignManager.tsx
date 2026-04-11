@@ -42,11 +42,6 @@ const t = {
     payoutFee: "Costo payout: €0,25",
     minPayout: "Saldo minimo per payout: €1,25",
     noData: "Nessuna campagna creata",
-    accountType: "Tipo account",
-    switchToOrg: "Passa a Organizzazione",
-    switchToOrgDesc: "Per creare campagne di donazione, il tuo account deve essere di tipo organizzazione.",
-    switchConfirm: "Conferma cambio",
-    accountSwitched: "Tipo account aggiornato",
   },
   en: {
     title: "Donation campaigns",
@@ -76,11 +71,6 @@ const t = {
     payoutFee: "Payout fee: €0.25",
     minPayout: "Minimum payout balance: €1.25",
     noData: "No campaigns created",
-    accountType: "Account type",
-    switchToOrg: "Switch to Organization",
-    switchToOrgDesc: "To create donation campaigns, your account type must be organization.",
-    switchConfirm: "Confirm switch",
-    accountSwitched: "Account type updated",
   },
 };
 
@@ -105,8 +95,6 @@ export default function DonationCampaignManager({ accountType, stripeAccountId, 
   const [balance, setBalance] = useState<any>(null);
   const [payingOut, setPayingOut] = useState(false);
   const [connectingStripe, setConnectingStripe] = useState(false);
-  const [switchingType, setSwitchingType] = useState(false);
-
   async function authFetch(url: string, opts?: RequestInit) {
     const token = await getToken();
     return fetch(url, { ...opts, headers: { ...opts?.headers, Authorization: `Bearer ${token}`, "Content-Type": "application/json" } });
@@ -128,22 +116,6 @@ export default function DonationCampaignManager({ accountType, stripeAccountId, 
       loadBalance();
     }
   }, [accountType]);
-
-  async function handleSwitchToOrg() {
-    setSwitchingType(true);
-    try {
-      const res = await authFetch("/api/users/me/account-type", {
-        method: "PUT",
-        body: JSON.stringify({ accountType: "organization" }),
-      });
-      if (res.ok) {
-        toast({ title: l.accountSwitched });
-        onRefreshProfile();
-      }
-    } finally {
-      setSwitchingType(false);
-    }
-  }
 
   async function handleCreateCampaign(e: React.FormEvent) {
     e.preventDefault();
@@ -211,23 +183,7 @@ export default function DonationCampaignManager({ accountType, stripeAccountId, 
   }
 
   if (accountType !== "organization") {
-    return (
-      <section className="mb-8">
-        <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
-          {l.title}
-        </h2>
-        <div className="bg-card border border-border rounded-2xl p-5">
-          <p className="text-sm text-muted-foreground mb-3">{l.switchToOrgDesc}</p>
-          <button
-            onClick={handleSwitchToOrg}
-            disabled={switchingType}
-            className="px-4 py-2 bg-primary text-primary-foreground rounded-xl text-sm font-medium hover:opacity-90 disabled:opacity-50"
-          >
-            {switchingType ? "..." : l.switchToOrg}
-          </button>
-        </div>
-      </section>
-    );
+    return null;
   }
 
   return (
