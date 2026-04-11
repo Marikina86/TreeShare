@@ -246,6 +246,8 @@ export const registerEnteSchema = z.object({
   password: z.string().min(8).max(100),
   ruoloUtente: z.string().min(2).max(100),
   numeroLicenze: z.coerce.number().int().min(1).max(1000),
+  acceptPrivacy: z.literal(true, { errorMap: () => ({ message: "Devi accettare l'informativa sulla privacy" }) }),
+  acceptTerms: z.literal(true, { errorMap: () => ({ message: "Devi accettare i termini e condizioni" }) }),
 });
 
 export type RegisterEnte = z.infer<typeof registerEnteSchema>;

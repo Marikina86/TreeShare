@@ -163,6 +163,9 @@ export default function OrganizationSignupPage() {
   const [success, setSuccess] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
+  const [acceptPrivacy, setAcceptPrivacy] = useState(false);
+  const [acceptTerms, setAcceptTerms] = useState(false);
+  const [consentErrors, setConsentErrors] = useState<{ privacy?: string; terms?: string }>({});
 
   const {
     register,
@@ -180,6 +183,14 @@ export default function OrganizationSignupPage() {
   const strength = useMemo(() => getPasswordStrength(passwordValue), [passwordValue]);
 
   const onSubmit = async (data: FormValues) => {
+    const ce: { privacy?: string; terms?: string } = {};
+    if (!acceptPrivacy) ce.privacy = "Devi accettare l'informativa sulla privacy";
+    if (!acceptTerms) ce.terms = "Devi accettare i termini e condizioni";
+    if (Object.keys(ce).length > 0) {
+      setConsentErrors(ce);
+      return;
+    }
+    setConsentErrors({});
     setSubmitting(true);
     setServerError(null);
 
@@ -190,6 +201,8 @@ export default function OrganizationSignupPage() {
         body: JSON.stringify({
           ...data,
           numeroLicenze: Number(data.numeroLicenze),
+          acceptPrivacy: true,
+          acceptTerms: true,
         }),
       });
 
@@ -623,9 +636,51 @@ export default function OrganizationSignupPage() {
             </CardContent>
           </Card>
 
-          <p className="text-center text-xs text-muted-foreground leading-relaxed px-2">
-            Cliccando su &ldquo;Registra l&rsquo;ente&rdquo; dichiaro di aver preso visione e accetto l&rsquo;<Link to="/privacy" className="underline text-primary">informativa sulla privacy</Link>, i <Link to="/terms" className="underline text-primary">termini e condizioni</Link> e l&rsquo;informativa AI.
-          </p>
+          <Card>
+            <CardContent className="pt-5 pb-5 space-y-3">
+              <p className="text-sm font-semibold text-foreground">Consensi obbligatori <span className="text-destructive">*</span></p>
+              <label className={`flex items-start gap-3 cursor-pointer group ${consentErrors.privacy ? "text-destructive" : ""}`}>
+                <input
+                  type="checkbox"
+                  checked={acceptPrivacy}
+                  onChange={(e) => {
+                    setAcceptPrivacy(e.target.checked);
+                    setConsentErrors((prev) => ({ ...prev, privacy: undefined }));
+                  }}
+                  className="mt-1 h-4 w-4 rounded border-border accent-primary flex-shrink-0"
+                />
+                <span className="text-sm leading-snug">
+                  Ho letto e accetto l&rsquo;<Link to="/privacy" className="underline text-primary font-medium">informativa sulla privacy</Link> <span className="text-destructive">*</span>
+                </span>
+              </label>
+              {consentErrors.privacy && (
+                <p className="flex items-center gap-1 text-xs text-destructive ml-7">
+                  <AlertCircle className="h-3 w-3 flex-shrink-0" />
+                  {consentErrors.privacy}
+                </p>
+              )}
+              <label className={`flex items-start gap-3 cursor-pointer group ${consentErrors.terms ? "text-destructive" : ""}`}>
+                <input
+                  type="checkbox"
+                  checked={acceptTerms}
+                  onChange={(e) => {
+                    setAcceptTerms(e.target.checked);
+                    setConsentErrors((prev) => ({ ...prev, terms: undefined }));
+                  }}
+                  className="mt-1 h-4 w-4 rounded border-border accent-primary flex-shrink-0"
+                />
+                <span className="text-sm leading-snug">
+                  Ho letto e accetto i <Link to="/terms" className="underline text-primary font-medium">termini e condizioni</Link> <span className="text-destructive">*</span>
+                </span>
+              </label>
+              {consentErrors.terms && (
+                <p className="flex items-center gap-1 text-xs text-destructive ml-7">
+                  <AlertCircle className="h-3 w-3 flex-shrink-0" />
+                  {consentErrors.terms}
+                </p>
+              )}
+            </CardContent>
+          </Card>
 
           <Button
             type="submit"
