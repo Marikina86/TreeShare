@@ -284,6 +284,20 @@ export default function ProfilePage() {
 
   const avatarSrc = photoSrc(profile?.photoUrl);
 
+  const co2Data = (() => {
+    const treeList = (trees.data as any)?.trees ?? [];
+    if (!treeList.length) return { treeCount: 0, co2Kg: 0 };
+    const now = Date.now();
+    const MS_PER_YEAR = 365.25 * 24 * 60 * 60 * 1000;
+    let totalCo2 = 0;
+    for (const tree of treeList) {
+      const planted = new Date(tree.plantedAt || tree.createdAt).getTime();
+      const years = Math.max(0, (now - planted) / MS_PER_YEAR);
+      totalCo2 += years * 22;
+    }
+    return { treeCount: treeList.length, co2Kg: Math.round(totalCo2 * 10) / 10 };
+  })();
+
   return (
     <Layout>
       <div className="max-w-4xl mx-auto px-4 py-6">
@@ -559,6 +573,56 @@ export default function ProfilePage() {
             )}
           </div>
         </div>
+
+        {co2Data.treeCount > 0 && (
+          <div className="mb-6 p-5 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 rounded-2xl">
+            <div className="flex items-start gap-3 mb-3">
+              <div className="w-10 h-10 rounded-full bg-emerald-100 dark:bg-emerald-900/50 flex items-center justify-center flex-shrink-0">
+                <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" className="text-emerald-600 dark:text-emerald-400">
+                  <path d="M12 22V8M12 8C12 8 8 4 4 6C4 6 3 10 8 12C8 12 6 6 12 2C18 6 16 12 16 12C21 10 20 6 20 6C16 4 12 8 12 8Z" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              </div>
+              <p className="text-sm text-emerald-800 dark:text-emerald-300 leading-relaxed">
+                {({
+                  it: "Ogni albero adulto assorbe circa 22 kg di CO\u2082 all'anno. Inizia oggi a fare la differenza.",
+                  en: "Every mature tree absorbs about 22 kg of CO\u2082 per year. Start making a difference today.",
+                  fr: "Chaque arbre adulte absorbe environ 22 kg de CO\u2082 par an. Commencez \u00e0 faire la diff\u00e9rence.",
+                  pt: "Cada \u00e1rvore adulta absorve cerca de 22 kg de CO\u2082 por ano. Comece hoje a fazer a diferen\u00e7a.",
+                  es: "Cada \u00e1rbol adulto absorbe unos 22 kg de CO\u2082 al a\u00f1o. Empieza hoy a marcar la diferencia.",
+                  ja: "\u6210\u6728\u306f\u5e74\u9593\u7d0422kg\u306eCO\u2082\u3092\u5438\u53ce\u3057\u307e\u3059\u3002\u4eca\u65e5\u304b\u3089\u9055\u3044\u3092\u751f\u307f\u51fa\u3057\u307e\u3057\u3087\u3046\u3002",
+                } as Record<string, string>)[lang] ?? "Ogni albero adulto assorbe circa 22 kg di CO\u2082 all'anno. Inizia oggi a fare la differenza."}
+              </p>
+            </div>
+            <div className="flex items-center gap-6">
+              <div>
+                <div className="text-2xl font-bold text-emerald-700 dark:text-emerald-300">{co2Data.co2Kg} kg</div>
+                <div className="text-xs text-emerald-600 dark:text-emerald-400">
+                  {({
+                    it: "CO\u2082 assorbita totale",
+                    en: "Total CO\u2082 absorbed",
+                    fr: "CO\u2082 absorb\u00e9 total",
+                    pt: "CO\u2082 absorvido total",
+                    es: "CO\u2082 absorbido total",
+                    ja: "\u5438\u53ce\u3057\u305fCO\u2082\u7dcf\u91cf",
+                  } as Record<string, string>)[lang] ?? "CO\u2082 assorbita totale"}
+                </div>
+              </div>
+              <div>
+                <div className="text-2xl font-bold text-emerald-700 dark:text-emerald-300">{co2Data.treeCount}</div>
+                <div className="text-xs text-emerald-600 dark:text-emerald-400">
+                  {({
+                    it: "alberi piantati",
+                    en: "trees planted",
+                    fr: "arbres plant\u00e9s",
+                    pt: "\u00e1rvores plantadas",
+                    es: "\u00e1rboles plantados",
+                    ja: "\u690d\u3048\u305f\u6728",
+                  } as Record<string, string>)[lang] ?? "alberi piantati"}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Trees grid */}
         <div className="mb-10">
