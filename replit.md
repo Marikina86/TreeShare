@@ -63,18 +63,15 @@ A plant/tree sharing social app. Community members document trees/plants they pl
 - Endpoints: `GET /policies/:type`, `POST /consent`, `GET /consent/status`, `DELETE /consent/:policyId`, `GET /users/:id/consents`
 - Cookie consent: `POST /cookie-consent`, `GET /cookie-consent/:sessionId`, `PATCH /cookie-consent/:sessionId`
 
-### Notification Strategy (no real-time push)
-- **SSE disabled**: `useAlertSSE` hook is a no-op — no EventSource connections, no browser Notification API
-- **No polling**: The 30-second `/api/inbox` polling interval has been removed
-- **On app open**: Inbox (alerts, notifications, tips) is fetched once when the Layout mounts
-- **On pull-to-refresh**: FeedPage dispatches `treeshare:refresh-inbox` event, which triggers Layout to re-fetch inbox counts
-- **Badge counts**: Still shown in nav, but only update on app open or manual refresh
-
-### Feed Performance Optimization
-- **QueryClient**: `staleTime: Infinity`, all auto-refetch disabled (focus, mount, reconnect, interval)
-- **Smart refresh**: `useFeed` hook checks lightweight `GET /api/trees/feed-meta` (returns `{total, lastUpdatedAt}`) before fetching full feed
-- **Pull-to-refresh**: Touch-based on mobile, button on desktop — both use smart refresh + inbox refresh
-- **Cache version control**: `lastUpdatedAt` compared between server meta and cached meta; full feed fetch only if changed
+### Zero-Polling Architecture
+- **No SSE**: `useAlertSSE` hook is a no-op — no EventSource connections, no browser Notification API
+- **No polling**: All `setInterval`-based server polling removed (inbox 30s, events 60s, map 60s)
+- **No auto-refetch**: Global `QueryClient` has `staleTime: Infinity`, all auto-refetch disabled (focus, mount, reconnect, interval)
+- **On app open**: Inbox fetched once (module-level guard `_inboxFetchedOnce`); events/profile fetched once via react-query cache
+- **On pull-to-refresh**: FeedPage dispatches `treeshare:refresh-inbox` event → Layout re-fetches inbox counts
+- **On navigation**: Data loaded per-page on first visit, then cached indefinitely until manual refresh
+- **Smart feed refresh**: `useFeed` hook checks lightweight `GET /api/trees/feed-meta` before full feed fetch
+- **Badge counts**: Shown in nav, only update on app open or manual refresh
 
 ### DB Schema (16 tables)
 `users`, `trees`, `treeUpdates`, `treeSuns`, `events`, `eventParticipants`, `alerts`, `tips`, `problemReports`, `userNotifications`, `organizations`, `reports`, `weeklyWinners`, `policies`, `userConsents`, `cookieConsents`

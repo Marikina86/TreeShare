@@ -158,13 +158,6 @@ export default function MapPage() {
     else fetchIndividual();
   }, [mode, precision, fetchClusters, fetchIndividual]);
 
-  useEffect(() => {
-    const interval = setInterval(() => {
-      if (mode === "cluster") fetchClusters(precision);
-      else fetchIndividual();
-    }, 60_000);
-    return () => clearInterval(interval);
-  }, [mode, precision, fetchClusters, fetchIndividual]);
 
   useEffect(() => {
     if (!mapRef.current || leafletMapRef.current) return;

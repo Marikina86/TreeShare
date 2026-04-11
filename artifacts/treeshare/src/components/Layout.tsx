@@ -2,11 +2,13 @@ import { useState, useEffect, useRef } from "react";
 import { useLocation, Link } from "wouter";
 import { useUser, useClerk, useAuth } from "@clerk/react";
 import { useLang } from "@/lib/i18n";
-import { useListEvents, getListEventsQueryKey, useGetMyProfile } from "@workspace/api-client-react";
+import { useListEvents, getListEventsQueryKey } from "@workspace/api-client-react";
 import { getEventsLastSeenAt } from "@/pages/EventsPage";
 import { getAlertsLastReadAt, getNotifsLastReadAt } from "@/pages/AlertsPage";
 import { getTipsLastReadAt } from "@/pages/TipsPage";
 import { useGps, getPlatformInstructions } from "@/hooks/useGps";
+
+let _inboxFetchedOnce = false;
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -23,13 +25,12 @@ export default function Layout({ children }: LayoutProps) {
 
   // ── Badge nuovi eventi ────────────────────────────────────────────────────
   const [lastSeenAt, setLastSeenAt] = useState(() => getEventsLastSeenAt());
-  const eventsQuery = useListEvents({ query: { queryKey: getListEventsQueryKey(), staleTime: 60_000 } });
+  const eventsQuery = useListEvents({ query: { queryKey: getListEventsQueryKey() } });
 
   useEffect(() => {
     const onStorage = () => setLastSeenAt(getEventsLastSeenAt());
     window.addEventListener("storage", onStorage);
-    const interval = setInterval(() => setLastSeenAt(getEventsLastSeenAt()), 5000);
-    return () => { window.removeEventListener("storage", onStorage); clearInterval(interval); };
+    return () => { window.removeEventListener("storage", onStorage); };
   }, []);
 
   const newEventsCount = (eventsQuery.data ?? []).filter((e) => {
@@ -88,7 +89,10 @@ export default function Layout({ children }: LayoutProps) {
   }).current;
 
   useEffect(() => {
-    fetchInbox();
+    if (!_inboxFetchedOnce) {
+      _inboxFetchedOnce = true;
+      fetchInbox();
+    }
     const handler = () => fetchInbox();
     window.addEventListener("treeshare:refresh-inbox", handler);
     return () => window.removeEventListener("treeshare:refresh-inbox", handler);
