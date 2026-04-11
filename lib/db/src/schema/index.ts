@@ -256,11 +256,34 @@ export const donationsTable = pgTable("donations", {
 export const orgBalancesTable = pgTable("org_balances", {
   id: serial("id").primaryKey(),
   userId: text("user_id").notNull().unique(),
-  totalReceived: integer("total_received").notNull().default(0),
-  totalCommissions: integer("total_commissions").notNull().default(0),
+  totalOrgReceived: integer("total_org_received").notNull().default(0),
   availableBalance: integer("available_balance").notNull().default(0),
+  totalPaidOut: integer("total_paid_out").notNull().default(0),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
+
+export const platformRevenueTable = pgTable("platform_revenue", {
+  id: serial("id").primaryKey(),
+  totalCommissions: integer("total_commissions").notNull().default(0),
+  totalPayoutFees: integer("total_payout_fees").notNull().default(0),
+  transactionCount: integer("transaction_count").notNull().default(0),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const ledgerEntriesTable = pgTable("ledger_entries", {
+  id: serial("id").primaryKey(),
+  entryType: text("entry_type").notNull(),
+  amountCents: integer("amount_cents").notNull(),
+  orgUserId: text("org_user_id"),
+  donationId: integer("donation_id"),
+  payoutId: integer("payout_id"),
+  description: text("description").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (table) => [
+  index("ledger_entries_type_idx").on(table.entryType),
+  index("ledger_entries_org_user_idx").on(table.orgUserId),
+  index("ledger_entries_donation_idx").on(table.donationId),
+]);
 
 export const payoutsTable = pgTable("payouts", {
   id: serial("id").primaryKey(),

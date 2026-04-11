@@ -5,11 +5,28 @@ import {
   donationCampaignsTable,
   donationsTable,
   orgBalancesTable,
+  platformRevenueTable,
+  ledgerEntriesTable,
   payoutsTable,
 } from "@workspace/db";
 import { eq, and, desc, sql } from "drizzle-orm";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth";
 import { getUncachableStripeClient, getStripePublishableKey } from "../lib/stripe";
+
+const PLATFORM_FEE_RATE = 0.20;
+const PAYOUT_FEE_CENTS = 25;
+const MIN_PAYOUT_BALANCE_CENTS = 125;
+
+async function ensurePlatformRevenueRow(tx: any) {
+  const [existing] = await tx.select({ id: platformRevenueTable.id }).from(platformRevenueTable).where(eq(platformRevenueTable.id, 1));
+  if (!existing) {
+    await tx.insert(platformRevenueTable).values({
+      totalCommissions: 0,
+      totalPayoutFees: 0,
+      transactionCount: 0,
+    });
+  }
+}
 
 const router = Router();
 
@@ -161,8 +178,8 @@ router.post("/donations/create-payment-intent", requireAuth, async (req, res) =>
       return;
     }
 
-    const amountOrg = Math.round(amountCents * 0.8);
-    const amountPlatform = amountCents - amountOrg;
+    const amountPlatform = Math.round(amountCents * PLATFORM_FEE_RATE);
+    const amountOrg = amountCents - amountPlatform;
 
     const stripe = await getUncachableStripeClient();
     const paymentIntent = await stripe.paymentIntents.create({
@@ -226,9 +243,9 @@ router.get("/donations/balance", requireAuth, async (req, res) => {
       balance = {
         id: 0,
         userId,
-        totalReceived: 0,
-        totalCommissions: 0,
+        totalOrgReceived: 0,
         availableBalance: 0,
+        totalPaidOut: 0,
         updatedAt: new Date(),
       };
     }
@@ -240,7 +257,22 @@ router.get("/donations/balance", requireAuth, async (req, res) => {
       .orderBy(desc(payoutsTable.requestedAt))
       .limit(10);
 
-    res.json({ balance, payouts: recentPayouts });
+    const recentLedger = await db
+      .select()
+      .from(ledgerEntriesTable)
+      .where(eq(ledgerEntriesTable.orgUserId, userId))
+      .orderBy(desc(ledgerEntriesTable.createdAt))
+      .limit(20);
+
+    res.json({
+      organizationBalance: {
+        totalOrgReceived: balance.totalOrgReceived,
+        availableBalance: balance.availableBalance,
+        totalPaidOut: balance.totalPaidOut,
+      },
+      payouts: recentPayouts,
+      ledger: recentLedger,
+    });
   } catch (err) {
     console.error("[donations] balance error:", err);
     res.status(500).json({ error: "Internal server error" });
@@ -265,9 +297,6 @@ router.post("/donations/request-payout", requireAuth, async (req, res) => {
       return;
     }
 
-    const payoutFee = 25;
-    const minBalance = 125;
-
     const deducted = await db
       .update(orgBalancesTable)
       .set({
@@ -277,18 +306,18 @@ router.post("/donations/request-payout", requireAuth, async (req, res) => {
       .where(
         and(
           eq(orgBalancesTable.userId, userId),
-          sql`${orgBalancesTable.availableBalance} >= ${minBalance}`
+          sql`${orgBalancesTable.availableBalance} >= ${MIN_PAYOUT_BALANCE_CENTS}`
         )
       )
       .returning({ previousBalance: orgBalancesTable.availableBalance });
 
     if (deducted.length === 0) {
-      res.status(400).json({ error: "Insufficient balance (min €1.25 including €0.25 fee)" });
+      res.status(400).json({ error: `Insufficient balance (min €${(MIN_PAYOUT_BALANCE_CENTS / 100).toFixed(2)} including €0.25 fee)` });
       return;
     }
 
     const grossAmount = deducted[0].previousBalance;
-    const amountNet = grossAmount - payoutFee;
+    const amountNet = grossAmount - PAYOUT_FEE_CENTS;
 
     let transfer;
     try {
@@ -310,18 +339,56 @@ router.post("/donations/request-payout", requireAuth, async (req, res) => {
       throw stripeErr;
     }
 
-    const [payout] = await db
-      .insert(payoutsTable)
-      .values({
-        userId,
-        amountGross: grossAmount,
-        payoutFee,
-        amountNet,
-        status: "completed",
-        stripeTransferId: transfer.id,
-        executedAt: new Date(),
-      })
-      .returning();
+    const payout = await db.transaction(async (tx) => {
+      const [p] = await tx
+        .insert(payoutsTable)
+        .values({
+          userId,
+          amountGross: grossAmount,
+          payoutFee: PAYOUT_FEE_CENTS,
+          amountNet,
+          status: "completed",
+          stripeTransferId: transfer.id,
+          executedAt: new Date(),
+        })
+        .returning();
+
+      await tx
+        .update(orgBalancesTable)
+        .set({
+          totalPaidOut: sql`${orgBalancesTable.totalPaidOut} + ${grossAmount}`,
+        })
+        .where(eq(orgBalancesTable.userId, userId));
+
+      await tx.insert(ledgerEntriesTable).values([
+        {
+          entryType: "payout_org",
+          amountCents: -grossAmount,
+          orgUserId: userId,
+          payoutId: p.id,
+          description: `Payout to Stripe Connect (gross €${(grossAmount / 100).toFixed(2)}, net €${(amountNet / 100).toFixed(2)})`,
+        },
+        {
+          entryType: "payout_fee_platform",
+          amountCents: PAYOUT_FEE_CENTS,
+          orgUserId: userId,
+          payoutId: p.id,
+          description: `Payout fee €${(PAYOUT_FEE_CENTS / 100).toFixed(2)}`,
+        },
+      ]);
+
+      await ensurePlatformRevenueRow(tx);
+
+      await tx
+        .update(platformRevenueTable)
+        .set({
+          totalPayoutFees: sql`${platformRevenueTable.totalPayoutFees} + ${PAYOUT_FEE_CENTS}`,
+          updatedAt: new Date(),
+        })
+        .where(eq(platformRevenueTable.id, 1));
+
+      return p;
+    });
 
     res.json({ payout });
   } catch (err) {
@@ -409,66 +476,101 @@ export async function webhookHandler(req: Request, res: Response) {
       const piId = paymentIntent.id;
       const meta = paymentIntent.metadata || {};
 
-      const updatedRows = await db
-        .update(donationsTable)
-        .set({ status: "completed" })
-        .where(
-          and(
-            eq(donationsTable.stripePaymentIntentId, piId),
-            sql`${donationsTable.status} != 'completed'`
+      const result = await db.transaction(async (tx) => {
+        const updatedRows = await tx
+          .update(donationsTable)
+          .set({ status: "completed" })
+          .where(
+            and(
+              eq(donationsTable.stripePaymentIntentId, piId),
+              sql`${donationsTable.status} != 'completed'`
+            )
           )
-        )
-        .returning({ id: donationsTable.id });
+          .returning({ id: donationsTable.id });
 
-      if (updatedRows.length === 0) {
+        if (updatedRows.length === 0) {
+          return { idempotent: true };
+        }
+
+        const donationId = updatedRows[0].id;
+        const campaignId = Number(meta.campaignId);
+        const recipientUserId = meta.recipientUserId;
+        const amountOrg = Number(meta.amountOrg) || 0;
+        const amountPlatform = Number(meta.amountPlatform) || 0;
+        const amountTotal = amountOrg + amountPlatform;
+
+        if (campaignId) {
+          await tx
+            .update(donationCampaignsTable)
+            .set({
+              totalRaised: sql`${donationCampaignsTable.totalRaised} + ${amountTotal}`,
+              donationCount: sql`${donationCampaignsTable.donationCount} + 1`,
+              updatedAt: new Date(),
+            })
+            .where(eq(donationCampaignsTable.id, campaignId));
+        }
+
+        if (recipientUserId) {
+          const [existingBalance] = await tx
+            .select()
+            .from(orgBalancesTable)
+            .where(eq(orgBalancesTable.userId, recipientUserId));
+
+          if (existingBalance) {
+            await tx
+              .update(orgBalancesTable)
+              .set({
+                totalOrgReceived: sql`${orgBalancesTable.totalOrgReceived} + ${amountOrg}`,
+                availableBalance: sql`${orgBalancesTable.availableBalance} + ${amountOrg}`,
+                updatedAt: new Date(),
+              })
+              .where(eq(orgBalancesTable.userId, recipientUserId));
+          } else {
+            await tx.insert(orgBalancesTable).values({
+              userId: recipientUserId,
+              totalOrgReceived: amountOrg,
+              availableBalance: amountOrg,
+              totalPaidOut: 0,
+            });
+          }
+
+          await tx.insert(ledgerEntriesTable).values({
+            entryType: "donation_org_credit",
+            amountCents: amountOrg,
+            orgUserId: recipientUserId,
+            donationId,
+            description: `Donation received: org share €${(amountOrg / 100).toFixed(2)} of €${(amountTotal / 100).toFixed(2)} total`,
+          });
+        }
+
+        await ensurePlatformRevenueRow(tx);
+
+        await tx
+          .update(platformRevenueTable)
+          .set({
+            totalCommissions: sql`${platformRevenueTable.totalCommissions} + ${amountPlatform}`,
+            transactionCount: sql`${platformRevenueTable.transactionCount} + 1`,
+            updatedAt: new Date(),
+          })
+          .where(eq(platformRevenueTable.id, 1));
+
+        await tx.insert(ledgerEntriesTable).values({
+          entryType: "donation_platform_fee",
+          amountCents: amountPlatform,
+          orgUserId: recipientUserId || null,
+          donationId,
+          description: `Platform commission: €${(amountPlatform / 100).toFixed(2)} (${(PLATFORM_FEE_RATE * 100).toFixed(0)}% of €${(amountTotal / 100).toFixed(2)})`,
+        });
+
+        return { idempotent: false, campaignId, amountOrg, amountPlatform };
+      });
+
+      if (result.idempotent) {
         res.json({ received: true, idempotent: true });
         return;
       }
 
-      const campaignId = Number(meta.campaignId);
-      const recipientUserId = meta.recipientUserId;
-      const amountOrg = Number(meta.amountOrg) || 0;
-      const amountPlatform = Number(meta.amountPlatform) || 0;
-      const amountTotal = amountOrg + amountPlatform;
-
-      if (campaignId) {
-        await db
-          .update(donationCampaignsTable)
-          .set({
-            totalRaised: sql`${donationCampaignsTable.totalRaised} + ${amountTotal}`,
-            donationCount: sql`${donationCampaignsTable.donationCount} + 1`,
-            updatedAt: new Date(),
-          })
-          .where(eq(donationCampaignsTable.id, campaignId));
-      }
-
-      if (recipientUserId) {
-        const [existingBalance] = await db
-          .select()
-          .from(orgBalancesTable)
-          .where(eq(orgBalancesTable.userId, recipientUserId));
-
-        if (existingBalance) {
-          await db
-            .update(orgBalancesTable)
-            .set({
-              totalReceived: sql`${orgBalancesTable.totalReceived} + ${amountTotal}`,
-              totalCommissions: sql`${orgBalancesTable.totalCommissions} + ${amountPlatform}`,
-              availableBalance: sql`${orgBalancesTable.availableBalance} + ${amountOrg}`,
-              updatedAt: new Date(),
-            })
-            .where(eq(orgBalancesTable.userId, recipientUserId));
-        } else {
-          await db.insert(orgBalancesTable).values({
-            userId: recipientUserId,
-            totalReceived: amountTotal,
-            totalCommissions: amountPlatform,
-            availableBalance: amountOrg,
-          });
-        }
-      }
-
-      console.info(`[donations] payment_intent.succeeded: ${piId}, campaign=${campaignId}`);
+      console.info(`[donations] payment_intent.succeeded: ${piId}, campaign=${result.campaignId}, org=€${((result.amountOrg ?? 0) / 100).toFixed(2)}, platform=€${((result.amountPlatform ?? 0) / 100).toFixed(2)}`);
     }
 
     if (event.type === "payment_intent.payment_failed") {
@@ -488,6 +590,76 @@ export async function webhookHandler(req: Request, res: Response) {
     res.status(500).json({ error: "Webhook processing failed" });
   }
 }
+
+router.get("/donations/platform-revenue", requireAuth, async (req, res) => {
+  const userId = (req as AuthenticatedRequest).userId;
+  const adminIds = (process.env.ADMIN_CLERK_USER_IDS || "").split(",");
+  if (!adminIds.includes(userId)) {
+    res.status(403).json({ error: "Admin only" });
+    return;
+  }
+
+  try {
+    const [revenue] = await db.select().from(platformRevenueTable).where(eq(platformRevenueTable.id, 1));
+
+    const recentPlatformLedger = await db
+      .select()
+      .from(ledgerEntriesTable)
+      .where(
+        sql`${ledgerEntriesTable.entryType} IN ('donation_platform_fee', 'payout_fee_platform')`
+      )
+      .orderBy(desc(ledgerEntriesTable.createdAt))
+      .limit(50);
+
+    res.json({
+      platformRevenue: {
+        totalCommissions: revenue?.totalCommissions ?? 0,
+        totalPayoutFees: revenue?.totalPayoutFees ?? 0,
+        totalRevenue: (revenue?.totalCommissions ?? 0) + (revenue?.totalPayoutFees ?? 0),
+        transactionCount: revenue?.transactionCount ?? 0,
+      },
+      recentLedger: recentPlatformLedger,
+    });
+  } catch (err) {
+    console.error("[donations] platform-revenue error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.get("/donations/audit", requireAuth, async (req, res) => {
+  const userId = (req as AuthenticatedRequest).userId;
+  const adminIds = (process.env.ADMIN_CLERK_USER_IDS || "").split(",");
+  if (!adminIds.includes(userId)) {
+    res.status(403).json({ error: "Admin only" });
+    return;
+  }
+
+  try {
+    const limit = Math.min(Number(req.query.limit) || 50, 200);
+    const offset = Number(req.query.offset) || 0;
+
+    const entries = await db
+      .select()
+      .from(ledgerEntriesTable)
+      .orderBy(desc(ledgerEntriesTable.createdAt))
+      .limit(limit)
+      .offset(offset);
+
+    const [countResult] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(ledgerEntriesTable);
+
+    res.json({
+      entries,
+      total: countResult.count,
+      limit,
+      offset,
+    });
+  } catch (err) {
+    console.error("[donations] audit error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
 
 router.put("/users/me/account-type", requireAuth, async (req, res) => {
   const userId = (req as AuthenticatedRequest).userId;

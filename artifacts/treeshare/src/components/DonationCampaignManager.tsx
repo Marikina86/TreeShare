@@ -36,7 +36,7 @@ const t = {
     stripeConnected: "Stripe collegato",
     balance: "Saldo disponibile",
     totalReceived: "Totale ricevuto",
-    commissions: "Commissioni piattaforma",
+    totalPaidOut: "Totale erogato",
     requestPayout: "Richiedi pagamento",
     payoutRequested: "Pagamento richiesto",
     payoutFee: "Costo payout: €0,25",
@@ -70,7 +70,7 @@ const t = {
     stripeConnected: "Stripe connected",
     balance: "Available balance",
     totalReceived: "Total received",
-    commissions: "Platform commissions",
+    totalPaidOut: "Total paid out",
     requestPayout: "Request payout",
     payoutRequested: "Payout requested",
     payoutFee: "Payout fee: €0.25",
@@ -253,19 +253,19 @@ export default function DonationCampaignManager({ accountType, stripeAccountId, 
         <div className="bg-card border border-border rounded-2xl p-4 mb-4">
           <div className="grid grid-cols-3 gap-4 text-center mb-3">
             <div>
-              <div className="text-lg font-bold text-foreground">€{(balance.balance.availableBalance / 100).toFixed(2)}</div>
+              <div className="text-lg font-bold text-emerald-600 dark:text-emerald-400">€{(balance.organizationBalance.availableBalance / 100).toFixed(2)}</div>
               <div className="text-[10px] text-muted-foreground">{l.balance}</div>
             </div>
             <div>
-              <div className="text-lg font-bold text-foreground">€{(balance.balance.totalReceived / 100).toFixed(2)}</div>
+              <div className="text-lg font-bold text-foreground">€{(balance.organizationBalance.totalOrgReceived / 100).toFixed(2)}</div>
               <div className="text-[10px] text-muted-foreground">{l.totalReceived}</div>
             </div>
             <div>
-              <div className="text-lg font-bold text-foreground">€{(balance.balance.totalCommissions / 100).toFixed(2)}</div>
-              <div className="text-[10px] text-muted-foreground">{l.commissions}</div>
+              <div className="text-lg font-bold text-foreground">€{(balance.organizationBalance.totalPaidOut / 100).toFixed(2)}</div>
+              <div className="text-[10px] text-muted-foreground">{l.totalPaidOut}</div>
             </div>
           </div>
-          {stripeAccountId && balance.balance.availableBalance >= 125 && (
+          {stripeAccountId && balance.organizationBalance.availableBalance >= 125 && (
             <div className="border-t border-border pt-3">
               <p className="text-[10px] text-muted-foreground mb-2">{l.payoutFee}</p>
               <button
@@ -277,7 +277,7 @@ export default function DonationCampaignManager({ accountType, stripeAccountId, 
               </button>
             </div>
           )}
-          {stripeAccountId && balance.balance.availableBalance < 125 && balance.balance.availableBalance > 0 && (
+          {stripeAccountId && balance.organizationBalance.availableBalance < 125 && balance.organizationBalance.availableBalance > 0 && (
             <p className="text-[10px] text-muted-foreground border-t border-border pt-2 mt-2">{l.minPayout}</p>
           )}
         </div>
