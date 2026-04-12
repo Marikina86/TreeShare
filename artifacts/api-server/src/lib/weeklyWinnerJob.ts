@@ -192,19 +192,49 @@ export async function calculateWeeklyWinners(): Promise<void> {
   }
 }
 
-const CHECK_INTERVAL_MS = 15 * 60 * 1000; // check every 15 minutes
+function getNextSundayAt2359Rome(): Date {
+  const now = new Date();
+  const romeNow = new Date(now.toLocaleString("en-US", { timeZone: "Europe/Rome" }));
 
-export function startWeeklyWinnerScheduler(): void {
-  // Check immediately on server start (handles server restarts on Monday)
-  if (new Date().getUTCDay() === 1) {
-    calculateWeeklyWinners();
+  const currentDay = romeNow.getDay();
+  let daysUntilSunday = currentDay === 0 ? 0 : 7 - currentDay;
+
+  if (currentDay === 0) {
+    const romeHour = romeNow.getHours();
+    const romeMinute = romeNow.getMinutes();
+    if (romeHour > 23 || (romeHour === 23 && romeMinute >= 59)) {
+      daysUntilSunday = 7;
+    }
   }
 
-  setInterval(() => {
-    if (new Date().getUTCDay() === 1) {
-      calculateWeeklyWinners();
-    }
-  }, CHECK_INTERVAL_MS);
+  const targetRome = new Date(romeNow);
+  targetRome.setDate(romeNow.getDate() + daysUntilSunday);
+  targetRome.setHours(23, 59, 0, 0);
 
-  logger.info("[weeklyWinner] Scheduler started (check interval: 15min, runs on Mondays)");
+  const romeOffsetMs = targetRome.getTime() - now.getTime();
+  const targetUtc = new Date(now.getTime() + romeOffsetMs);
+
+  return targetUtc;
+}
+
+function scheduleNext(): void {
+  const nextRun = getNextSundayAt2359Rome();
+  const delayMs = nextRun.getTime() - Date.now();
+
+  logger.info(
+    { nextRun: nextRun.toISOString(), delayMinutes: Math.round(delayMs / 60000) },
+    "[weeklyWinner] Next calculation scheduled"
+  );
+
+  setTimeout(async () => {
+    logger.info("[weeklyWinner] Timer fired — calculating winners");
+    await calculateWeeklyWinners();
+    scheduleNext();
+  }, delayMs);
+}
+
+export function startWeeklyWinnerScheduler(): void {
+  calculateWeeklyWinners();
+  scheduleNext();
+  logger.info("[weeklyWinner] Scheduler started (runs every Sunday at 23:59 Europe/Rome)");
 }
