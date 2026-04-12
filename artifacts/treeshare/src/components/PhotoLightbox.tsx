@@ -161,6 +161,7 @@ function Lightbox({ photos, currentIndex, onClose, onChange, onDelete }: {
 
   return (
     <div
+      data-lightbox
       className="fixed inset-0 z-[9999] flex items-center justify-center"
       onClick={onClose}
     >
