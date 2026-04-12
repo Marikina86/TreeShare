@@ -196,9 +196,22 @@ export default function DonateSection({ profileUserId, profileUsername }: {
     }
   }
 
-  const handleSuccess = useCallback(() => {
+  const handleSuccess = useCallback(async () => {
     setStep("done");
     toast({ title: l.success });
+
+    if (paymentInfo?.clientSecret) {
+      try {
+        const piId = paymentInfo.clientSecret.split("_secret_")[0];
+        const token = await getToken();
+        await fetch("/api/donations/confirm-payment", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ paymentIntentId: piId }),
+        });
+      } catch {}
+    }
+
     const donatedAmount = Math.round(parseFloat(amount) * 100);
     queryClient.setQueryData<Campaign | null>(["donate-campaign", profileUserId], (prev) =>
       prev ? { ...prev, totalRaised: prev.totalRaised + donatedAmount, donationCount: prev.donationCount + 1 } : prev
@@ -211,7 +224,7 @@ export default function DonateSection({ profileUserId, profileUsername }: {
       setClientSecret(null);
       setPaymentInfo(null);
     }, 2000);
-  }, [amount, profileUserId, queryClient, toast, l.success]);
+  }, [amount, profileUserId, queryClient, toast, l.success, paymentInfo, getToken]);
 
   if (loading || !campaign) return null;
 
