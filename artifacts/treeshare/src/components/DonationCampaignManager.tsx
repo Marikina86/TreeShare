@@ -1,5 +1,5 @@
 import { useState, useRef } from "react";
-import { useAuth } from "@clerk/react";
+import { useAuth } from "@/lib/auth";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLang } from "@/lib/i18n";
 import { useToast } from "@/hooks/use-toast";

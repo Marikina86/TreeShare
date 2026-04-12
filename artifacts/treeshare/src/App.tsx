@@ -1,9 +1,8 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import { Switch, Route, Router as WouterRouter, Redirect, useLocation } from "wouter";
 import { QueryClientProvider, useQueryClient } from "@tanstack/react-query";
-import { ClerkProvider, SignIn, SignUp, Show, useClerk, useAuth, useUser } from "@clerk/react";
+import { SupabaseAuthProvider, useAuth, useUser, useClerk, Show } from "@/lib/auth";
 import { useGetMyProfile, getGetMyProfileQueryKey } from "@workspace/api-client-react";
-import { itIT, enUS, frFR, ptBR, esES, jaJP } from "@clerk/localizations";
 import { setAuthTokenGetter } from "@workspace/api-client-react";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -26,24 +25,12 @@ import AdminPage from "@/pages/AdminPage";
 import OrganizationSignupPage from "@/pages/OrganizationSignupPage";
 import RegisterChoicePage from "@/pages/RegisterChoicePage";
 import PrivateSignupPage from "@/pages/PrivateSignupPage";
-import SSOCallbackPage from "@/pages/SSOCallbackPage";
+import SignInPage from "@/pages/SignInPage";
 import CampaignsPage from "@/pages/CampaignsPage";
 import NotFound from "@/pages/not-found";
 import InstallPrompt from "@/components/InstallPrompt";
 
-const clerkPubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
-const clerkProxyUrl = import.meta.env.VITE_CLERK_PROXY_URL;
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
-
-if (!clerkPubKey) {
-  throw new Error("Missing VITE_CLERK_PUBLISHABLE_KEY");
-}
-
-function stripBase(path: string): string {
-  return basePath && path.startsWith(basePath)
-    ? path.slice(basePath.length) || "/"
-    : path;
-}
 
 function AuthTokenSync() {
   const { getToken } = useAuth();
@@ -74,9 +61,8 @@ function ProfileAutoSync() {
         });
 
         if (check.status === 404) {
-          const name = [user!.firstName, user!.lastName].filter(Boolean).join("_");
           const email = user!.emailAddresses?.[0]?.emailAddress ?? "";
-          const raw = user!.username || name || email.split("@")[0] || "user";
+          const raw = user!.username || user!.firstName || email.split("@")[0] || "user";
           const username = raw.replace(/[^a-zA-Z0-9_.-]/g, "_").slice(0, 30) || "user";
 
           await fetch("/api/users/me", {
@@ -96,41 +82,6 @@ function ProfileAutoSync() {
   }, [isLoaded, isSignedIn, user, getToken, qc]);
 
   return null;
-}
-
-function SignInPage() {
-  const { lang } = useLang();
-  const forgotPasswordUrl = `${basePath}/sign-in/forgot-password`;
-  return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-background p-4 gap-4">
-      <SignIn
-        routing="path"
-        path={`${basePath}/sign-in`}
-        signUpUrl={`${basePath}/sign-up`}
-      />
-      <p className="text-sm text-muted-foreground text-center">
-        {({ it: "Password dimenticata?", en: "Forgot your password?", fr: "Mot de passe oublié\u00a0?", pt: "Esqueceu a palavra-passe?", es: "¿Olvidaste tu contraseña?", ja: "パスワードを忘れましたか？" } as Record<string,string>)[lang]}{" "}
-        <a
-          href={forgotPasswordUrl}
-          className="font-semibold text-primary hover:underline"
-        >
-          {({ it: "Recupera password", en: "Reset password", fr: "Réinitialiser", pt: "Recuperar", es: "Recuperar contraseña", ja: "リセットする" } as Record<string,string>)[lang]}
-        </a>
-      </p>
-    </div>
-  );
-}
-
-function SignUpPage() {
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-background p-4">
-      <SignUp
-        routing="path"
-        path={`${basePath}/sign-up`}
-        signInUrl={`${basePath}/sign-in`}
-      />
-    </div>
-  );
 }
 
 function HomeRedirect() {
@@ -175,7 +126,7 @@ function AdminRoute({ component: Component }: { component: React.ComponentType }
   );
 }
 
-function ClerkQueryClientCacheInvalidator() {
+function QueryClientCacheInvalidator() {
   const { addListener } = useClerk();
   const qc = useQueryClient();
   const prevUserIdRef = useRef<string | null | undefined>(undefined);
@@ -192,29 +143,18 @@ function ClerkQueryClientCacheInvalidator() {
   return null;
 }
 
-function ClerkProviderWithRoutes() {
-  const [, setLocation] = useLocation();
-  const { lang } = useLang();
-  const localizationMap = { it: itIT, en: enUS, fr: frFR, pt: ptBR, es: esES, ja: jaJP };
-  const localization = localizationMap[lang] ?? enUS;
-
+function AuthProviderWithRoutes() {
   return (
-    <ClerkProvider
-      publishableKey={clerkPubKey}
-      proxyUrl={clerkProxyUrl}
-      localization={localization}
-      routerPush={(to) => setLocation(stripBase(to))}
-      routerReplace={(to) => setLocation(stripBase(to), { replace: true })}
-    >
+    <SupabaseAuthProvider>
       <QueryClientProvider client={queryClient}>
-        <ClerkQueryClientCacheInvalidator />
+        <QueryClientCacheInvalidator />
         <AuthTokenSync />
         <ProfileAutoSync />
         <TooltipProvider>
           <Switch>
             <Route path="/" component={HomeRedirect} />
             <Route path="/sign-in/*?" component={SignInPage} />
-            <Route path="/sign-up/*?" component={SignUpPage} />
+            <Route path="/sign-up/*?" component={() => <Redirect to="/register" />} />
             <Route path="/onboarding" component={() => <ProtectedRoute component={OnboardingPage} />} />
             <Route path="/feed" component={() => <ProtectedRoute component={FeedPage} />} />
             <Route path="/map" component={() => <ProtectedRoute component={MapPage} />} />
@@ -233,14 +173,13 @@ function ClerkProviderWithRoutes() {
             <Route path="/register" component={RegisterChoicePage} />
             <Route path="/register-privato" component={PrivateSignupPage} />
             <Route path="/register-ente" component={OrganizationSignupPage} />
-            <Route path="/sso-callback" component={SSOCallbackPage} />
             <Route component={NotFound} />
           </Switch>
           <Toaster />
           <InstallPrompt />
         </TooltipProvider>
       </QueryClientProvider>
-    </ClerkProvider>
+    </SupabaseAuthProvider>
   );
 }
 
@@ -248,7 +187,7 @@ function App() {
   return (
     <WouterRouter base={basePath}>
       <LanguageProvider>
-        <ClerkProviderWithRoutes />
+        <AuthProviderWithRoutes />
       </LanguageProvider>
     </WouterRouter>
   );

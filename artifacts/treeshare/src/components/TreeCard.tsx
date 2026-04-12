@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link } from "wouter";
-import { useAuth } from "@clerk/react";
+import { useAuth } from "@/lib/auth";
 import ReportModal from "./ReportModal";
 import SunButton from "./SunButton";
 import AdaptiveImage from "./AdaptiveImage";

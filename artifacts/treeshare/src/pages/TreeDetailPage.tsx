@@ -10,7 +10,7 @@ import {
   getGetTreeQueryKey,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { useUser, useAuth } from "@clerk/react";
+import { useUser, useAuth } from "@/lib/auth";
 import Layout from "@/components/Layout";
 import { useToast } from "@/hooks/use-toast";
 import LocationSearch, { type LocationResult } from "@/components/LocationSearch";

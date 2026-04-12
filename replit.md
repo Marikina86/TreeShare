@@ -36,7 +36,7 @@ A plant/tree sharing social app. Community members document trees/plants they pl
 
 ### Frontend Stack
 - React 19 + Vite
-- Clerk (`@clerk/react`) for authentication — requires `VITE_CLERK_PUBLISHABLE_KEY` env var
+- Supabase Auth (`@supabase/supabase-js`) for authentication — requires `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` env vars
 - Wouter for routing
 - TanStack Query + generated API client hooks (`@workspace/api-client-react`)
 - Tailwind CSS + Radix UI (shadcn/ui components)
@@ -45,21 +45,23 @@ A plant/tree sharing social app. Community members document trees/plants they pl
 - i18n: Italian, English, French, Portuguese, Spanish, Japanese
 
 ### API Server Features
-- Clerk JWT auth via JWKS (no secret key needed for dev, JWKS URL hardcoded to `humane-cod-19.clerk.accounts.dev`)
+- Supabase JWT auth via HMAC-SHA256 (`SUPABASE_JWT_SECRET`); `sub` claim = Supabase UUID stored in `usersTable.clerkUserId` column
 - Trees, users, events, alerts, tips, notifications, reports, admin, map, storage, organizations, weekly winners routes
 - Image uploads: Cloudinary (optional) or local `uploads/` folder
 - Plant verification: Google Gemini AI (`GEMINI_API_KEY`)
 - Scheduled jobs: event cleanup, weekly winner selection
 
 ### Environment Variables Required
-- `VITE_CLERK_PUBLISHABLE_KEY` — Clerk publishable key (pk_test_... or pk_live_...) — set as shared env var
+- `VITE_SUPABASE_URL` — Supabase project URL — set as shared env var
+- `VITE_SUPABASE_ANON_KEY` — Supabase anon/public key — set as shared env var
+- `SUPABASE_JWT_SECRET` — Supabase JWT secret for backend token verification
 - `GEMINI_API_KEY` — (optional) for AI plant verification
 - `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET` — (optional) for cloud image uploads
 
 ### GDPR Consent System
 - DB tables: `policies`, `user_consents`, `cookie_consents`
 - Active policies: Privacy v1.0, Terms v1.0 (Italian content)
-- Consent enforced for both private users (Clerk-based, `userId` = clerk ID) and organizations (`userId` = `org:<orgId>`)
+- Consent enforced for both private users (Supabase-based, `userId` = Supabase UUID) and organizations (`userId` = `org:<orgId>`)
 - Endpoints: `GET /policies/:type`, `POST /consent`, `GET /consent/status`, `DELETE /consent/:policyId`, `GET /users/:id/consents`
 - Cookie consent: `POST /cookie-consent`, `GET /cookie-consent/:sessionId`, `PATCH /cookie-consent/:sessionId`
 

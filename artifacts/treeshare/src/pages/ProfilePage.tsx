@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { useParams, Link, useLocation } from "wouter";
-import { useUser, useAuth } from "@clerk/react";
+import { useUser, useAuth } from "@/lib/auth";
 import {
   useGetMyProfile,
   useGetUserProfile,

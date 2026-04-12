@@ -4,7 +4,6 @@ import { usersTable, treesTable } from "@workspace/db";
 import { eq, desc, count, sql } from "drizzle-orm";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth";
 import { UpsertMyProfileBody } from "@workspace/api-zod";
-import { createClerkClient } from "@clerk/backend";
 import { isAdmin } from "../middlewares/requireAdmin";
 
 const router = Router();
@@ -162,12 +161,6 @@ router.delete("/users/me/delete", requireAuth, async (req, res) => {
   try {
     await db.delete(treesTable).where(eq(treesTable.userId, userId));
     await db.delete(usersTable).where(eq(usersTable.clerkUserId, userId));
-
-    const clerkSecretKey = process.env.CLERK_SECRET_KEY;
-    if (clerkSecretKey) {
-      const clerk = createClerkClient({ secretKey: clerkSecretKey });
-      await clerk.users.deleteUser(userId);
-    }
 
     res.status(204).send();
   } catch (err) {

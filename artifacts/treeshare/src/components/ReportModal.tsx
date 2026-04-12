@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useAuth } from "@clerk/react";
+import { useAuth } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
 
 interface ReportModalProps {

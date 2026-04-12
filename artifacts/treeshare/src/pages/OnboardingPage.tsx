@@ -3,7 +3,7 @@ import { useLocation } from "wouter";
 import { useUpsertMyProfile, getGetMyProfileQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
-import { useUser } from "@clerk/react";
+import { useUser } from "@/lib/auth";
 import { useLang } from "@/lib/i18n";
 
 export default function OnboardingPage() {
@@ -48,20 +48,16 @@ export default function OnboardingPage() {
     }
     setPwLoading(true);
     try {
-      await user?.updatePassword({ currentPassword: pwCurrent, newPassword: pwNew, signOutOfOtherSessions: false });
+      await user?.updatePassword({ currentPassword: pwCurrent, newPassword: pwNew });
       toast({ title: L({ it: "✅ Password aggiornata!", en: "✅ Password updated!", fr: "✅ Mot de passe mis à jour\u00a0!", pt: "✅ Senha atualizada!", es: "✅ ¡Contraseña actualizada!", ja: "✅ パスワードを更新しました！" }) });
       setPwCurrent(""); setPwNew(""); setPwConfirm("");
       setShowPasswordForm(false);
     } catch (err: unknown) {
-      const clerkErr = err as { errors?: Array<{ message?: string; code?: string }> };
-      const code = clerkErr?.errors?.[0]?.code;
-      const msg = clerkErr?.errors?.[0]?.message;
-      if (code === "form_password_incorrect") {
+      const msg = err instanceof Error ? err.message : "";
+      if (msg.includes("incorrect") || msg.includes("wrong")) {
         setPwError(L({ it: "Password attuale non corretta.", en: "Current password is incorrect.", fr: "Mot de passe actuel incorrect.", pt: "Senha atual incorreta.", es: "Contraseña actual incorrecta.", ja: "現在のパスワードが正しくありません。" }));
-      } else if (code === "form_password_pwned") {
-        setPwError(L({ it: "Password troppo comune. Scegline una più sicura.", en: "Password too common. Choose a stronger one.", fr: "Mot de passe trop commun. Choisissez-en un plus sûr.", pt: "Senha muito comum. Escolha uma mais segura.", es: "Contraseña demasiado común. Elige una más segura.", ja: "このパスワードはよく使われています。より強いものを選んでください。" }));
       } else {
-        setPwError(msg ?? L({ it: "Errore durante il cambio password.", en: "Error changing password.", fr: "Erreur lors du changement de mot de passe.", pt: "Erro ao alterar a senha.", es: "Error al cambiar la contraseña.", ja: "パスワードの変更中にエラーが発生しました。" }));
+        setPwError(msg || L({ it: "Errore durante il cambio password.", en: "Error changing password.", fr: "Erreur lors du changement de mot de passe.", pt: "Erro ao alterar a senha.", es: "Error al cambiar la contraseña.", ja: "パスワードの変更中にエラーが発生しました。" }));
       }
     } finally {
       setPwLoading(false);

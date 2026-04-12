@@ -2,14 +2,15 @@ import { type Request, type Response, type NextFunction } from "express";
 import { type AuthenticatedRequest } from "./requireAuth";
 
 export function getAdminIds(): string[] {
-  return (process.env.ADMIN_CLERK_USER_IDS ?? "")
+  const ids = process.env.ADMIN_USER_IDS ?? process.env.ADMIN_CLERK_USER_IDS ?? "";
+  return ids
     .split(",")
     .map((s) => s.trim())
     .filter(Boolean);
 }
 
-export function isAdmin(clerkUserId: string): boolean {
-  return getAdminIds().includes(clerkUserId);
+export function isAdmin(userId: string): boolean {
+  return getAdminIds().includes(userId);
 }
 
 export const requireAdmin = (

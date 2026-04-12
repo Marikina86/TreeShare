@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
-import { useUser, useClerk, useAuth } from "@clerk/react";
+import { useUser, useClerk, useAuth } from "@/lib/auth";
 import { useQueryClient } from "@tanstack/react-query";
 import Layout from "@/components/Layout";
 import { useLang, type Lang } from "@/lib/i18n";
@@ -72,20 +72,16 @@ export default function SettingsPage() {
 
     setPwLoading(true);
     try {
-      await user?.updatePassword({ currentPassword: pwCurrent, newPassword: pwNew, signOutOfOtherSessions: false });
+      await user?.updatePassword({ currentPassword: pwCurrent, newPassword: pwNew });
       toast({ title: L("✅ Password aggiornata con successo!", "✅ Password updated successfully!") });
       setPwCurrent(""); setPwNew(""); setPwConfirm("");
       setShowPasswordForm(false);
     } catch (err: unknown) {
-      const clerkErr = err as { errors?: Array<{ message?: string; code?: string }> };
-      const msg = clerkErr?.errors?.[0]?.message;
-      const code = clerkErr?.errors?.[0]?.code;
-      if (code === "form_password_incorrect") {
+      const msg = err instanceof Error ? err.message : "";
+      if (msg.includes("incorrect") || msg.includes("wrong")) {
         setPwError(L("Password attuale non corretta.", "Current password is incorrect."));
-      } else if (code === "form_password_pwned") {
-        setPwError(L("Questa password è troppo comune. Scegline una più sicura.", "This password is too common. Choose a stronger one."));
       } else {
-        setPwError(msg ?? L("Errore durante il cambio password.", "Error changing password."));
+        setPwError(msg || L("Errore durante il cambio password.", "Error changing password."));
       }
     } finally {
       setPwLoading(false);

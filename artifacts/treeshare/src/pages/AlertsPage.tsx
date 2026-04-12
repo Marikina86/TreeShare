@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { useAuth } from "@clerk/react";
+import { useAuth } from "@/lib/auth";
 import Layout from "@/components/Layout";
 import { useToast } from "@/hooks/use-toast";
 import { useLang } from "@/lib/i18n";

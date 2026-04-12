@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useLocation, Link } from "wouter";
-import { useUser, useClerk, useAuth } from "@clerk/react";
+import { useUser, useClerk, useAuth } from "@/lib/auth";
 import { useLang } from "@/lib/i18n";
 import { useListEvents, getListEventsQueryKey } from "@workspace/api-client-react";
 import { getEventsLastSeenAt } from "@/pages/EventsPage";
