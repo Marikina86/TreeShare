@@ -14,6 +14,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useLang, type Lang } from "@/lib/i18n";
 import ReportProblemButton from "@/components/ReportProblemButton";
 import DonateSection from "@/components/DonateSection";
+import ProfileCampaignSection from "@/components/ProfileCampaignSection";
 
 const BADGES = [
   { min: 100, label: "Spirito delle foreste", emoji: "🌳", color: "bg-emerald-50 text-emerald-800 border-emerald-200" },
@@ -575,11 +576,18 @@ export default function ProfilePage() {
           </div>
         </div>
 
-        {!isOwnProfile && (profile as any)?.accountType === "organization" && (
-          <DonateSection
-            profileUserId={profile!.clerkUserId}
-            profileUsername={profile!.username}
-          />
+        {(profile as any)?.accountType === "organization" && (
+          isOwnProfile ? (
+            <ProfileCampaignSection
+              profileUserId={profile!.clerkUserId}
+              isOwnProfile={true}
+            />
+          ) : (
+            <DonateSection
+              profileUserId={profile!.clerkUserId}
+              profileUsername={profile!.username}
+            />
+          )
         )}
 
         {co2Data.treeCount > 0 && (

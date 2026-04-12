@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, boolean, real, timestamp, index, varchar } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, boolean, real, timestamp, index, varchar, json } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
@@ -228,6 +228,7 @@ export const donationCampaignsTable = pgTable("donation_campaigns", {
   isActive: boolean("is_active").notNull().default(true),
   totalRaised: integer("total_raised").notNull().default(0),
   donationCount: integer("donation_count").notNull().default(0),
+  photos: json("photos").notNull().default([]),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 }, (table) => [

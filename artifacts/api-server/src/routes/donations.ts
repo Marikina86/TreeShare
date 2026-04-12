@@ -116,6 +116,21 @@ router.patch("/donations/campaigns/:campaignId", requireAuth, async (req, res) =
     if (req.body.goalAmount !== undefined)
       updates.goalAmount = req.body.goalAmount ? Math.round(Number(req.body.goalAmount) * 100) : null;
     if (req.body.isActive !== undefined) updates.isActive = Boolean(req.body.isActive);
+    if (req.body.photos !== undefined) {
+      if (!Array.isArray(req.body.photos)) {
+        res.status(400).json({ error: "Photos must be an array" });
+        return;
+      }
+      if (req.body.photos.length > 3) {
+        res.status(400).json({ error: "Maximum 3 photos allowed" });
+        return;
+      }
+      if (!req.body.photos.every((p: any) => typeof p === "string" && p.length > 0)) {
+        res.status(400).json({ error: "Each photo must be a non-empty string" });
+        return;
+      }
+      updates.photos = req.body.photos;
+    }
 
     const [updated] = await db
       .update(donationCampaignsTable)
@@ -143,6 +158,7 @@ router.get("/donations/campaigns/active", async (req, res) => {
         goalAmount: donationCampaignsTable.goalAmount,
         totalRaised: donationCampaignsTable.totalRaised,
         donationCount: donationCampaignsTable.donationCount,
+        photos: donationCampaignsTable.photos,
         createdAt: donationCampaignsTable.createdAt,
         orgUsername: usersTable.username,
         orgPhotoUrl: usersTable.photoUrl,

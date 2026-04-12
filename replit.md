@@ -74,6 +74,7 @@ A plant/tree sharing social app. Community members document trees/plants they pl
 - **Badge counts**: Shown in nav, only update on app open or manual refresh
 
 ### Donation System (Stripe) — Fund Separation Architecture
+- **Campaign photos**: Max 3 photos per campaign; stored as JSON array of paths in `donation_campaigns.photos`; upload via existing `/api/storage/uploads/request-url` flow; photos shown on campaigns page, profile (DonateSection for visitors, ProfileCampaignSection for owner), and DonationCampaignManager
 - **Account types**: Users can be `"user"` (default) or `"organization"` — only orgs can create campaigns
 - **Stripe integration**: Uses Replit Stripe connector (NOT env vars); `getUncachableStripeClient()` called fresh each request
 - **Platform model**: Platform collects all funds; 20% platform fee, 80% to org; payout fee €5.00 (500 cents)

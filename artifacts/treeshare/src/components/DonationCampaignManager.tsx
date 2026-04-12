@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useAuth } from "@clerk/react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLang } from "@/lib/i18n";
@@ -12,9 +12,11 @@ interface Campaign {
   isActive: boolean;
   totalRaised: number;
   donationCount: number;
+  photos: string[];
 }
 
 const MIN_PAYOUT_BALANCE_CENTS = 600;
+const MAX_CAMPAIGN_PHOTOS = 3;
 
 const t = {
   it: {
@@ -45,6 +47,10 @@ const t = {
     payoutFee: "Costo payout: €5,00",
     minPayout: "Saldo minimo per payout: €6,00",
     noData: "Nessuna campagna creata",
+    addPhotos: "Aggiungi foto",
+    removePhoto: "Rimuovi",
+    photoUploading: "Caricamento...",
+    maxPhotos: "Max 3 foto per campagna",
   },
   en: {
     title: "Donation campaigns",
@@ -74,10 +80,19 @@ const t = {
     payoutFee: "Payout fee: €5.00",
     minPayout: "Minimum payout balance: €6.00",
     noData: "No campaigns created",
+    addPhotos: "Add photos",
+    removePhoto: "Remove",
+    photoUploading: "Uploading...",
+    maxPhotos: "Max 3 photos per campaign",
   },
 };
 
 type Lang = keyof typeof t;
+
+function photoSrc(url: string) {
+  if (url.startsWith("http")) return url;
+  return `/api/storage${url.startsWith("/") ? "" : "/"}${url}`;
+}
 
 export default function DonationCampaignManager({ accountType, stripeAccountId, onRefreshProfile }: {
   accountType: string;
@@ -94,9 +109,13 @@ export default function DonationCampaignManager({ accountType, stripeAccountId, 
   const [formTitle, setFormTitle] = useState("");
   const [formDesc, setFormDesc] = useState("");
   const [formGoal, setFormGoal] = useState("");
+  const [formPhotos, setFormPhotos] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [payingOut, setPayingOut] = useState(false);
   const [connectingStripe, setConnectingStripe] = useState(false);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [uploadingForCampaign, setUploadingForCampaign] = useState<number | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   async function authFetch(url: string, opts?: RequestInit) {
     const token = await getToken();
@@ -135,6 +154,87 @@ export default function DonationCampaignManager({ accountType, stripeAccountId, 
     refetchInterval: false,
   });
 
+  async function uploadFile(file: File): Promise<string> {
+    const urlRes = await fetch("/api/storage/uploads/request-url", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: file.name, size: file.size, contentType: file.type || "image/jpeg" }),
+    });
+    if (!urlRes.ok) throw new Error("Failed to get upload URL");
+    const { uploadURL } = await urlRes.json();
+    const uploadRes = await fetch(uploadURL, {
+      method: "PUT",
+      headers: { "Content-Type": file.type || "image/jpeg" },
+      body: file,
+    });
+    if (!uploadRes.ok) throw new Error("Upload failed");
+    const data = await uploadRes.json();
+    return data.finalObjectPath as string;
+  }
+
+  async function handleFormPhotoUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = e.target.files;
+    if (!files?.length) return;
+    const remaining = MAX_CAMPAIGN_PHOTOS - formPhotos.length;
+    if (remaining <= 0) return;
+
+    setUploadingPhoto(true);
+    try {
+      const toUpload = Array.from(files).slice(0, remaining);
+      const paths: string[] = [];
+      for (const file of toUpload) {
+        const path = await uploadFile(file);
+        paths.push(path);
+      }
+      setFormPhotos((prev) => [...prev, ...paths].slice(0, MAX_CAMPAIGN_PHOTOS));
+    } catch {
+      toast({ title: "Upload error", variant: "destructive" });
+    } finally {
+      setUploadingPhoto(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  }
+
+  async function handleExistingCampaignPhotoUpload(campaignId: number, currentPhotos: string[], e: React.ChangeEvent<HTMLInputElement>) {
+    const files = e.target.files;
+    if (!files?.length) return;
+    const remaining = MAX_CAMPAIGN_PHOTOS - currentPhotos.length;
+    if (remaining <= 0) return;
+
+    setUploadingForCampaign(campaignId);
+    try {
+      const toUpload = Array.from(files).slice(0, remaining);
+      const paths: string[] = [];
+      for (const file of toUpload) {
+        const path = await uploadFile(file);
+        paths.push(path);
+      }
+      const newPhotos = [...currentPhotos, ...paths].slice(0, MAX_CAMPAIGN_PHOTOS);
+      await authFetch(`/api/donations/campaigns/${campaignId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ photos: newPhotos }),
+      });
+      toast({ title: l.updated });
+      queryClient.invalidateQueries({ queryKey: ["my-campaigns"] });
+    } catch {
+      toast({ title: "Upload error", variant: "destructive" });
+    } finally {
+      setUploadingForCampaign(null);
+      const input = document.getElementById(`campaign-photo-${campaignId}`) as HTMLInputElement;
+      if (input) input.value = "";
+    }
+  }
+
+  async function handleRemovePhoto(campaignId: number, currentPhotos: string[], photoIndex: number) {
+    const newPhotos = currentPhotos.filter((_, i) => i !== photoIndex);
+    await authFetch(`/api/donations/campaigns/${campaignId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ photos: newPhotos }),
+    });
+    toast({ title: l.updated });
+    queryClient.invalidateQueries({ queryKey: ["my-campaigns"] });
+  }
+
   async function handleCreateCampaign(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
@@ -148,11 +248,19 @@ export default function DonationCampaignManager({ accountType, stripeAccountId, 
         }),
       });
       if (res.ok) {
+        const created = await res.json();
+        if (formPhotos.length > 0) {
+          await authFetch(`/api/donations/campaigns/${created.id}`, {
+            method: "PATCH",
+            body: JSON.stringify({ photos: formPhotos }),
+          });
+        }
         toast({ title: l.created });
         setShowForm(false);
         setFormTitle("");
         setFormDesc("");
         setFormGoal("");
+        setFormPhotos([]);
         queryClient.invalidateQueries({ queryKey: ["my-campaigns"] });
       }
     } finally {
@@ -258,30 +366,73 @@ export default function DonationCampaignManager({ accountType, stripeAccountId, 
       )}
 
       <div className="bg-card border border-border rounded-2xl overflow-hidden divide-y divide-border">
-        {campaigns.map((c) => (
-          <div key={c.id} className="px-5 py-4">
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium text-foreground truncate">{c.title}</p>
-                <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{c.description}</p>
-                <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
-                  <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${c.isActive ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400" : "bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400"}`}>
-                    {c.isActive ? l.active : l.inactive}
-                  </span>
-                  <span>€{(c.totalRaised / 100).toFixed(2)} {l.raised}</span>
-                  <span>{c.donationCount} {l.donations}</span>
-                  {c.goalAmount && <span>/ €{(c.goalAmount / 100).toFixed(2)}</span>}
+        {campaigns.map((c) => {
+          const photos = Array.isArray(c.photos) ? c.photos : [];
+          return (
+            <div key={c.id} className="px-5 py-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium text-foreground truncate">{c.title}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{c.description}</p>
+                  <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
+                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${c.isActive ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400" : "bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400"}`}>
+                      {c.isActive ? l.active : l.inactive}
+                    </span>
+                    <span>€{(c.totalRaised / 100).toFixed(2)} {l.raised}</span>
+                    <span>{c.donationCount} {l.donations}</span>
+                    {c.goalAmount && <span>/ €{(c.goalAmount / 100).toFixed(2)}</span>}
+                  </div>
                 </div>
+                <button
+                  onClick={() => handleToggleCampaign(c.id, c.isActive)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-medium border ${c.isActive ? "border-gray-300 text-gray-600 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-400" : "border-emerald-300 text-emerald-600 hover:bg-emerald-50 dark:border-emerald-700 dark:text-emerald-400"}`}
+                >
+                  {c.isActive ? l.deactivate : l.activate}
+                </button>
               </div>
-              <button
-                onClick={() => handleToggleCampaign(c.id, c.isActive)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium border ${c.isActive ? "border-gray-300 text-gray-600 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-400" : "border-emerald-300 text-emerald-600 hover:bg-emerald-50 dark:border-emerald-700 dark:text-emerald-400"}`}
-              >
-                {c.isActive ? l.deactivate : l.activate}
-              </button>
+
+              {photos.length > 0 && (
+                <div className="flex gap-2 mt-3 overflow-x-auto">
+                  {photos.map((photo, i) => (
+                    <div key={i} className="relative flex-shrink-0">
+                      <img
+                        src={photoSrc(photo)}
+                        alt=""
+                        className="w-20 h-20 rounded-xl object-cover border border-border"
+                      />
+                      <button
+                        onClick={() => handleRemovePhoto(c.id, photos, i)}
+                        className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center text-[10px] font-bold hover:bg-red-600"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {photos.length < MAX_CAMPAIGN_PHOTOS && (
+                <div className="mt-2">
+                  <input
+                    id={`campaign-photo-${c.id}`}
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    className="hidden"
+                    onChange={(e) => handleExistingCampaignPhotoUpload(c.id, photos, e)}
+                  />
+                  <button
+                    onClick={() => document.getElementById(`campaign-photo-${c.id}`)?.click()}
+                    disabled={uploadingForCampaign === c.id}
+                    className="text-xs text-primary hover:underline disabled:opacity-50"
+                  >
+                    {uploadingForCampaign === c.id ? l.photoUploading : `+ ${l.addPhotos} (${photos.length}/${MAX_CAMPAIGN_PHOTOS})`}
+                  </button>
+                </div>
+              )}
             </div>
-          </div>
-        ))}
+          );
+        })}
 
         {campaigns.length === 0 && !showForm && (
           <div className="px-5 py-8 text-center text-sm text-muted-foreground">{l.noData}</div>
@@ -312,10 +463,51 @@ export default function DonationCampaignManager({ accountType, stripeAccountId, 
               inputMode="decimal"
               className="w-full px-3 py-2 border border-border rounded-xl text-sm bg-background"
             />
+
+            <div>
+              <p className="text-xs text-muted-foreground mb-1">{l.maxPhotos}</p>
+              {formPhotos.length > 0 && (
+                <div className="flex gap-2 mb-2 overflow-x-auto">
+                  {formPhotos.map((photo, i) => (
+                    <div key={i} className="relative flex-shrink-0">
+                      <img src={photoSrc(photo)} alt="" className="w-16 h-16 rounded-xl object-cover border border-border" />
+                      <button
+                        type="button"
+                        onClick={() => setFormPhotos((prev) => prev.filter((_, idx) => idx !== i))}
+                        className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center text-[10px] font-bold hover:bg-red-600"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {formPhotos.length < MAX_CAMPAIGN_PHOTOS && (
+                <>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    className="hidden"
+                    onChange={handleFormPhotoUpload}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={uploadingPhoto}
+                    className="text-xs text-primary hover:underline disabled:opacity-50"
+                  >
+                    {uploadingPhoto ? l.photoUploading : `+ ${l.addPhotos}`}
+                  </button>
+                </>
+              )}
+            </div>
+
             <div className="flex gap-2">
               <button
                 type="button"
-                onClick={() => setShowForm(false)}
+                onClick={() => { setShowForm(false); setFormPhotos([]); }}
                 className="flex-1 py-2 border border-border rounded-xl text-sm font-medium text-foreground hover:bg-muted"
               >
                 {l.cancel}
