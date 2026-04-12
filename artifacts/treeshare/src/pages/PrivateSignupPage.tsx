@@ -142,12 +142,20 @@ export default function PrivateSignupPage() {
         identities: data.user?.identities?.length,
       });
 
-      if (data.session) {
+      if (data.user) {
+        if (!data.session) {
+          const { error: loginError } = await supabase.auth.signInWithPassword({
+            email: fields.email.trim(),
+            password: fields.password,
+          });
+          if (loginError) {
+            console.warn("[SignUp] Auto-login after signup failed:", loginError.message);
+          }
+        }
+
         const saved = await saveCity();
         setProfileSaved(saved);
         setStep("done");
-      } else if (data.user && !data.session) {
-        setStep("verify");
       } else if (data.user?.identities?.length === 0) {
         setServerError(lang === "en"
           ? "This email is already registered. Sign in or reset your password."
