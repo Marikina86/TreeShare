@@ -44,6 +44,8 @@ export default function PrivateSignupPage() {
   const [serverError, setServerError] = useState<string | null>(null);
   const [otp, setOtp] = useState("");
   const [otpError, setOtpError] = useState<string | null>(null);
+  const [resending, setResending] = useState(false);
+  const [resendMsg, setResendMsg] = useState<string | null>(null);
 
   const [fields, setFields] = useState({
     nome: "",
@@ -100,6 +102,7 @@ export default function PrivateSignupPage() {
         email: fields.email.trim(),
         password: fields.password,
         options: {
+          emailRedirectTo: `${window.location.origin}/feed`,
           data: {
             first_name: fields.nome.trim(),
             last_name: fields.cognome.trim(),
@@ -113,10 +116,14 @@ export default function PrivateSignupPage() {
       });
 
       if (error) {
-        if (error.message.includes("already registered")) {
-          setServerError("Questa email è già registrata. Accedi con le tue credenziali o recupera la password.");
+        if (error.message.includes("already registered") || error.message.includes("already been registered")) {
+          setServerError(lang === "en"
+            ? "This email is already registered. Sign in or reset your password."
+            : "Questa email è già registrata. Accedi con le tue credenziali o recupera la password.");
         } else if (error.message.includes("password")) {
-          setServerError("La password non soddisfa i requisiti di sicurezza. Scegli una password più forte.");
+          setServerError(lang === "en"
+            ? "Password does not meet security requirements. Choose a stronger one."
+            : "La password non soddisfa i requisiti di sicurezza. Scegli una password più forte.");
         } else {
           setServerError(error.message);
         }
@@ -129,6 +136,10 @@ export default function PrivateSignupPage() {
         setStep("done");
       } else if (data.user && !data.session) {
         setStep("verify");
+      } else if (data.user?.identities?.length === 0) {
+        setServerError(lang === "en"
+          ? "This email is already registered. Sign in or reset your password."
+          : "Questa email è già registrata. Accedi con le tue credenziali o recupera la password.");
       }
     } catch {
       setServerError("Errore durante la registrazione. Riprova.");
@@ -165,6 +176,40 @@ export default function PrivateSignupPage() {
       setOtpError("Codice non valido. Riprova.");
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  async function handleResendCode() {
+    setResending(true);
+    setResendMsg(null);
+    setOtpError(null);
+    try {
+      const { error } = await supabase.auth.resend({
+        type: "signup",
+        email: fields.email.trim(),
+        options: {
+          emailRedirectTo: `${window.location.origin}/feed`,
+        },
+      });
+      if (error) {
+        if (error.message.includes("rate") || error.message.includes("limit")) {
+          setOtpError(lang === "en"
+            ? "Too many requests. Wait a few minutes before trying again."
+            : "Troppe richieste. Attendi qualche minuto prima di riprovare.");
+        } else {
+          setOtpError(error.message);
+        }
+      } else {
+        setResendMsg(lang === "en"
+          ? "Verification code resent! Check your inbox (and spam folder)."
+          : "Codice di verifica rinviato! Controlla la tua casella di posta (anche lo spam).");
+      }
+    } catch {
+      setOtpError(lang === "en"
+        ? "Error resending code. Try again."
+        : "Errore nell'invio del codice. Riprova.");
+    } finally {
+      setResending(false);
     }
   }
 
@@ -276,6 +321,12 @@ export default function PrivateSignupPage() {
                 {otpError}
               </div>
             )}
+            {resendMsg && (
+              <div className="bg-green-50 border border-green-200 rounded-lg px-4 py-3 text-sm text-green-700 flex items-center gap-2">
+                <CheckCircle2 className="h-4 w-4 flex-shrink-0" />
+                {resendMsg}
+              </div>
+            )}
             <div>
               <label className="block text-sm font-medium text-foreground mb-1.5">
                 {lang === "en" ? "Verification code" : "Codice di verifica"}
@@ -290,6 +341,11 @@ export default function PrivateSignupPage() {
                 className={`${inputCls} text-center text-2xl tracking-widest font-mono`}
               />
             </div>
+            <p className="text-xs text-muted-foreground text-center">
+              {lang === "en"
+                ? "Check your inbox and spam folder for the verification email."
+                : "Controlla la tua casella di posta e la cartella spam per l'email di verifica."}
+            </p>
             <button
               type="submit"
               disabled={submitting || otp.length < 6}
@@ -299,6 +355,17 @@ export default function PrivateSignupPage() {
                 <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
               )}
               {lang === "en" ? "Verify" : "Verifica"}
+            </button>
+            <button
+              type="button"
+              onClick={handleResendCode}
+              disabled={resending}
+              className="w-full py-2 text-sm font-medium text-primary hover:text-primary/80 disabled:opacity-50 flex items-center justify-center gap-2 transition-colors"
+            >
+              {resending && (
+                <div className="w-3 h-3 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+              )}
+              {lang === "en" ? "Resend verification code" : "Rinvia codice di verifica"}
             </button>
             <button
               type="button"
