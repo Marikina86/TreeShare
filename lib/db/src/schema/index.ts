@@ -290,7 +290,7 @@ export const payoutsTable = pgTable("payouts", {
   id: serial("id").primaryKey(),
   userId: text("user_id").notNull(),
   amountGross: integer("amount_gross").notNull(),
-  payoutFee: integer("payout_fee").notNull().default(25),
+  payoutFee: integer("payout_fee").notNull().default(500),
   amountNet: integer("amount_net").notNull(),
   status: text("status").notNull().default("pending"),
   stripeTransferId: text("stripe_transfer_id"),
