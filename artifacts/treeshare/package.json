@@ -16,7 +16,6 @@
     "@stripe/react-stripe-js": "^6.1.0",
     "@stripe/stripe-js": "^9.1.0",
     "@types/react-google-recaptcha": "^2.1.9",
-    "pigeon-maps": "^0.22.1",
     "react-google-recaptcha": "^3.1.0"
   },
   "devDependencies": {
