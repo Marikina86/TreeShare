@@ -3,6 +3,7 @@ import { useAuth } from "@clerk/react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLang } from "@/lib/i18n";
 import { useToast } from "@/hooks/use-toast";
+import { ManagerPhotoThumbnails } from "@/components/PhotoLightbox";
 
 interface Campaign {
   id: number;
@@ -524,25 +525,11 @@ export default function DonationCampaignManager({ accountType, stripeAccountId, 
                     </div>
                   </div>
 
-                  {photos.length > 0 && (
-                    <div className="flex gap-2 mt-3 overflow-x-auto pb-1">
-                      {photos.map((photo, i) => (
-                        <div key={i} className="relative flex-shrink-0 group">
-                          <img
-                            src={photoSrc(photo)}
-                            alt=""
-                            className="w-20 h-20 rounded-xl object-cover border border-border"
-                          />
-                          <button
-                            onClick={() => handleRemovePhoto(c.id, photos, i)}
-                            className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center text-[10px] font-bold hover:bg-red-600 opacity-0 group-hover:opacity-100 transition-opacity"
-                          >
-                            ×
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
+                  <ManagerPhotoThumbnails
+                    photos={photos}
+                    onRemove={(i) => handleRemovePhoto(c.id, photos, i)}
+                    campaignId={c.id}
+                  />
 
                   <div className="flex items-center gap-2 mt-3 pt-2 border-t border-border/50">
                     {photos.length < MAX_CAMPAIGN_PHOTOS && (

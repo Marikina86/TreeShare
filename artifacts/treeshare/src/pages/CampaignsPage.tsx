@@ -19,10 +19,7 @@ interface Campaign {
   orgPhotoUrl: string | null;
 }
 
-function photoSrc(url: string) {
-  if (url.startsWith("http")) return url;
-  return `/api/storage${url.startsWith("/") ? "" : "/"}${url}`;
-}
+import { CampaignPhotoGrid } from "@/components/PhotoLightbox";
 
 const t = {
   it: {
@@ -209,19 +206,7 @@ export default function CampaignsPage() {
 
                     <p className="text-sm text-muted-foreground line-clamp-2 mb-4">{c.description}</p>
 
-                    {(() => {
-                      const photos = Array.isArray(c.photos) ? c.photos : [];
-                      if (photos.length === 0) return null;
-                      return (
-                        <div className={`mb-4 ${photos.length === 1 ? "" : "grid gap-2"}`}
-                          style={photos.length > 1 ? { gridTemplateColumns: `repeat(${Math.min(photos.length, 3)}, 1fr)` } : undefined}
-                        >
-                          {photos.map((photo, i) => (
-                            <img key={i} src={photoSrc(photo)} alt="" className={`rounded-xl object-cover border border-border w-full ${photos.length === 1 ? "max-h-52" : "h-28"}`} />
-                          ))}
-                        </div>
-                      );
-                    })()}
+                    <CampaignPhotoGrid photos={Array.isArray(c.photos) ? c.photos : []} className="mb-4" />
 
                     <div className="flex items-center gap-4 text-xs text-muted-foreground mb-3">
                       <span className="font-medium text-foreground">€{(c.totalRaised / 100).toFixed(2)} {l.raised}</span>

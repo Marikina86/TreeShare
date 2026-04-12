@@ -23,10 +23,7 @@ const labels = {
 
 type Lang = keyof typeof labels;
 
-function photoSrc(url: string) {
-  if (url.startsWith("http")) return url;
-  return `/api/storage${url.startsWith("/") ? "" : "/"}${url}`;
-}
+import { CampaignPhotoGridCompact } from "@/components/PhotoLightbox";
 
 export default function ProfileCampaignSection({ profileUserId, isOwnProfile }: {
   profileUserId: string;
@@ -71,20 +68,7 @@ export default function ProfileCampaignSection({ profileUserId, isOwnProfile }: 
         </div>
       </div>
 
-      {photos.length > 0 && (
-        <div className={`mb-3 ${photos.length === 1 ? "" : "grid gap-2"}`}
-          style={photos.length > 1 ? { gridTemplateColumns: `repeat(${Math.min(photos.length, 3)}, 1fr)` } : undefined}
-        >
-          {photos.map((photo, i) => (
-            <img
-              key={i}
-              src={photoSrc(photo)}
-              alt=""
-              className={`rounded-xl object-cover border border-emerald-200 dark:border-emerald-800 w-full ${photos.length === 1 ? "max-h-48" : "h-24"}`}
-            />
-          ))}
-        </div>
-      )}
+      <CampaignPhotoGridCompact photos={photos} className="mb-3" />
 
       <div className="flex items-center gap-4 text-xs text-emerald-600 dark:text-emerald-400 mb-1">
         <span className="font-semibold">€{(campaign.totalRaised / 100).toFixed(2)} {l.raised}</span>
