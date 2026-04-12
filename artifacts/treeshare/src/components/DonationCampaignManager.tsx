@@ -36,6 +36,7 @@ const t = {
     deactivate: "Disattiva",
     created: "Campagna creata",
     updated: "Campagna aggiornata",
+    deleted: "Campagna eliminata",
     connectStripe: "Collega Stripe",
     connectStripeDesc: "Per ricevere i pagamenti, collega il tuo account Stripe.",
     stripeConnected: "Stripe collegato",
@@ -48,9 +49,15 @@ const t = {
     minPayout: "Saldo minimo per payout: €6,00",
     noData: "Nessuna campagna creata",
     addPhotos: "Aggiungi foto",
-    removePhoto: "Rimuovi",
     photoUploading: "Caricamento...",
-    maxPhotos: "Max 3 foto per campagna",
+    maxPhotos: "Max 3 foto",
+    edit: "Modifica",
+    delete: "Elimina",
+    confirmDelete: "Sei sicuro di voler eliminare questa campagna?",
+    confirmDeleteBtn: "Elimina",
+    cancelDelete: "Annulla",
+    cannotDelete: "Non puoi eliminare una campagna con donazioni. Puoi solo disattivarla.",
+    goal: "Obiettivo",
   },
   en: {
     title: "Donation campaigns",
@@ -69,6 +76,7 @@ const t = {
     deactivate: "Deactivate",
     created: "Campaign created",
     updated: "Campaign updated",
+    deleted: "Campaign deleted",
     connectStripe: "Connect Stripe",
     connectStripeDesc: "To receive payments, connect your Stripe account.",
     stripeConnected: "Stripe connected",
@@ -81,9 +89,15 @@ const t = {
     minPayout: "Minimum payout balance: €6.00",
     noData: "No campaigns created",
     addPhotos: "Add photos",
-    removePhoto: "Remove",
     photoUploading: "Uploading...",
-    maxPhotos: "Max 3 photos per campaign",
+    maxPhotos: "Max 3 photos",
+    edit: "Edit",
+    delete: "Delete",
+    confirmDelete: "Are you sure you want to delete this campaign?",
+    confirmDeleteBtn: "Delete",
+    cancelDelete: "Cancel",
+    cannotDelete: "Cannot delete a campaign with donations. You can deactivate it instead.",
+    goal: "Goal",
   },
 };
 
@@ -115,6 +129,11 @@ export default function DonationCampaignManager({ accountType, stripeAccountId, 
   const [connectingStripe, setConnectingStripe] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [uploadingForCampaign, setUploadingForCampaign] = useState<number | null>(null);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editTitle, setEditTitle] = useState("");
+  const [editDesc, setEditDesc] = useState("");
+  const [editGoal, setEditGoal] = useState("");
+  const [deletingId, setDeletingId] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   async function authFetch(url: string, opts?: RequestInit) {
@@ -177,14 +196,12 @@ export default function DonationCampaignManager({ accountType, stripeAccountId, 
     if (!files?.length) return;
     const remaining = MAX_CAMPAIGN_PHOTOS - formPhotos.length;
     if (remaining <= 0) return;
-
     setUploadingPhoto(true);
     try {
       const toUpload = Array.from(files).slice(0, remaining);
       const paths: string[] = [];
       for (const file of toUpload) {
-        const path = await uploadFile(file);
-        paths.push(path);
+        paths.push(await uploadFile(file));
       }
       setFormPhotos((prev) => [...prev, ...paths].slice(0, MAX_CAMPAIGN_PHOTOS));
     } catch {
@@ -195,27 +212,30 @@ export default function DonationCampaignManager({ accountType, stripeAccountId, 
     }
   }
 
-  async function handleExistingCampaignPhotoUpload(campaignId: number, currentPhotos: string[], e: React.ChangeEvent<HTMLInputElement>) {
+  async function handleCampaignPhotoUpload(campaignId: number, currentPhotos: string[], e: React.ChangeEvent<HTMLInputElement>) {
     const files = e.target.files;
     if (!files?.length) return;
     const remaining = MAX_CAMPAIGN_PHOTOS - currentPhotos.length;
     if (remaining <= 0) return;
-
     setUploadingForCampaign(campaignId);
     try {
       const toUpload = Array.from(files).slice(0, remaining);
       const paths: string[] = [];
       for (const file of toUpload) {
-        const path = await uploadFile(file);
-        paths.push(path);
+        paths.push(await uploadFile(file));
       }
       const newPhotos = [...currentPhotos, ...paths].slice(0, MAX_CAMPAIGN_PHOTOS);
-      await authFetch(`/api/donations/campaigns/${campaignId}`, {
+      const res = await authFetch(`/api/donations/campaigns/${campaignId}`, {
         method: "PATCH",
         body: JSON.stringify({ photos: newPhotos }),
       });
-      toast({ title: l.updated });
-      queryClient.invalidateQueries({ queryKey: ["my-campaigns"] });
+      if (res.ok) {
+        toast({ title: l.updated });
+        queryClient.invalidateQueries({ queryKey: ["my-campaigns"] });
+      } else {
+        const data = await res.json().catch(() => ({}));
+        toast({ title: data.error || "Error", variant: "destructive" });
+      }
     } catch {
       toast({ title: "Upload error", variant: "destructive" });
     } finally {
@@ -227,12 +247,17 @@ export default function DonationCampaignManager({ accountType, stripeAccountId, 
 
   async function handleRemovePhoto(campaignId: number, currentPhotos: string[], photoIndex: number) {
     const newPhotos = currentPhotos.filter((_, i) => i !== photoIndex);
-    await authFetch(`/api/donations/campaigns/${campaignId}`, {
+    const res = await authFetch(`/api/donations/campaigns/${campaignId}`, {
       method: "PATCH",
       body: JSON.stringify({ photos: newPhotos }),
     });
-    toast({ title: l.updated });
-    queryClient.invalidateQueries({ queryKey: ["my-campaigns"] });
+    if (res.ok) {
+      toast({ title: l.updated });
+      queryClient.invalidateQueries({ queryKey: ["my-campaigns"] });
+    } else {
+      const data = await res.json().catch(() => ({}));
+      toast({ title: data.error || "Error", variant: "destructive" });
+    }
   }
 
   async function handleCreateCampaign(e: React.FormEvent) {
@@ -268,13 +293,66 @@ export default function DonationCampaignManager({ accountType, stripeAccountId, 
     }
   }
 
+  function startEdit(c: Campaign) {
+    setEditingId(c.id);
+    setEditTitle(c.title);
+    setEditDesc(c.description);
+    setEditGoal(c.goalAmount ? String(c.goalAmount / 100) : "");
+  }
+
+  async function handleSaveEdit(campaignId: number) {
+    setSaving(true);
+    try {
+      const res = await authFetch(`/api/donations/campaigns/${campaignId}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          title: editTitle,
+          description: editDesc,
+          goalAmount: editGoal ? Number(editGoal) : null,
+        }),
+      });
+      if (res.ok) {
+        toast({ title: l.updated });
+        setEditingId(null);
+        queryClient.invalidateQueries({ queryKey: ["my-campaigns"] });
+      }
+    } finally {
+      setSaving(false);
+    }
+  }
+
   async function handleToggleCampaign(id: number, isActive: boolean) {
-    await authFetch(`/api/donations/campaigns/${id}`, {
+    const res = await authFetch(`/api/donations/campaigns/${id}`, {
       method: "PATCH",
       body: JSON.stringify({ isActive: !isActive }),
     });
-    toast({ title: l.updated });
-    queryClient.invalidateQueries({ queryKey: ["my-campaigns"] });
+    if (res.ok) {
+      toast({ title: l.updated });
+      queryClient.invalidateQueries({ queryKey: ["my-campaigns"] });
+    } else {
+      const data = await res.json().catch(() => ({}));
+      toast({ title: data.error || "Error", variant: "destructive" });
+    }
+  }
+
+  async function handleDeleteCampaign(campaignId: number) {
+    try {
+      const res = await authFetch(`/api/donations/campaigns/${campaignId}`, {
+        method: "DELETE",
+      });
+      if (res.ok) {
+        toast({ title: l.deleted });
+        setDeletingId(null);
+        queryClient.invalidateQueries({ queryKey: ["my-campaigns"] });
+      } else {
+        const data = await res.json();
+        toast({ title: data.error || l.cannotDelete, variant: "destructive" });
+        setDeletingId(null);
+      }
+    } catch {
+      toast({ title: "Error", variant: "destructive" });
+      setDeletingId(null);
+    }
   }
 
   async function handleConnectStripe() {
@@ -308,9 +386,7 @@ export default function DonationCampaignManager({ accountType, stripeAccountId, 
     }
   }
 
-  if (!isOrg) {
-    return null;
-  }
+  if (!isOrg) return null;
 
   return (
     <section className="mb-8">
@@ -368,67 +444,164 @@ export default function DonationCampaignManager({ accountType, stripeAccountId, 
       <div className="bg-card border border-border rounded-2xl overflow-hidden divide-y divide-border">
         {campaigns.map((c) => {
           const photos = Array.isArray(c.photos) ? c.photos : [];
+          const isEditing = editingId === c.id;
+          const isDeleting = deletingId === c.id;
+
           return (
             <div key={c.id} className="px-5 py-4">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium text-foreground truncate">{c.title}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{c.description}</p>
-                  <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
-                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${c.isActive ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400" : "bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400"}`}>
-                      {c.isActive ? l.active : l.inactive}
-                    </span>
-                    <span>€{(c.totalRaised / 100).toFixed(2)} {l.raised}</span>
-                    <span>{c.donationCount} {l.donations}</span>
-                    {c.goalAmount && <span>/ €{(c.goalAmount / 100).toFixed(2)}</span>}
+              {isDeleting ? (
+                <div className="py-2">
+                  <p className="text-sm text-foreground mb-3">{l.confirmDelete}</p>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setDeletingId(null)}
+                      className="flex-1 py-2 border border-border rounded-xl text-sm font-medium text-foreground hover:bg-muted"
+                    >
+                      {l.cancelDelete}
+                    </button>
+                    <button
+                      onClick={() => handleDeleteCampaign(c.id)}
+                      className="flex-1 py-2 bg-red-600 text-white rounded-xl text-sm font-medium hover:bg-red-700"
+                    >
+                      {l.confirmDeleteBtn}
+                    </button>
                   </div>
                 </div>
-                <button
-                  onClick={() => handleToggleCampaign(c.id, c.isActive)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-medium border ${c.isActive ? "border-gray-300 text-gray-600 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-400" : "border-emerald-300 text-emerald-600 hover:bg-emerald-50 dark:border-emerald-700 dark:text-emerald-400"}`}
-                >
-                  {c.isActive ? l.deactivate : l.activate}
-                </button>
-              </div>
-
-              {photos.length > 0 && (
-                <div className="flex gap-2 mt-3 overflow-x-auto">
-                  {photos.map((photo, i) => (
-                    <div key={i} className="relative flex-shrink-0">
-                      <img
-                        src={photoSrc(photo)}
-                        alt=""
-                        className="w-20 h-20 rounded-xl object-cover border border-border"
-                      />
-                      <button
-                        onClick={() => handleRemovePhoto(c.id, photos, i)}
-                        className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center text-[10px] font-bold hover:bg-red-600"
-                      >
-                        ×
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {photos.length < MAX_CAMPAIGN_PHOTOS && (
-                <div className="mt-2">
+              ) : isEditing ? (
+                <div className="space-y-3">
                   <input
-                    id={`campaign-photo-${c.id}`}
-                    type="file"
-                    accept="image/*"
-                    multiple
-                    className="hidden"
-                    onChange={(e) => handleExistingCampaignPhotoUpload(c.id, photos, e)}
+                    value={editTitle}
+                    onChange={(e) => setEditTitle(e.target.value)}
+                    placeholder={l.campaignTitle}
+                    className="w-full px-3 py-2 border border-border rounded-xl text-sm bg-background"
                   />
-                  <button
-                    onClick={() => document.getElementById(`campaign-photo-${c.id}`)?.click()}
-                    disabled={uploadingForCampaign === c.id}
-                    className="text-xs text-primary hover:underline disabled:opacity-50"
-                  >
-                    {uploadingForCampaign === c.id ? l.photoUploading : `+ ${l.addPhotos} (${photos.length}/${MAX_CAMPAIGN_PHOTOS})`}
-                  </button>
+                  <textarea
+                    value={editDesc}
+                    onChange={(e) => setEditDesc(e.target.value)}
+                    placeholder={l.campaignDesc}
+                    rows={3}
+                    className="w-full px-3 py-2 border border-border rounded-xl text-sm bg-background resize-none"
+                  />
+                  <input
+                    value={editGoal}
+                    onChange={(e) => setEditGoal(e.target.value.replace(/[^0-9.]/g, ""))}
+                    placeholder={l.goalOptional}
+                    type="text"
+                    inputMode="decimal"
+                    className="w-full px-3 py-2 border border-border rounded-xl text-sm bg-background"
+                  />
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setEditingId(null)}
+                      className="flex-1 py-2 border border-border rounded-xl text-sm font-medium text-foreground hover:bg-muted"
+                    >
+                      {l.cancel}
+                    </button>
+                    <button
+                      onClick={() => handleSaveEdit(c.id)}
+                      disabled={saving || !editTitle || !editDesc}
+                      className="flex-1 py-2 bg-primary text-primary-foreground rounded-xl text-sm font-medium hover:opacity-90 disabled:opacity-50"
+                    >
+                      {saving ? "..." : l.save}
+                    </button>
+                  </div>
                 </div>
+              ) : (
+                <>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium text-foreground truncate">{c.title}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{c.description}</p>
+                      <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
+                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${c.isActive ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400" : "bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400"}`}>
+                          {c.isActive ? l.active : l.inactive}
+                        </span>
+                        <span>€{(c.totalRaised / 100).toFixed(2)} {l.raised}</span>
+                        <span>{c.donationCount} {l.donations}</span>
+                        {c.goalAmount && <span>/ €{(c.goalAmount / 100).toFixed(2)}</span>}
+                      </div>
+                    </div>
+                  </div>
+
+                  {photos.length > 0 && (
+                    <div className="flex gap-2 mt-3 overflow-x-auto pb-1">
+                      {photos.map((photo, i) => (
+                        <div key={i} className="relative flex-shrink-0 group">
+                          <img
+                            src={photoSrc(photo)}
+                            alt=""
+                            className="w-20 h-20 rounded-xl object-cover border border-border"
+                          />
+                          <button
+                            onClick={() => handleRemovePhoto(c.id, photos, i)}
+                            className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center text-[10px] font-bold hover:bg-red-600 opacity-0 group-hover:opacity-100 transition-opacity"
+                          >
+                            ×
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="flex items-center gap-2 mt-3 pt-2 border-t border-border/50">
+                    {photos.length < MAX_CAMPAIGN_PHOTOS && (
+                      <>
+                        <input
+                          id={`campaign-photo-${c.id}`}
+                          type="file"
+                          accept="image/*"
+                          multiple
+                          className="hidden"
+                          onChange={(e) => handleCampaignPhotoUpload(c.id, photos, e)}
+                        />
+                        <button
+                          onClick={() => document.getElementById(`campaign-photo-${c.id}`)?.click()}
+                          disabled={uploadingForCampaign === c.id}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-emerald-300 text-emerald-600 hover:bg-emerald-50 dark:border-emerald-700 dark:text-emerald-400 dark:hover:bg-emerald-900/30 disabled:opacity-50"
+                        >
+                          <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/>
+                          </svg>
+                          {uploadingForCampaign === c.id ? l.photoUploading : `${l.addPhotos} (${photos.length}/${MAX_CAMPAIGN_PHOTOS})`}
+                        </button>
+                      </>
+                    )}
+
+                    <button
+                      onClick={() => startEdit(c)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-blue-300 text-blue-600 hover:bg-blue-50 dark:border-blue-700 dark:text-blue-400 dark:hover:bg-blue-900/30"
+                    >
+                      <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                        <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                      </svg>
+                      {l.edit}
+                    </button>
+
+                    <button
+                      onClick={() => handleToggleCampaign(c.id, c.isActive)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-medium border ${c.isActive ? "border-gray-300 text-gray-600 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-400" : "border-emerald-300 text-emerald-600 hover:bg-emerald-50 dark:border-emerald-700 dark:text-emerald-400"}`}
+                    >
+                      {c.isActive ? l.deactivate : l.activate}
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        if (c.donationCount > 0) {
+                          toast({ title: l.cannotDelete, variant: "destructive" });
+                        } else {
+                          setDeletingId(c.id);
+                        }
+                      }}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-red-300 text-red-600 hover:bg-red-50 dark:border-red-700 dark:text-red-400 dark:hover:bg-red-900/30"
+                    >
+                      <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                        <path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6h14" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                      {l.delete}
+                    </button>
+                  </div>
+                </>
               )}
             </div>
           );
@@ -465,16 +638,16 @@ export default function DonationCampaignManager({ accountType, stripeAccountId, 
             />
 
             <div>
-              <p className="text-xs text-muted-foreground mb-1">{l.maxPhotos}</p>
+              <p className="text-xs text-muted-foreground mb-2">{l.maxPhotos}</p>
               {formPhotos.length > 0 && (
                 <div className="flex gap-2 mb-2 overflow-x-auto">
                   {formPhotos.map((photo, i) => (
-                    <div key={i} className="relative flex-shrink-0">
+                    <div key={i} className="relative flex-shrink-0 group">
                       <img src={photoSrc(photo)} alt="" className="w-16 h-16 rounded-xl object-cover border border-border" />
                       <button
                         type="button"
                         onClick={() => setFormPhotos((prev) => prev.filter((_, idx) => idx !== i))}
-                        className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center text-[10px] font-bold hover:bg-red-600"
+                        className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center text-[10px] font-bold hover:bg-red-600 opacity-0 group-hover:opacity-100 transition-opacity"
                       >
                         ×
                       </button>
@@ -496,9 +669,12 @@ export default function DonationCampaignManager({ accountType, stripeAccountId, 
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
                     disabled={uploadingPhoto}
-                    className="text-xs text-primary hover:underline disabled:opacity-50"
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-emerald-300 text-emerald-600 hover:bg-emerald-50 dark:border-emerald-700 dark:text-emerald-400 dark:hover:bg-emerald-900/30 disabled:opacity-50"
                   >
-                    {uploadingPhoto ? l.photoUploading : `+ ${l.addPhotos}`}
+                    <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                      <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/>
+                    </svg>
+                    {uploadingPhoto ? l.photoUploading : l.addPhotos}
                   </button>
                 </>
               )}

@@ -111,10 +111,32 @@ router.patch("/donations/campaigns/:campaignId", requireAuth, async (req, res) =
     }
 
     const updates: Record<string, any> = { updatedAt: new Date() };
-    if (req.body.title !== undefined) updates.title = req.body.title;
-    if (req.body.description !== undefined) updates.description = req.body.description;
-    if (req.body.goalAmount !== undefined)
-      updates.goalAmount = req.body.goalAmount ? Math.round(Number(req.body.goalAmount) * 100) : null;
+    if (req.body.title !== undefined) {
+      if (typeof req.body.title !== "string" || req.body.title.trim().length === 0 || req.body.title.trim().length > 200) {
+        res.status(400).json({ error: "Title must be 1-200 characters" });
+        return;
+      }
+      updates.title = req.body.title.trim();
+    }
+    if (req.body.description !== undefined) {
+      if (typeof req.body.description !== "string" || req.body.description.trim().length === 0 || req.body.description.trim().length > 2000) {
+        res.status(400).json({ error: "Description must be 1-2000 characters" });
+        return;
+      }
+      updates.description = req.body.description.trim();
+    }
+    if (req.body.goalAmount !== undefined) {
+      if (req.body.goalAmount !== null) {
+        const goal = Number(req.body.goalAmount);
+        if (!Number.isFinite(goal) || goal <= 0) {
+          res.status(400).json({ error: "Goal must be a positive number" });
+          return;
+        }
+        updates.goalAmount = Math.round(goal * 100);
+      } else {
+        updates.goalAmount = null;
+      }
+    }
     if (req.body.isActive !== undefined) updates.isActive = Boolean(req.body.isActive);
     if (req.body.photos !== undefined) {
       if (!Array.isArray(req.body.photos)) {
@@ -141,6 +163,46 @@ router.patch("/donations/campaigns/:campaignId", requireAuth, async (req, res) =
     res.json(updated);
   } catch (err) {
     console.error("[donations] update campaign error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.delete("/donations/campaigns/:campaignId", requireAuth, async (req, res) => {
+  const userId = (req as AuthenticatedRequest).userId;
+  const campaignId = Number(req.params.campaignId);
+  try {
+    const [campaign] = await db
+      .select()
+      .from(donationCampaignsTable)
+      .where(
+        and(
+          eq(donationCampaignsTable.id, campaignId),
+          eq(donationCampaignsTable.userId, userId),
+        ),
+      );
+
+    if (!campaign) {
+      res.status(404).json({ error: "Campaign not found" });
+      return;
+    }
+
+    const [donationRow] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(donationsTable)
+      .where(eq(donationsTable.campaignId, campaignId));
+
+    if (campaign.donationCount > 0 || (donationRow && donationRow.count > 0)) {
+      res.status(400).json({ error: "Cannot delete campaign with donations. Deactivate it instead." });
+      return;
+    }
+
+    await db
+      .delete(donationCampaignsTable)
+      .where(eq(donationCampaignsTable.id, campaignId));
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error("[donations] delete campaign error:", err);
     res.status(500).json({ error: "Internal server error" });
   }
 });
