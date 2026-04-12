@@ -16,7 +16,6 @@ interface Campaign {
   photos: string[];
 }
 
-const MIN_PAYOUT_BALANCE_CENTS = 600;
 const MAX_CAMPAIGN_PHOTOS = 3;
 
 const t = {
@@ -39,15 +38,9 @@ const t = {
     updated: "Campagna aggiornata",
     deleted: "Campagna eliminata",
     connectStripe: "Collega Stripe",
-    connectStripeDesc: "Per ricevere i pagamenti, collega il tuo account Stripe.",
+    connectStripeDesc: "Per ricevere i pagamenti, collega il tuo account Stripe. I fondi arrivano direttamente sul tuo conto (80%), la piattaforma trattiene il 20%.",
     stripeConnected: "Stripe collegato",
-    balance: "Saldo disponibile",
-    totalReceived: "Totale ricevuto",
-    totalPaidOut: "Totale erogato",
-    requestPayout: "Richiedi pagamento",
-    payoutRequested: "Pagamento richiesto",
-    payoutFee: "Costo payout: €5,00",
-    minPayout: "Saldo minimo per payout: €6,00",
+    totalReceived: "Totale ricevuto (80%)",
     noData: "Nessuna campagna creata",
     addPhotos: "Aggiungi foto",
     photoUploading: "Caricamento...",
@@ -59,6 +52,7 @@ const t = {
     cancelDelete: "Annulla",
     cannotDelete: "Non puoi eliminare una campagna con donazioni. Puoi solo disattivarla.",
     goal: "Obiettivo",
+    fundsInfo: "I fondi arrivano direttamente sul tuo account Stripe Connect.",
   },
   en: {
     title: "Donation campaigns",
@@ -79,15 +73,9 @@ const t = {
     updated: "Campaign updated",
     deleted: "Campaign deleted",
     connectStripe: "Connect Stripe",
-    connectStripeDesc: "To receive payments, connect your Stripe account.",
+    connectStripeDesc: "To receive payments, connect your Stripe account. Funds go directly to your account (80%), platform retains 20%.",
     stripeConnected: "Stripe connected",
-    balance: "Available balance",
-    totalReceived: "Total received",
-    totalPaidOut: "Total paid out",
-    requestPayout: "Request payout",
-    payoutRequested: "Payout requested",
-    payoutFee: "Payout fee: €5.00",
-    minPayout: "Minimum payout balance: €6.00",
+    totalReceived: "Total received (80%)",
     noData: "No campaigns created",
     addPhotos: "Add photos",
     photoUploading: "Uploading...",
@@ -99,6 +87,7 @@ const t = {
     cancelDelete: "Cancel",
     cannotDelete: "Cannot delete a campaign with donations. You can deactivate it instead.",
     goal: "Goal",
+    fundsInfo: "Funds go directly to your Stripe Connect account.",
   },
 };
 
@@ -126,7 +115,6 @@ export default function DonationCampaignManager({ accountType, stripeAccountId, 
   const [formGoal, setFormGoal] = useState("");
   const [formPhotos, setFormPhotos] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
-  const [payingOut, setPayingOut] = useState(false);
   const [connectingStripe, setConnectingStripe] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [uploadingForCampaign, setUploadingForCampaign] = useState<number | null>(null);
@@ -371,22 +359,6 @@ export default function DonationCampaignManager({ accountType, stripeAccountId, 
     }
   }
 
-  async function handleRequestPayout() {
-    setPayingOut(true);
-    try {
-      const res = await authFetch("/api/donations/request-payout", { method: "POST" });
-      if (res.ok) {
-        toast({ title: l.payoutRequested });
-        queryClient.invalidateQueries({ queryKey: ["org-balance"] });
-      } else {
-        const data = await res.json();
-        toast({ title: data.error, variant: "destructive" });
-      }
-    } finally {
-      setPayingOut(false);
-    }
-  }
-
   if (!isOrg) return null;
 
   return (
@@ -408,37 +380,13 @@ export default function DonationCampaignManager({ accountType, stripeAccountId, 
         </div>
       )}
 
-      {balance && (
-        <div className="bg-card border border-border rounded-2xl p-4 mb-4">
-          <div className="grid grid-cols-3 gap-4 text-center mb-3">
-            <div>
-              <div className="text-lg font-bold text-emerald-600 dark:text-emerald-400">€{(balance.organizationBalance.availableBalance / 100).toFixed(2)}</div>
-              <div className="text-[10px] text-muted-foreground">{l.balance}</div>
-            </div>
-            <div>
-              <div className="text-lg font-bold text-foreground">€{(balance.organizationBalance.totalOrgReceived / 100).toFixed(2)}</div>
-              <div className="text-[10px] text-muted-foreground">{l.totalReceived}</div>
-            </div>
-            <div>
-              <div className="text-lg font-bold text-foreground">€{(balance.organizationBalance.totalPaidOut / 100).toFixed(2)}</div>
-              <div className="text-[10px] text-muted-foreground">{l.totalPaidOut}</div>
-            </div>
+      {stripeAccountId && balance && (
+        <div className="bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 rounded-2xl p-4 mb-4">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-sm font-medium text-emerald-800 dark:text-emerald-300">{l.totalReceived}</span>
+            <span className="text-lg font-bold text-emerald-600 dark:text-emerald-400">€{(balance.organizationBalance.totalOrgReceived / 100).toFixed(2)}</span>
           </div>
-          {stripeAccountId && balance.organizationBalance.availableBalance >= MIN_PAYOUT_BALANCE_CENTS && (
-            <div className="border-t border-border pt-3">
-              <p className="text-[10px] text-muted-foreground mb-2">{l.payoutFee}</p>
-              <button
-                onClick={handleRequestPayout}
-                disabled={payingOut}
-                className="w-full py-2 bg-emerald-600 text-white rounded-xl text-sm font-medium hover:bg-emerald-700 disabled:opacity-50"
-              >
-                {payingOut ? "..." : l.requestPayout}
-              </button>
-            </div>
-          )}
-          {stripeAccountId && balance.organizationBalance.availableBalance < MIN_PAYOUT_BALANCE_CENTS && balance.organizationBalance.availableBalance > 0 && (
-            <p className="text-[10px] text-muted-foreground border-t border-border pt-2 mt-2">{l.minPayout}</p>
-          )}
+          <p className="text-[10px] text-emerald-700 dark:text-emerald-400">{l.fundsInfo}</p>
         </div>
       )}
 

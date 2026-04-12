@@ -190,11 +190,9 @@ export default function AdminPage() {
   const [alertForm, setAlertForm] = useState({ title: "", message: "", priority: "normal" });
 
   interface FinanceData {
-    platformRevenue: { totalCommissions: number; totalPayoutFees: number; totalRevenue: number; transactionCount: number };
+    platformRevenue: { totalCommissions: number; totalRevenue: number; transactionCount: number };
     recentLedger: { id: number; entryType: string; amountCents: number; orgUserId: string | null; description: string | null; createdAt: string }[];
-    orgBalances: { username: string; totalOrgReceived: number; availableBalance: number; totalPaidOut: number }[];
     recentDonations: { id: number; donorUsername: string; recipientUsername: string; amountTotal: number; amountOrg: number; amountPlatform: number; status: string; createdAt: string }[];
-    recentPayouts: { id: number; username: string; amountGross: number; payoutFee: number; amountNet: number; status: string; executedAt: string | null }[];
   }
   const { data: financeData, isLoading: financeLoading } = useQuery<FinanceData>({
     queryKey: ["admin-finance"],
@@ -1892,14 +1890,10 @@ export default function AdminPage() {
                     <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6" strokeLinecap="round" strokeLinejoin="round"/></svg>
                     {lang === "it" ? "Ricavi piattaforma (20% commissioni)" : "Platform revenue (20% commissions)"}
                   </h2>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                     <div className="bg-emerald-50 dark:bg-emerald-950/20 rounded-xl p-4 text-center">
                       <div className="text-2xl font-bold text-emerald-700 dark:text-emerald-400">€{(financeData.platformRevenue.totalCommissions / 100).toFixed(2)}</div>
-                      <div className="text-xs text-muted-foreground mt-1">{lang === "it" ? "Commissioni (20%)" : "Commissions (20%)"}</div>
-                    </div>
-                    <div className="bg-blue-50 dark:bg-blue-950/20 rounded-xl p-4 text-center">
-                      <div className="text-2xl font-bold text-blue-700 dark:text-blue-400">€{(financeData.platformRevenue.totalPayoutFees / 100).toFixed(2)}</div>
-                      <div className="text-xs text-muted-foreground mt-1">{lang === "it" ? "Fee prelievi (€5.00)" : "Payout fees (€5.00)"}</div>
+                      <div className="text-xs text-muted-foreground mt-1">{lang === "it" ? "Application fee (20%)" : "Application fee (20%)"}</div>
                     </div>
                     <div className="bg-purple-50 dark:bg-purple-950/20 rounded-xl p-4 text-center">
                       <div className="text-2xl font-bold text-purple-700 dark:text-purple-400">€{(financeData.platformRevenue.totalRevenue / 100).toFixed(2)}</div>
@@ -1912,43 +1906,9 @@ export default function AdminPage() {
                   </div>
                   <p className="text-xs text-muted-foreground mt-4 bg-muted/50 rounded-lg p-3">
                     {lang === "it"
-                      ? "I fondi della piattaforma (20%) restano sul tuo account Stripe principale. Quando un'org richiede un prelievo, il sistema trasferisce solo l'80% (quota org) al loro conto Stripe Connect, trattenendo anche €5.00 di fee."
-                      : "Platform funds (20%) stay on your main Stripe account. When an org requests a payout, the system transfers only 80% (org share) to their Stripe Connect account, also retaining a €5.00 fee."}
+                      ? "Con Stripe Connect, l'80% di ogni donazione va direttamente all'organizzazione. Il 20% resta alla piattaforma come commissione (application fee)."
+                      : "With Stripe Connect, 80% of each donation goes directly to the organization. 20% stays with the platform as an application fee."}
                   </p>
-                </div>
-
-                {/* Bilanci organizzazioni */}
-                <div className="bg-card border border-border rounded-2xl p-5">
-                  <h2 className="font-semibold text-foreground mb-4 flex items-center gap-2">
-                    <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75" strokeLinecap="round" strokeLinejoin="round"/></svg>
-                    {lang === "it" ? "Bilanci organizzazioni (80% quota org)" : "Organization balances (80% org share)"}
-                  </h2>
-                  {financeData.orgBalances.length === 0 ? (
-                    <p className="text-sm text-muted-foreground py-4 text-center">{lang === "it" ? "Nessun saldo org presente" : "No org balances yet"}</p>
-                  ) : (
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-sm">
-                        <thead>
-                          <tr className="border-b border-border">
-                            <th className="text-left py-2 px-2 text-xs font-medium text-muted-foreground">{lang === "it" ? "Organizzazione" : "Organization"}</th>
-                            <th className="text-right py-2 px-2 text-xs font-medium text-muted-foreground">{lang === "it" ? "Ricevuto (80%)" : "Received (80%)"}</th>
-                            <th className="text-right py-2 px-2 text-xs font-medium text-muted-foreground">{lang === "it" ? "Disponibile" : "Available"}</th>
-                            <th className="text-right py-2 px-2 text-xs font-medium text-muted-foreground">{lang === "it" ? "Prelevato" : "Paid out"}</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {financeData.orgBalances.map((ob, i) => (
-                            <tr key={i} className="border-b border-border/50">
-                              <td className="py-2 px-2 font-medium">@{ob.username}</td>
-                              <td className="py-2 px-2 text-right text-emerald-600">€{(ob.totalOrgReceived / 100).toFixed(2)}</td>
-                              <td className="py-2 px-2 text-right font-semibold">€{(ob.availableBalance / 100).toFixed(2)}</td>
-                              <td className="py-2 px-2 text-right text-muted-foreground">€{(ob.totalPaidOut / 100).toFixed(2)}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
                 </div>
 
                 {/* Donazioni recenti */}
@@ -1998,47 +1958,6 @@ export default function AdminPage() {
                 </div>
 
                 {/* Prelievi recenti */}
-                <div className="bg-card border border-border rounded-2xl p-5">
-                  <h2 className="font-semibold text-foreground mb-4 flex items-center gap-2">
-                    <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path d="M2 12h20M12 2l10 10-10 10" strokeLinecap="round" strokeLinejoin="round"/></svg>
-                    {lang === "it" ? "Prelievi recenti" : "Recent payouts"}
-                  </h2>
-                  {financeData.recentPayouts.length === 0 ? (
-                    <p className="text-sm text-muted-foreground py-4 text-center">{lang === "it" ? "Nessun prelievo" : "No payouts yet"}</p>
-                  ) : (
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-sm">
-                        <thead>
-                          <tr className="border-b border-border">
-                            <th className="text-left py-2 px-2 text-xs font-medium text-muted-foreground">{lang === "it" ? "Organizzazione" : "Organization"}</th>
-                            <th className="text-right py-2 px-2 text-xs font-medium text-muted-foreground">{lang === "it" ? "Lordo" : "Gross"}</th>
-                            <th className="text-right py-2 px-2 text-xs font-medium text-muted-foreground">Fee</th>
-                            <th className="text-right py-2 px-2 text-xs font-medium text-muted-foreground">{lang === "it" ? "Netto" : "Net"}</th>
-                            <th className="text-center py-2 px-2 text-xs font-medium text-muted-foreground">Status</th>
-                            <th className="text-right py-2 px-2 text-xs font-medium text-muted-foreground">{lang === "it" ? "Data" : "Date"}</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {financeData.recentPayouts.map((p) => (
-                            <tr key={p.id} className="border-b border-border/50">
-                              <td className="py-2 px-2 font-medium">@{p.username}</td>
-                              <td className="py-2 px-2 text-right">€{(p.amountGross / 100).toFixed(2)}</td>
-                              <td className="py-2 px-2 text-right text-muted-foreground">€{(p.payoutFee / 100).toFixed(2)}</td>
-                              <td className="py-2 px-2 text-right font-semibold text-emerald-600">€{(p.amountNet / 100).toFixed(2)}</td>
-                              <td className="py-2 px-2 text-center">
-                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                                  p.status === "completed" ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" : "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
-                                }`}>{p.status}</span>
-                              </td>
-                              <td className="py-2 px-2 text-right text-xs text-muted-foreground">{p.executedAt ? new Date(p.executedAt).toLocaleDateString(lang === "it" ? "it-IT" : "en-GB", { day: "2-digit", month: "short" }) : "-"}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-                </div>
-
                 {/* Registro contabile (ledger) */}
                 <div className="bg-card border border-border rounded-2xl p-5">
                   <h2 className="font-semibold text-foreground mb-4 flex items-center gap-2">
@@ -2062,10 +1981,8 @@ export default function AdminPage() {
                           {financeData.recentLedger.map((entry) => {
                             const isCredit = entry.amountCents > 0;
                             const typeLabels: Record<string, { it: string; en: string }> = {
-                              donation_org_credit: { it: "Credito org", en: "Org credit" },
-                              donation_platform_fee: { it: "Comm. piattaforma", en: "Platform fee" },
-                              payout_org: { it: "Prelievo org", en: "Org payout" },
-                              payout_fee_platform: { it: "Fee prelievo", en: "Payout fee" },
+                              donation_org_credit: { it: "Credito org (80%)", en: "Org credit (80%)" },
+                              donation_platform_fee: { it: "Comm. piattaforma (20%)", en: "Platform fee (20%)" },
                             };
                             const label = typeLabels[entry.entryType]?.[lang === "it" ? "it" : "en"] || entry.entryType;
                             return (
@@ -2073,7 +1990,6 @@ export default function AdminPage() {
                                 <td className="py-2 px-2">
                                   <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
                                     entry.entryType.includes("platform") ? "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400" :
-                                    entry.entryType.includes("payout") ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400" :
                                     "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
                                   }`}>{label}</span>
                                 </td>
@@ -2093,31 +2009,25 @@ export default function AdminPage() {
 
                 {/* Schema flusso fondi */}
                 <div className="bg-card border border-border rounded-2xl p-5">
-                  <h2 className="font-semibold text-foreground mb-4">{lang === "it" ? "Come funziona il flusso fondi" : "How fund flow works"}</h2>
+                  <h2 className="font-semibold text-foreground mb-4">{lang === "it" ? "Come funziona il flusso fondi (Stripe Connect)" : "How fund flow works (Stripe Connect)"}</h2>
                   <div className="space-y-3 text-sm">
                     <div className="flex items-start gap-3">
                       <div className="w-7 h-7 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center flex-shrink-0 text-xs font-bold text-emerald-700">1</div>
                       <p className="text-muted-foreground">{lang === "it"
-                        ? "L'utente dona → Stripe incassa il 100% sul tuo account principale"
-                        : "User donates → Stripe collects 100% on your main account"}</p>
+                        ? "L'utente dona → Stripe crea un destination charge"
+                        : "User donates → Stripe creates a destination charge"}</p>
                     </div>
                     <div className="flex items-start gap-3">
                       <div className="w-7 h-7 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center flex-shrink-0 text-xs font-bold text-emerald-700">2</div>
                       <p className="text-muted-foreground">{lang === "it"
-                        ? "Il sistema registra: 80% credito all'org + 20% commissione piattaforma"
-                        : "System records: 80% org credit + 20% platform commission"}</p>
+                        ? "L'80% va direttamente all'account Stripe Connect dell'organizzazione"
+                        : "80% goes directly to the organization's Stripe Connect account"}</p>
                     </div>
                     <div className="flex items-start gap-3">
                       <div className="w-7 h-7 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center flex-shrink-0 text-xs font-bold text-emerald-700">3</div>
                       <p className="text-muted-foreground">{lang === "it"
-                        ? "I fondi della piattaforma (20%) restano sul tuo account Stripe — sono già tuoi"
-                        : "Platform funds (20%) stay on your Stripe account — they're already yours"}</p>
-                    </div>
-                    <div className="flex items-start gap-3">
-                      <div className="w-7 h-7 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center flex-shrink-0 text-xs font-bold text-blue-700">4</div>
-                      <p className="text-muted-foreground">{lang === "it"
-                        ? "Quando l'org richiede prelievo → l'80% viene trasferito al suo Stripe Connect, meno €5.00 di fee (che resta alla piattaforma)"
-                        : "When org requests payout → 80% is transferred to their Stripe Connect, minus €5.00 fee (kept by platform)"}</p>
+                        ? "Il 20% resta alla piattaforma come application fee — automaticamente"
+                        : "20% stays with the platform as an application fee — automatically"}</p>
                     </div>
                   </div>
                 </div>

@@ -4,18 +4,14 @@ import {
   usersTable,
   donationCampaignsTable,
   donationsTable,
-  orgBalancesTable,
   platformRevenueTable,
   ledgerEntriesTable,
-  payoutsTable,
 } from "@workspace/db";
 import { eq, and, desc, sql } from "drizzle-orm";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth";
 import { getUncachableStripeClient, getStripePublishableKey } from "../lib/stripe";
 
 const PLATFORM_FEE_RATE = 0.20;
-const PAYOUT_FEE_CENTS = 500;
-const MIN_PAYOUT_BALANCE_CENTS = 600;
 
 async function ensurePlatformRevenueRow(tx: any) {
   const [existing] = await tx.select({ id: platformRevenueTable.id }).from(platformRevenueTable).where(eq(platformRevenueTable.id, 1));
@@ -295,10 +291,24 @@ router.post("/donations/create-payment-intent", requireAuth, async (req, res) =>
     const amountPlatform = Math.round(amountCents * PLATFORM_FEE_RATE);
     const amountOrg = amountCents - amountPlatform;
 
+    const [recipientUser] = await db
+      .select({ stripeAccountId: usersTable.stripeAccountId })
+      .from(usersTable)
+      .where(eq(usersTable.clerkUserId, campaign.userId));
+
+    if (!recipientUser?.stripeAccountId) {
+      res.status(400).json({ error: "Organization has not connected Stripe yet" });
+      return;
+    }
+
     const stripe = await getUncachableStripeClient();
     const paymentIntent = await stripe.paymentIntents.create({
       amount: amountCents,
       currency: "eur",
+      application_fee_amount: amountPlatform,
+      transfer_data: {
+        destination: recipientUser.stripeAccountId,
+      },
       metadata: {
         campaignId: String(campaign.id),
         donorUserId,
@@ -388,38 +398,13 @@ router.post("/donations/confirm-payment", requireAuth, async (req, res) => {
           .where(eq(donationCampaignsTable.id, campaignId));
       }
 
-      if (recipientUserId) {
-        const [existingBalance] = await tx
-          .select()
-          .from(orgBalancesTable)
-          .where(eq(orgBalancesTable.userId, recipientUserId));
-
-        if (existingBalance) {
-          await tx
-            .update(orgBalancesTable)
-            .set({
-              totalOrgReceived: sql`${orgBalancesTable.totalOrgReceived} + ${amountOrg}`,
-              availableBalance: sql`${orgBalancesTable.availableBalance} + ${amountOrg}`,
-              updatedAt: new Date(),
-            })
-            .where(eq(orgBalancesTable.userId, recipientUserId));
-        } else {
-          await tx.insert(orgBalancesTable).values({
-            userId: recipientUserId,
-            totalOrgReceived: amountOrg,
-            availableBalance: amountOrg,
-            totalPaidOut: 0,
-          });
-        }
-
-        await tx.insert(ledgerEntriesTable).values({
-          entryType: "donation_org_credit",
-          amountCents: amountOrg,
-          orgUserId: recipientUserId,
-          donationId,
-          description: `Donation received: org share €${(amountOrg / 100).toFixed(2)} of €${(amountTotal / 100).toFixed(2)} total`,
-        });
-      }
+      await tx.insert(ledgerEntriesTable).values({
+        entryType: "donation_org_credit",
+        amountCents: amountOrg,
+        orgUserId: recipientUserId || null,
+        donationId,
+        description: `Stripe Connect destination charge: org receives €${(amountOrg / 100).toFixed(2)} of €${(amountTotal / 100).toFixed(2)} total`,
+      });
 
       await ensurePlatformRevenueRow(tx);
 
@@ -437,7 +422,7 @@ router.post("/donations/confirm-payment", requireAuth, async (req, res) => {
         amountCents: amountPlatform,
         orgUserId: recipientUserId || null,
         donationId,
-        description: `Platform commission: €${(amountPlatform / 100).toFixed(2)} (${(PLATFORM_FEE_RATE * 100).toFixed(0)}% of €${(amountTotal / 100).toFixed(2)})`,
+        description: `Platform application fee: €${(amountPlatform / 100).toFixed(2)} (${(PLATFORM_FEE_RATE * 100).toFixed(0)}% of €${(amountTotal / 100).toFixed(2)})`,
       });
 
       return { idempotent: false, donationId, amountOrg, amountPlatform };
@@ -463,28 +448,13 @@ router.get("/donations/balance", requireAuth, async (req, res) => {
       return;
     }
 
-    let [balance] = await db
-      .select()
-      .from(orgBalancesTable)
-      .where(eq(orgBalancesTable.userId, userId));
-
-    if (!balance) {
-      balance = {
-        id: 0,
-        userId,
-        totalOrgReceived: 0,
-        availableBalance: 0,
-        totalPaidOut: 0,
-        updatedAt: new Date(),
-      };
-    }
-
-    const recentPayouts = await db
-      .select()
-      .from(payoutsTable)
-      .where(eq(payoutsTable.userId, userId))
-      .orderBy(desc(payoutsTable.requestedAt))
-      .limit(10);
+    const [totals] = await db
+      .select({
+        totalReceived: sql<number>`COALESCE(SUM(CASE WHEN ${donationsTable.status} = 'completed' THEN ${donationsTable.amountOrg} ELSE 0 END), 0)`,
+        donationCount: sql<number>`COUNT(CASE WHEN ${donationsTable.status} = 'completed' THEN 1 END)`,
+      })
+      .from(donationsTable)
+      .where(eq(donationsTable.recipientUserId, userId));
 
     const recentLedger = await db
       .select()
@@ -495,145 +465,14 @@ router.get("/donations/balance", requireAuth, async (req, res) => {
 
     res.json({
       organizationBalance: {
-        totalOrgReceived: balance.totalOrgReceived,
-        availableBalance: balance.availableBalance,
-        totalPaidOut: balance.totalPaidOut,
+        totalOrgReceived: totals.totalReceived,
+        completedDonations: totals.donationCount,
       },
-      payouts: recentPayouts,
       ledger: recentLedger,
     });
   } catch (err) {
     console.error("[donations] balance error:", err);
     res.status(500).json({ error: "Internal server error" });
-  }
-});
-
-router.post("/donations/request-payout", requireAuth, async (req, res) => {
-  const userId = (req as AuthenticatedRequest).userId;
-  try {
-    const [user] = await db
-      .select()
-      .from(usersTable)
-      .where(eq(usersTable.clerkUserId, userId));
-
-    if (!user || user.accountType !== "organization") {
-      res.status(403).json({ error: "Only organizations can request payouts" });
-      return;
-    }
-
-    if (!user.stripeAccountId) {
-      res.status(400).json({ error: "Stripe account not connected" });
-      return;
-    }
-
-    const [balanceRow] = await db
-      .select({ availableBalance: orgBalancesTable.availableBalance })
-      .from(orgBalancesTable)
-      .where(eq(orgBalancesTable.userId, userId));
-
-    if (!balanceRow || balanceRow.availableBalance < MIN_PAYOUT_BALANCE_CENTS) {
-      res.status(400).json({ error: `Insufficient balance (min €${(MIN_PAYOUT_BALANCE_CENTS / 100).toFixed(2)} including €5.00 fee)` });
-      return;
-    }
-
-    const grossAmount = balanceRow.availableBalance;
-    const amountNet = grossAmount - PAYOUT_FEE_CENTS;
-
-    const deducted = await db
-      .update(orgBalancesTable)
-      .set({
-        availableBalance: sql`${orgBalancesTable.availableBalance} - ${grossAmount}`,
-        updatedAt: new Date(),
-      })
-      .where(
-        and(
-          eq(orgBalancesTable.userId, userId),
-          sql`${orgBalancesTable.availableBalance} >= ${grossAmount}`
-        )
-      )
-      .returning({ id: orgBalancesTable.id });
-
-    if (deducted.length === 0) {
-      res.status(400).json({ error: "Balance changed during payout, please retry" });
-      return;
-    }
-
-    let transfer;
-    try {
-      const stripe = await getUncachableStripeClient();
-      transfer = await stripe.transfers.create({
-        amount: amountNet,
-        currency: "eur",
-        destination: user.stripeAccountId,
-        metadata: { userId },
-      });
-    } catch (stripeErr: any) {
-      await db
-        .update(orgBalancesTable)
-        .set({
-          availableBalance: sql`${orgBalancesTable.availableBalance} + ${grossAmount}`,
-          updatedAt: new Date(),
-        })
-        .where(eq(orgBalancesTable.userId, userId));
-      console.error("[donations] Stripe transfer failed, balance rolled back:", stripeErr.message);
-      throw stripeErr;
-    }
-
-    const payout = await db.transaction(async (tx) => {
-      const [p] = await tx
-        .insert(payoutsTable)
-        .values({
-          userId,
-          amountGross: grossAmount,
-          payoutFee: PAYOUT_FEE_CENTS,
-          amountNet,
-          status: "completed",
-          stripeTransferId: transfer.id,
-          executedAt: new Date(),
-        })
-        .returning();
-
-      await tx
-        .update(orgBalancesTable)
-        .set({
-          totalPaidOut: sql`${orgBalancesTable.totalPaidOut} + ${grossAmount}`,
-        })
-        .where(eq(orgBalancesTable.userId, userId));
-
-      await tx.insert(ledgerEntriesTable).values([
-        {
-          entryType: "payout_org",
-          amountCents: -grossAmount,
-          orgUserId: userId,
-          payoutId: p.id,
-          description: `Payout to Stripe Connect (gross €${(grossAmount / 100).toFixed(2)}, net €${(amountNet / 100).toFixed(2)})`,
-        },
-        {
-          entryType: "payout_fee_platform",
-          amountCents: PAYOUT_FEE_CENTS,
-          orgUserId: userId,
-          payoutId: p.id,
-          description: `Payout fee €${(PAYOUT_FEE_CENTS / 100).toFixed(2)}`,
-        },
-      ]);
-
-      await ensurePlatformRevenueRow(tx);
-
-      await tx
-        .update(platformRevenueTable)
-        .set({
-          totalPayoutFees: sql`${platformRevenueTable.totalPayoutFees} + ${PAYOUT_FEE_CENTS}`,
-          updatedAt: new Date(),
-        })
-        .where(eq(platformRevenueTable.id, 1));
-
-      return p;
-    });
-
-    res.json({ payout });
-  } catch (err) {
-    console.error("[donations] request-payout error:", err);
-    res.status(500).json({ error: "Payout failed" });
   }
 });
 
@@ -750,38 +589,13 @@ export async function webhookHandler(req: Request, res: Response) {
             .where(eq(donationCampaignsTable.id, campaignId));
         }
 
-        if (recipientUserId) {
-          const [existingBalance] = await tx
-            .select()
-            .from(orgBalancesTable)
-            .where(eq(orgBalancesTable.userId, recipientUserId));
-
-          if (existingBalance) {
-            await tx
-              .update(orgBalancesTable)
-              .set({
-                totalOrgReceived: sql`${orgBalancesTable.totalOrgReceived} + ${amountOrg}`,
-                availableBalance: sql`${orgBalancesTable.availableBalance} + ${amountOrg}`,
-                updatedAt: new Date(),
-              })
-              .where(eq(orgBalancesTable.userId, recipientUserId));
-          } else {
-            await tx.insert(orgBalancesTable).values({
-              userId: recipientUserId,
-              totalOrgReceived: amountOrg,
-              availableBalance: amountOrg,
-              totalPaidOut: 0,
-            });
-          }
-
-          await tx.insert(ledgerEntriesTable).values({
-            entryType: "donation_org_credit",
-            amountCents: amountOrg,
-            orgUserId: recipientUserId,
-            donationId,
-            description: `Donation received: org share €${(amountOrg / 100).toFixed(2)} of €${(amountTotal / 100).toFixed(2)} total`,
-          });
-        }
+        await tx.insert(ledgerEntriesTable).values({
+          entryType: "donation_org_credit",
+          amountCents: amountOrg,
+          orgUserId: recipientUserId || null,
+          donationId,
+          description: `Stripe Connect destination charge: org receives €${(amountOrg / 100).toFixed(2)} of €${(amountTotal / 100).toFixed(2)} total`,
+        });
 
         await ensurePlatformRevenueRow(tx);
 
@@ -799,7 +613,7 @@ export async function webhookHandler(req: Request, res: Response) {
           amountCents: amountPlatform,
           orgUserId: recipientUserId || null,
           donationId,
-          description: `Platform commission: €${(amountPlatform / 100).toFixed(2)} (${(PLATFORM_FEE_RATE * 100).toFixed(0)}% of €${(amountTotal / 100).toFixed(2)})`,
+          description: `Platform application fee: €${(amountPlatform / 100).toFixed(2)} (${(PLATFORM_FEE_RATE * 100).toFixed(0)}% of €${(amountTotal / 100).toFixed(2)})`,
         });
 
         return { idempotent: false, campaignId, amountOrg, amountPlatform };
@@ -878,7 +692,7 @@ router.get("/donations/platform-revenue", requireAuth, async (req, res) => {
       .select()
       .from(ledgerEntriesTable)
       .where(
-        sql`${ledgerEntriesTable.entryType} IN ('donation_platform_fee', 'payout_fee_platform')`
+        sql`${ledgerEntriesTable.entryType} = 'donation_platform_fee'`
       )
       .orderBy(desc(ledgerEntriesTable.createdAt))
       .limit(50);
@@ -886,8 +700,7 @@ router.get("/donations/platform-revenue", requireAuth, async (req, res) => {
     res.json({
       platformRevenue: {
         totalCommissions: revenue?.totalCommissions ?? 0,
-        totalPayoutFees: revenue?.totalPayoutFees ?? 0,
-        totalRevenue: (revenue?.totalCommissions ?? 0) + (revenue?.totalPayoutFees ?? 0),
+        totalRevenue: revenue?.totalCommissions ?? 0,
         transactionCount: revenue?.transactionCount ?? 0,
       },
       recentLedger: recentPlatformLedger,
@@ -951,16 +764,6 @@ router.get("/donations/admin-finance", requireAuth, async (req, res) => {
       .orderBy(desc(ledgerEntriesTable.createdAt))
       .limit(50);
 
-    const orgBalances = await db
-      .select({
-        username: usersTable.username,
-        totalOrgReceived: orgBalancesTable.totalOrgReceived,
-        availableBalance: orgBalancesTable.availableBalance,
-        totalPaidOut: orgBalancesTable.totalPaidOut,
-      })
-      .from(orgBalancesTable)
-      .innerJoin(usersTable, eq(orgBalancesTable.userId, usersTable.clerkUserId));
-
     const recentDonations = await db
       .select({
         id: donationsTable.id,
@@ -978,32 +781,14 @@ router.get("/donations/admin-finance", requireAuth, async (req, res) => {
       .orderBy(desc(donationsTable.createdAt))
       .limit(30);
 
-    const recentPayouts = await db
-      .select({
-        id: payoutsTable.id,
-        username: usersTable.username,
-        amountGross: payoutsTable.amountGross,
-        payoutFee: payoutsTable.payoutFee,
-        amountNet: payoutsTable.amountNet,
-        status: payoutsTable.status,
-        executedAt: payoutsTable.executedAt,
-      })
-      .from(payoutsTable)
-      .innerJoin(usersTable, eq(payoutsTable.userId, usersTable.clerkUserId))
-      .orderBy(desc(payoutsTable.requestedAt))
-      .limit(20);
-
     res.json({
       platformRevenue: {
         totalCommissions: revenue?.totalCommissions ?? 0,
-        totalPayoutFees: revenue?.totalPayoutFees ?? 0,
-        totalRevenue: (revenue?.totalCommissions ?? 0) + (revenue?.totalPayoutFees ?? 0),
+        totalRevenue: revenue?.totalCommissions ?? 0,
         transactionCount: revenue?.transactionCount ?? 0,
       },
       recentLedger,
-      orgBalances,
       recentDonations,
-      recentPayouts,
     });
   } catch (err) {
     console.error("[donations] admin-finance error:", err);
