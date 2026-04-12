@@ -1,10 +1,20 @@
 import { Router } from "express";
 import bcrypt from "bcryptjs";
+import { createClient } from "@supabase/supabase-js";
 import { db } from "@workspace/db";
-import { organizationsTable, registerEnteSchema, userConsentsTable, policiesTable } from "@workspace/db";
-import { eq, and } from "drizzle-orm";
+import { organizationsTable, registerEnteSchema, userConsentsTable, policiesTable, usersTable } from "@workspace/db";
+import { eq } from "drizzle-orm";
 
 const router = Router();
+
+function getSupabaseAdmin() {
+  const url = process.env.SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) return null;
+  return createClient(url, key, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
+}
 
 router.post("/register-ente", async (req, res) => {
   const parsed = registerEnteSchema.safeParse(req.body);
@@ -63,6 +73,43 @@ router.post("/register-ente", async (req, res) => {
       return;
     }
 
+    const supabase = getSupabaseAdmin();
+    if (!supabase) {
+      res.status(500).json({ error: "Servizio di autenticazione non disponibile" });
+      return;
+    }
+
+    const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+      email: data.emailUfficiale,
+      password: data.password,
+      email_confirm: true,
+      user_metadata: {
+        username: data.username,
+        full_name: `${data.referenteNome} ${data.referenteCognome}`,
+      },
+    });
+
+    if (authError || !authData.user) {
+      if (authError?.message?.includes("already been registered")) {
+        res.status(409).json({
+          error: "Email già registrata",
+          fields: { emailUfficiale: "Questa email è già registrata. Usa il login." },
+        });
+        return;
+      }
+      req.log?.error?.({ err: authError }, "Error creating Supabase user for org");
+      res.status(500).json({ error: "Errore nella creazione dell'account" });
+      return;
+    }
+
+    const supabaseUserId = authData.user.id;
+
+    await db.insert(usersTable).values({
+      clerkUserId: supabaseUserId,
+      username: data.username,
+      accountType: "organization",
+    });
+
     const hashedPassword = await bcrypt.hash(data.password, 12);
 
     const [org] = await db
@@ -107,6 +154,8 @@ router.post("/register-ente", async (req, res) => {
     const consentRecords: { userId: string; policyId: string; accepted: boolean; ipAddress: string | null; userAgent: string | null }[] = [];
     if (privacyPolicy) consentRecords.push({ userId: orgUserId, policyId: privacyPolicy.id, accepted: true, ipAddress, userAgent });
     if (termsPolicy) consentRecords.push({ userId: orgUserId, policyId: termsPolicy.id, accepted: true, ipAddress, userAgent });
+    if (privacyPolicy) consentRecords.push({ userId: supabaseUserId, policyId: privacyPolicy.id, accepted: true, ipAddress, userAgent });
+    if (termsPolicy) consentRecords.push({ userId: supabaseUserId, policyId: termsPolicy.id, accepted: true, ipAddress, userAgent });
 
     if (consentRecords.length > 0) {
       await db.insert(userConsentsTable).values(consentRecords);
