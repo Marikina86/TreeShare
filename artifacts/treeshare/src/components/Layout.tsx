@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { useLocation, Link } from "wouter";
 import { useUser, useClerk, useAuth } from "@/lib/auth";
 import { useLang } from "@/lib/i18n";
-import { useListEvents, getListEventsQueryKey } from "@workspace/api-client-react";
+import { useListEvents, getListEventsQueryKey, useGetMyProfile } from "@workspace/api-client-react";
 import { getEventsLastSeenAt } from "@/pages/EventsPage";
 import { getAlertsLastReadAt, getNotifsLastReadAt } from "@/pages/AlertsPage";
 import { getTipsLastReadAt } from "@/pages/TipsPage";
@@ -22,6 +22,8 @@ export default function Layout({ children }: LayoutProps) {
   const { t, lang } = useLang();
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
+  const profileQuery = useGetMyProfile();
+  const isAdmin = (profileQuery.data as any)?.isAdmin === true;
 
   // ── Badge nuovi eventi ────────────────────────────────────────────────────
   const [lastSeenAt, setLastSeenAt] = useState(() => getEventsLastSeenAt());
@@ -344,6 +346,19 @@ export default function Layout({ children }: LayoutProps) {
               <path d="M12 14C12 14 7 13 5 9C3 5 6 2 9 3C10.5 3.5 11.5 5 12 7C12.5 5 13.5 3.5 15 3C18 2 21 5 19 9C17 13 12 14 12 14Z"/>
             </svg>
           </Link>
+          {isAdmin && (
+            <Link
+              href="/admin"
+              title="Admin"
+              className={`p-2 rounded-lg transition-colors ${
+                location === "/admin" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground"
+              }`}
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+              </svg>
+            </Link>
+          )}
           <Link
             href="/settings"
             title={t.settings.title}
@@ -392,6 +407,19 @@ export default function Layout({ children }: LayoutProps) {
               <path d="M12 14C12 14 7 13 5 9C3 5 6 2 9 3C10.5 3.5 11.5 5 12 7C12.5 5 13.5 3.5 15 3C18 2 21 5 19 9C17 13 12 14 12 14Z"/>
             </svg>
           </Link>
+          {isAdmin && (
+            <Link
+              href="/admin"
+              title="Admin"
+              className={`p-2 rounded-lg transition-colors ${
+                location === "/admin" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"
+              }`}
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+              </svg>
+            </Link>
+          )}
           <Link
             href="/alerts"
             className={`relative p-2 rounded-lg transition-colors ${
