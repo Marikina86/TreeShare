@@ -33,8 +33,8 @@ const labels = {
     donations: "donazioni",
     summary: "Riepilogo donazione",
     total: "Totale",
-    orgShare: "Per l'organizzazione",
-    platformFee: "Commissione piattaforma (20% + €0,25)",
+    orgShare: "Per l'organizzazione (80%)",
+    platformFee: "Commissione piattaforma (20%)",
     confirmPay: "Conferma e paga",
     back: "Modifica importo",
     minAmount: "Importo minimo: €1",
@@ -52,8 +52,8 @@ const labels = {
     donations: "donations",
     summary: "Donation summary",
     total: "Total",
-    orgShare: "To organization",
-    platformFee: "Platform fee (20% + €0.25)",
+    orgShare: "To organization (80%)",
+    platformFee: "Platform fee (20%)",
     confirmPay: "Confirm and pay",
     back: "Change amount",
     minAmount: "Minimum amount: €1",
@@ -334,11 +334,11 @@ export default function DonateSection({ profileUserId, profileUsername }: {
                   </div>
                   <div className="flex justify-between text-xs">
                     <span className="text-muted-foreground">{l.orgShare}</span>
-                    <span>€{(parseFloat(amount) - (parseFloat(amount) * 0.2 + 0.25)).toFixed(2)}</span>
+                    <span>€{(parseFloat(amount) * 0.8).toFixed(2)}</span>
                   </div>
                   <div className="flex justify-between text-xs">
                     <span className="text-muted-foreground">{l.platformFee}</span>
-                    <span>€{(parseFloat(amount) * 0.2 + 0.25).toFixed(2)}</span>
+                    <span>€{(parseFloat(amount) * 0.2).toFixed(2)}</span>
                   </div>
                 </div>
                 <div className="flex gap-2">
