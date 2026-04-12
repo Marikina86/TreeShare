@@ -14,6 +14,7 @@ import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAu
 import { getUncachableStripeClient, getStripePublishableKey } from "../lib/stripe";
 
 const PLATFORM_FEE_RATE = 0.20;
+const PLATFORM_FIXED_FEE_CENTS = 25;
 const PAYOUT_FEE_CENTS = 500;
 const MIN_PAYOUT_BALANCE_CENTS = 600;
 
@@ -292,8 +293,14 @@ router.post("/donations/create-payment-intent", requireAuth, async (req, res) =>
       return;
     }
 
-    const amountPlatform = Math.round(amountCents * PLATFORM_FEE_RATE);
+    const percentageFee = Math.round(amountCents * PLATFORM_FEE_RATE);
+    const amountPlatform = percentageFee + PLATFORM_FIXED_FEE_CENTS;
     const amountOrg = amountCents - amountPlatform;
+
+    if (amountOrg <= 0) {
+      res.status(400).json({ error: "Amount too low after fees" });
+      return;
+    }
 
     const stripe = await getUncachableStripeClient();
     const paymentIntent = await stripe.paymentIntents.create({
@@ -437,7 +444,7 @@ router.post("/donations/confirm-payment", requireAuth, async (req, res) => {
         amountCents: amountPlatform,
         orgUserId: recipientUserId || null,
         donationId,
-        description: `Platform commission: €${(amountPlatform / 100).toFixed(2)} (${(PLATFORM_FEE_RATE * 100).toFixed(0)}% of €${(amountTotal / 100).toFixed(2)})`,
+        description: `Platform commission: €${(amountPlatform / 100).toFixed(2)} (${(PLATFORM_FEE_RATE * 100).toFixed(0)}% + €${(PLATFORM_FIXED_FEE_CENTS / 100).toFixed(2)} fixed of €${(amountTotal / 100).toFixed(2)})`,
       });
 
       return { idempotent: false, donationId, amountOrg, amountPlatform };
@@ -799,7 +806,7 @@ export async function webhookHandler(req: Request, res: Response) {
           amountCents: amountPlatform,
           orgUserId: recipientUserId || null,
           donationId,
-          description: `Platform commission: €${(amountPlatform / 100).toFixed(2)} (${(PLATFORM_FEE_RATE * 100).toFixed(0)}% of €${(amountTotal / 100).toFixed(2)})`,
+          description: `Platform commission: €${(amountPlatform / 100).toFixed(2)} (${(PLATFORM_FEE_RATE * 100).toFixed(0)}% + €${(PLATFORM_FIXED_FEE_CENTS / 100).toFixed(2)} fixed of €${(amountTotal / 100).toFixed(2)})`,
         });
 
         return { idempotent: false, campaignId, amountOrg, amountPlatform };
