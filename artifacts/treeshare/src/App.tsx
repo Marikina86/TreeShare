@@ -27,6 +27,7 @@ import RegisterChoicePage from "@/pages/RegisterChoicePage";
 import PrivateSignupPage from "@/pages/PrivateSignupPage";
 import SignInPage from "@/pages/SignInPage";
 import CampaignsPage from "@/pages/CampaignsPage";
+import ResetPasswordPage from "@/pages/ResetPasswordPage";
 import NotFound from "@/pages/not-found";
 import InstallPrompt from "@/components/InstallPrompt";
 
@@ -155,6 +156,7 @@ function AuthProviderWithRoutes() {
             <Route path="/" component={HomeRedirect} />
             <Route path="/sign-in/*?" component={SignInPage} />
             <Route path="/sign-up/*?" component={() => <Redirect to="/register" />} />
+            <Route path="/reset-password" component={ResetPasswordPage} />
             <Route path="/onboarding" component={() => <ProtectedRoute component={OnboardingPage} />} />
             <Route path="/feed" component={() => <ProtectedRoute component={FeedPage} />} />
             <Route path="/map" component={() => <ProtectedRoute component={MapPage} />} />
