@@ -20,11 +20,9 @@ function getSupabaseAdmin(): SupabaseClient | null {
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
   if (!url || !key) {
-    console.error("[requireAuth] SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY is not set", { urlSet: !!url, keySet: !!key });
+    console.error("[requireAuth] SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY is not set");
     return null;
   }
-
-  console.log("[requireAuth] Initializing Supabase client with URL:", url.substring(0, 40));
 
   try {
     _supabase = createClient(url, key, {
@@ -55,18 +53,11 @@ export const requireAuth = async (
     const token = authHeader.slice(7);
     try {
       const { data, error } = await supabase.auth.getUser(token);
-      if (error) {
-        console.error("[requireAuth] getUser error:", error.message, "token prefix:", token.substring(0, 20));
-      }
       if (!error && data.user) {
         userId = data.user.id;
       }
     } catch (err) {
       console.error("[requireAuth] token verification error:", err);
-    }
-  } else {
-    if (authHeader) {
-      console.warn("[requireAuth] Auth header present but not Bearer:", authHeader.substring(0, 30));
     }
   }
 
