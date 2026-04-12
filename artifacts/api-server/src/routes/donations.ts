@@ -716,9 +716,41 @@ export async function webhookHandler(req: Request, res: Response) {
   }
 }
 
+router.get("/donations/my-donations", requireAuth, async (req, res) => {
+  const userId = (req as AuthenticatedRequest).userId;
+  try {
+    const myDonations = await db
+      .select({
+        id: donationsTable.id,
+        amountTotal: donationsTable.amountTotal,
+        amountOrg: donationsTable.amountOrg,
+        amountPlatform: donationsTable.amountPlatform,
+        status: donationsTable.status,
+        createdAt: donationsTable.createdAt,
+        campaignTitle: donationCampaignsTable.title,
+        recipientUsername: usersTable.username,
+      })
+      .from(donationsTable)
+      .leftJoin(donationCampaignsTable, eq(donationsTable.campaignId, donationCampaignsTable.id))
+      .leftJoin(usersTable, eq(donationsTable.recipientUserId, usersTable.clerkUserId))
+      .where(eq(donationsTable.donorUserId, userId))
+      .orderBy(desc(donationsTable.createdAt))
+      .limit(50);
+
+    const totalDonated = myDonations
+      .filter(d => d.status === "completed")
+      .reduce((sum, d) => sum + (d.amountTotal ?? 0), 0);
+
+    res.json({ donations: myDonations, totalDonated });
+  } catch (err) {
+    console.error("[donations] my-donations error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 router.get("/donations/platform-revenue", requireAuth, async (req, res) => {
   const userId = (req as AuthenticatedRequest).userId;
-  const adminIds = (process.env.ADMIN_CLERK_USER_IDS || "").split(",");
+  const adminIds = (process.env.ADMIN_USER_IDS || process.env.ADMIN_CLERK_USER_IDS || "").split(",").map((s: string) => s.trim()).filter(Boolean);
   if (!adminIds.includes(userId)) {
     res.status(403).json({ error: "Admin only" });
     return;
@@ -753,7 +785,7 @@ router.get("/donations/platform-revenue", requireAuth, async (req, res) => {
 
 router.get("/donations/audit", requireAuth, async (req, res) => {
   const userId = (req as AuthenticatedRequest).userId;
-  const adminIds = (process.env.ADMIN_CLERK_USER_IDS || "").split(",");
+  const adminIds = (process.env.ADMIN_USER_IDS || process.env.ADMIN_CLERK_USER_IDS || "").split(",").map((s: string) => s.trim()).filter(Boolean);
   if (!adminIds.includes(userId)) {
     res.status(403).json({ error: "Admin only" });
     return;
@@ -788,7 +820,7 @@ router.get("/donations/audit", requireAuth, async (req, res) => {
 
 router.get("/donations/admin-finance", requireAuth, async (req, res) => {
   const userId = (req as AuthenticatedRequest).userId;
-  const adminIds = (process.env.ADMIN_CLERK_USER_IDS || "").split(",");
+  const adminIds = (process.env.ADMIN_USER_IDS || process.env.ADMIN_CLERK_USER_IDS || "").split(",").map((s: string) => s.trim()).filter(Boolean);
   if (!adminIds.includes(userId)) {
     res.status(403).json({ error: "Admin only" });
     return;

@@ -8,6 +8,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useGetMyProfile } from "@workspace/api-client-react";
 import { useGps, getPlatformInstructions } from "@/hooks/useGps";
 import DonationCampaignManager from "@/components/DonationCampaignManager";
+import MyDonationsSection from "@/components/MyDonationsSection";
 
 export default function SettingsPage() {
   const { lang, setLang, t } = useLang();
@@ -655,6 +656,8 @@ export default function SettingsPage() {
           stripeAccountId={(myProfile as any)?.stripeAccountId ?? null}
           onRefreshProfile={() => queryClient.invalidateQueries({ queryKey: ["/api/users/me"] })}
         />
+
+        <MyDonationsSection />
 
         {/* Account section */}
         <section className="mb-8">
