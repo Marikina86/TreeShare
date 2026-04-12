@@ -99,7 +99,7 @@ function PaymentForm({ clientSecret, onSuccess, onCancel, l }: {
     <form onSubmit={handleSubmit} className="space-y-4">
       <PaymentElement />
       {error && <p className="text-sm text-destructive">{error}</p>}
-      <div className="flex gap-2">
+      <div className="flex gap-2 sticky bottom-0 bg-background pt-3 pb-1">
         <button
           type="button"
           onClick={onCancel}
@@ -276,8 +276,8 @@ export default function DonateSection({ profileUserId, profileUsername }: {
       </div>
 
       {showModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="bg-background rounded-2xl shadow-2xl max-w-sm w-full p-6">
+        <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-sm">
+          <div className="bg-background rounded-t-2xl sm:rounded-2xl shadow-2xl max-w-sm w-full p-6 max-h-[90dvh] overflow-y-auto">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-semibold text-foreground">{l.donateNow} {profileUsername}</h2>
               <button onClick={() => { setShowModal(false); setStep("amount"); setAmount(""); setClientSecret(null); }}
