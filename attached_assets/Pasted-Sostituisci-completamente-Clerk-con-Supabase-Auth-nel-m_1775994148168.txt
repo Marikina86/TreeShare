@@ -1,0 +1,77 @@
+Sostituisci completamente Clerk con Supabase Auth nel mio progetto React + backend mantenendo invariata la logica esistente e senza rompere il funzionamento dell’app.
+
+Contesto:
+
+- Il progetto utilizza attualmente Clerk per autenticazione sia frontend che backend.
+- NON ci sono utenti reali, quindi non è necessaria migrazione dati utenti.
+- Il database è PostgreSQL (Drizzle ORM) e NON deve essere modificato.
+- Il sistema include integrazioni con Stripe, campagne, notifiche, ecc. che dipendono dall’identità utente.
+- Il frontend (UI login/signup) è già creato e NON deve essere modificato visivamente.
+
+Obiettivo:
+Sostituire Clerk con Supabase Auth mantenendo lo stesso flusso logico e struttura dell’app.
+
+Task:
+
+1. Rimozione Clerk:
+
+- Eliminare tutte le dipendenze @clerk/*
+- Rimuovere ClerkProvider, hook e middleware Clerk
+- Rimuovere integrazioni Clerk sia frontend che backend
+
+2. Integrazione Supabase:
+
+- Installare @supabase/supabase-js
+- Creare supabaseClient (config con env variables)
+- Configurare autenticazione email/password
+
+3. Frontend:
+
+- Collegare i form esistenti a:
+  - signInWithPassword
+  - signUp
+- NON modificare UI o struttura componenti
+- Sostituire hook Clerk con gestione stato utente via Supabase
+
+4. Gestione sessione:
+
+- Usare supabase.auth.getUser()
+- Gestire persistenza sessione
+- Creare o adattare context globale utente
+
+5. Backend:
+
+- Sostituire la verifica Clerk JWT con Supabase JWT
+- Implementare middleware per verificare utente autenticato
+- Estrarre user id dal token Supabase
+
+6. Allineamento user ID:
+
+- Assicurarsi che l'user id Supabase venga usato come riferimento nel database
+- Aggiornare eventuali riferimenti a Clerk user ID
+
+7. Stripe e altre integrazioni:
+
+- Assicurarsi che Stripe e altre logiche usino il nuovo user id Supabase
+- NON modificare la logica business
+
+8. Performance:
+
+- NON introdurre polling
+- NON modificare flussi esistenti
+- Mantenere comportamento identico
+
+Requisito CRITICO:
+
+- NON cambiare la logica dell’app
+- NON modificare UI
+- NON rifattorizzare parti non richieste
+- Limitarsi alla sostituzione dell’autenticazione
+
+Output richiesto:
+
+- File modificati frontend e backend
+- Middleware auth aggiornato
+- supabaseClient configurato
+- Lista modifiche fatte
+- Eventuali note su punti critici
