@@ -51,7 +51,6 @@ externalPort = 3003
 [userenv]
 
 [userenv.shared]
-VITE_CLERK_PUBLISHABLE_KEY = "pk_test_aHVtYW5lLWNvZC0xOS5jbGVyay5hY2NvdW50cy5kZXYk"
 ADMIN_CLERK_USER_IDS = "user_3BqLsbB6mhTnAEayEaSY9xcRqgO"
 VITE_SUPABASE_URL = "https://kxgnfhxvqbxzpglwpeee.supabase.co"
 VITE_SUPABASE_ANON_KEY = "sb_publishable_J99pqUQ-LyBWOuVndZzFjA_kLf4Abma"
