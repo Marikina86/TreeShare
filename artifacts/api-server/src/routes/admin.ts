@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { usersTable, treesTable, reportsTable, treeUpdatesTable } from "@workspace/db";
+import { usersTable, treesTable, reportsTable, treeUpdatesTable, treeSunsTable, eventsTable, eventParticipantsTable, problemReportsTable, userConsentsTable, cookieConsentsTable, userNotificationsTable, donationCampaignsTable, donationsTable, orgBalancesTable, ledgerEntriesTable, payoutsTable, weeklyWinnersTable, organizationsTable } from "@workspace/db";
 import { eq, desc, sql, count, ilike, or } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
 import { requireAdmin } from "../middlewares/requireAdmin";
@@ -136,7 +136,51 @@ router.delete(
       return;
     }
     try {
+      const userTreeIds = await db.select({ id: treesTable.id }).from(treesTable).where(eq(treesTable.userId, clerkUserId));
+      const treeIds = userTreeIds.map(t => t.id);
+
+      if (treeIds.length > 0) {
+        for (const treeId of treeIds) {
+          await db.delete(treeSunsTable).where(eq(treeSunsTable.treeId, treeId));
+          await db.delete(treeUpdatesTable).where(eq(treeUpdatesTable.treeId, treeId));
+        }
+      }
+
+      await db.delete(treeSunsTable).where(eq(treeSunsTable.userId, clerkUserId));
+      await db.delete(treeUpdatesTable).where(eq(treeUpdatesTable.userId, clerkUserId));
       await db.delete(treesTable).where(eq(treesTable.userId, clerkUserId));
+
+      const userEvents = await db.select({ id: eventsTable.id }).from(eventsTable).where(eq(eventsTable.userId, clerkUserId));
+      for (const ev of userEvents) {
+        await db.delete(eventParticipantsTable).where(eq(eventParticipantsTable.eventId, ev.id));
+      }
+      await db.delete(eventParticipantsTable).where(eq(eventParticipantsTable.userId, clerkUserId));
+      await db.delete(eventsTable).where(eq(eventsTable.userId, clerkUserId));
+
+      await db.delete(donationsTable).where(eq(donationsTable.donorUserId, clerkUserId));
+      await db.delete(donationCampaignsTable).where(eq(donationCampaignsTable.userId, clerkUserId));
+
+      await db.delete(ledgerEntriesTable).where(eq(ledgerEntriesTable.orgUserId, clerkUserId));
+      await db.delete(payoutsTable).where(eq(payoutsTable.userId, clerkUserId));
+      await db.delete(orgBalancesTable).where(eq(orgBalancesTable.userId, clerkUserId));
+
+      await db.delete(weeklyWinnersTable).where(eq(weeklyWinnersTable.userId, clerkUserId));
+      await db.delete(problemReportsTable).where(eq(problemReportsTable.userId, clerkUserId));
+      await db.delete(userNotificationsTable).where(eq(userNotificationsTable.userId, clerkUserId));
+      await db.delete(userConsentsTable).where(eq(userConsentsTable.userId, clerkUserId));
+      await db.delete(cookieConsentsTable).where(eq(cookieConsentsTable.userId, clerkUserId));
+      await db.delete(reportsTable).where(eq(reportsTable.reporterUserId, clerkUserId));
+
+      const [user] = await db.select({ accountType: usersTable.accountType }).from(usersTable).where(eq(usersTable.clerkUserId, clerkUserId));
+      if (user?.accountType === "organization") {
+        const orgs = await db.select({ id: organizationsTable.id }).from(organizationsTable)
+          .where(eq(organizationsTable.emailUfficiale, clerkUserId));
+        for (const org of orgs) {
+          await db.delete(userConsentsTable).where(eq(userConsentsTable.userId, `org:${org.id}`));
+          await db.delete(organizationsTable).where(eq(organizationsTable.id, org.id));
+        }
+      }
+
       await db.delete(usersTable).where(eq(usersTable.clerkUserId, clerkUserId));
       res.status(204).send();
     } catch (err) {
