@@ -115,6 +115,7 @@ export default function PrivateSignupPage() {
       });
 
       if (error) {
+        console.error("[SignUp] Supabase error:", error.message, error.status);
         if (error.message.includes("already registered") || error.message.includes("already been registered")) {
           setServerError(lang === "en"
             ? "This email is already registered. Sign in or reset your password."
@@ -123,11 +124,23 @@ export default function PrivateSignupPage() {
           setServerError(lang === "en"
             ? "Password does not meet security requirements. Choose a stronger one."
             : "La password non soddisfa i requisiti di sicurezza. Scegli una password più forte.");
+        } else if (error.message.includes("rate") || error.message.includes("limit") || error.message.includes("exceeded")) {
+          setServerError(lang === "en"
+            ? "Too many signup attempts. Please wait a few minutes and try again."
+            : "Troppi tentativi di registrazione. Attendi qualche minuto e riprova.");
         } else {
           setServerError(error.message);
         }
         return;
       }
+
+      console.log("[SignUp] Supabase response:", {
+        hasSession: !!data.session,
+        hasUser: !!data.user,
+        userId: data.user?.id,
+        emailConfirmedAt: data.user?.email_confirmed_at,
+        identities: data.user?.identities?.length,
+      });
 
       if (data.session) {
         const saved = await saveCity();
