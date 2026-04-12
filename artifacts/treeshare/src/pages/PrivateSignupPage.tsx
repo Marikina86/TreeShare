@@ -42,10 +42,9 @@ export default function PrivateSignupPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
-  const [otp, setOtp] = useState("");
-  const [otpError, setOtpError] = useState<string | null>(null);
   const [resending, setResending] = useState(false);
   const [resendMsg, setResendMsg] = useState<string | null>(null);
+  const [verifyError, setVerifyError] = useState<string | null>(null);
 
   const [fields, setFields] = useState({
     nome: "",
@@ -148,41 +147,10 @@ export default function PrivateSignupPage() {
     }
   }
 
-  async function handleVerify(ev: React.FormEvent) {
-    ev.preventDefault();
-    setSubmitting(true);
-    setOtpError(null);
-
-    try {
-      const { data, error } = await supabase.auth.verifyOtp({
-        email: fields.email.trim(),
-        token: otp.trim(),
-        type: "signup",
-      });
-
-      if (error) {
-        setOtpError(error.message || "Codice non valido. Riprova.");
-        return;
-      }
-
-      if (data.session) {
-        const saved = await saveCity();
-        setProfileSaved(saved);
-        setStep("done");
-      } else {
-        setOtpError("Verifica non completata. Riprova.");
-      }
-    } catch {
-      setOtpError("Codice non valido. Riprova.");
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  async function handleResendCode() {
+  async function handleResendEmail() {
     setResending(true);
     setResendMsg(null);
-    setOtpError(null);
+    setVerifyError(null);
     try {
       const { error } = await supabase.auth.resend({
         type: "signup",
@@ -193,21 +161,21 @@ export default function PrivateSignupPage() {
       });
       if (error) {
         if (error.message.includes("rate") || error.message.includes("limit")) {
-          setOtpError(lang === "en"
+          setVerifyError(lang === "en"
             ? "Too many requests. Wait a few minutes before trying again."
             : "Troppe richieste. Attendi qualche minuto prima di riprovare.");
         } else {
-          setOtpError(error.message);
+          setVerifyError(error.message);
         }
       } else {
         setResendMsg(lang === "en"
-          ? "Verification code resent! Check your inbox (and spam folder)."
-          : "Codice di verifica rinviato! Controlla la tua casella di posta (anche lo spam).");
+          ? "Email resent! Check your inbox (and spam folder)."
+          : "Email rinviata! Controlla la tua casella di posta (anche lo spam).");
       }
     } catch {
-      setOtpError(lang === "en"
-        ? "Error resending code. Try again."
-        : "Errore nell'invio del codice. Riprova.");
+      setVerifyError(lang === "en"
+        ? "Error resending email. Try again."
+        : "Errore nell'invio dell'email. Riprova.");
     } finally {
       setResending(false);
     }
@@ -305,20 +273,20 @@ export default function PrivateSignupPage() {
               </div>
             </div>
             <h1 className="text-2xl font-bold mb-1">
-              {lang === "en" ? "Verify your email" : "Verifica la tua email"}
+              {lang === "en" ? "Check your email" : "Controlla la tua email"}
             </h1>
-            <p className="text-sm text-muted-foreground">
+            <p className="text-sm text-muted-foreground mt-2">
               {lang === "en"
-                ? `We sent a 6-digit code to ${fields.email}`
-                : `Abbiamo inviato un codice a 6 cifre a ${fields.email}`}
+                ? <>We sent a verification link to <strong className="text-foreground">{fields.email}</strong></>
+                : <>Abbiamo inviato un link di verifica a <strong className="text-foreground">{fields.email}</strong></>}
             </p>
           </div>
 
-          <form onSubmit={handleVerify} className="space-y-4">
-            {otpError && (
+          <div className="space-y-4">
+            {verifyError && (
               <div className="bg-destructive/10 border border-destructive/20 rounded-lg px-4 py-3 text-sm text-destructive flex items-center gap-2">
                 <AlertCircle className="h-4 w-4 flex-shrink-0" />
-                {otpError}
+                {verifyError}
               </div>
             )}
             {resendMsg && (
@@ -327,46 +295,59 @@ export default function PrivateSignupPage() {
                 {resendMsg}
               </div>
             )}
-            <div>
-              <label className="block text-sm font-medium text-foreground mb-1.5">
-                {lang === "en" ? "Verification code" : "Codice di verifica"}
-              </label>
-              <input
-                type="text"
-                inputMode="numeric"
-                maxLength={6}
-                placeholder="000000"
-                value={otp}
-                onChange={(e) => setOtp(e.target.value.replace(/\D/g, ""))}
-                className={`${inputCls} text-center text-2xl tracking-widest font-mono`}
-              />
+
+            <div className="bg-muted/50 border border-border rounded-xl p-5 space-y-3">
+              <div className="flex items-start gap-3">
+                <div className="flex items-center justify-center w-7 h-7 rounded-full bg-primary/10 text-primary text-sm font-bold shrink-0 mt-0.5">1</div>
+                <p className="text-sm text-foreground">
+                  {lang === "en"
+                    ? "Open the email we just sent you"
+                    : "Apri l'email che ti abbiamo appena inviato"}
+                </p>
+              </div>
+              <div className="flex items-start gap-3">
+                <div className="flex items-center justify-center w-7 h-7 rounded-full bg-primary/10 text-primary text-sm font-bold shrink-0 mt-0.5">2</div>
+                <p className="text-sm text-foreground">
+                  {lang === "en"
+                    ? "Click the confirmation link in the email"
+                    : "Clicca sul link di conferma nell'email"}
+                </p>
+              </div>
+              <div className="flex items-start gap-3">
+                <div className="flex items-center justify-center w-7 h-7 rounded-full bg-primary/10 text-primary text-sm font-bold shrink-0 mt-0.5">3</div>
+                <p className="text-sm text-foreground">
+                  {lang === "en"
+                    ? "Come back here and sign in"
+                    : "Torna qui e accedi con le tue credenziali"}
+                </p>
+              </div>
             </div>
+
             <p className="text-xs text-muted-foreground text-center">
               {lang === "en"
-                ? "Check your inbox and spam folder for the verification email."
-                : "Controlla la tua casella di posta e la cartella spam per l'email di verifica."}
+                ? "Don't see the email? Check your spam or junk folder."
+                : "Non trovi l'email? Controlla la cartella spam o posta indesiderata."}
             </p>
+
             <button
-              type="submit"
-              disabled={submitting || otp.length < 6}
-              className="w-full py-2.5 bg-primary text-primary-foreground rounded-xl font-semibold hover:opacity-90 disabled:opacity-50 flex items-center justify-center gap-2 transition-opacity"
+              onClick={() => setLocation("/sign-in")}
+              className="w-full py-2.5 bg-primary text-primary-foreground rounded-xl font-semibold hover:opacity-90 flex items-center justify-center gap-2 transition-opacity"
             >
-              {submitting && (
-                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-              )}
-              {lang === "en" ? "Verify" : "Verifica"}
+              {lang === "en" ? "Go to Sign in" : "Vai all'accesso"}
             </button>
+
             <button
               type="button"
-              onClick={handleResendCode}
+              onClick={handleResendEmail}
               disabled={resending}
               className="w-full py-2 text-sm font-medium text-primary hover:text-primary/80 disabled:opacity-50 flex items-center justify-center gap-2 transition-colors"
             >
               {resending && (
                 <div className="w-3 h-3 border-2 border-primary border-t-transparent rounded-full animate-spin" />
               )}
-              {lang === "en" ? "Resend verification code" : "Rinvia codice di verifica"}
+              {lang === "en" ? "Resend verification email" : "Rinvia email di verifica"}
             </button>
+
             <button
               type="button"
               onClick={() => setStep("form")}
@@ -374,7 +355,7 @@ export default function PrivateSignupPage() {
             >
               {lang === "en" ? "← Back" : "← Indietro"}
             </button>
-          </form>
+          </div>
         </div>
       </div>
     );
