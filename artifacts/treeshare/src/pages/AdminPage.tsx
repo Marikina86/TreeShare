@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useAuth } from "@clerk/react";
+import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { useLang } from "@/lib/i18n";
 import { useToast } from "@/hooks/use-toast";
@@ -195,8 +196,20 @@ export default function AdminPage() {
     recentDonations: { id: number; donorUsername: string; recipientUsername: string; amountTotal: number; amountOrg: number; amountPlatform: number; status: string; createdAt: string }[];
     recentPayouts: { id: number; username: string; amountGross: number; payoutFee: number; amountNet: number; status: string; executedAt: string | null }[];
   }
-  const [financeData, setFinanceData] = useState<FinanceData | null>(null);
-  const [financeLoading, setFinanceLoading] = useState(false);
+  const { data: financeData, isLoading: financeLoading } = useQuery<FinanceData>({
+    queryKey: ["admin-finance"],
+    queryFn: async () => {
+      const res = await authFetch("/api/donations/admin-finance");
+      if (res.ok) return res.json();
+      throw new Error("Failed to load finance data");
+    },
+    enabled: activeTab === "finance",
+    staleTime: Infinity,
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
+    refetchOnReconnect: false,
+    refetchInterval: false,
+  });
 
   const T = {
     it: {
@@ -535,14 +548,6 @@ export default function AdminPage() {
   }
 
   // ── Funzioni CRUD consigli ────────────────────────────────────────────────
-  async function loadFinance() {
-    setFinanceLoading(true);
-    try {
-      const res = await authFetch("/api/donations/admin-finance");
-      if (res.ok) setFinanceData(await res.json());
-    } catch { toast({ title: T.errors.load, variant: "destructive" }); }
-    finally { setFinanceLoading(false); }
-  }
 
   async function loadAdminTips() {
     setTipsLoading(true);
@@ -595,7 +600,6 @@ export default function AdminPage() {
   useEffect(() => { if (activeTab === "pending_updates") loadPendingUpdates(1); }, [activeTab]);
   useEffect(() => { if (activeTab === "alerts") loadAdminAlerts(); }, [activeTab]);
   useEffect(() => { if (activeTab === "tips") loadAdminTips(); }, [activeTab]);
-  useEffect(() => { if (activeTab === "finance") loadFinance(); }, [activeTab]);
   useEffect(() => { loadProblemReports(); }, []);
   useEffect(() => { loadPendingCounts(); }, []);
 

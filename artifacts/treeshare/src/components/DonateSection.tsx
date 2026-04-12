@@ -1,5 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useAuth, useUser } from "@clerk/react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { loadStripe } from "@stripe/stripe-js";
 import { Elements, PaymentElement, useStripe, useElements } from "@stripe/react-stripe-js";
 import { useLang } from "@/lib/i18n";
@@ -124,10 +125,9 @@ export default function DonateSection({ profileUserId, profileUsername }: {
   const { user } = useUser();
   const { lang } = useLang();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const l = labels[lang as Lang] || labels.en;
 
-  const [campaign, setCampaign] = useState<Campaign | null>(null);
-  const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [amount, setAmount] = useState("");
   const [step, setStep] = useState<"amount" | "summary" | "payment" | "done">("amount");
@@ -135,20 +135,19 @@ export default function DonateSection({ profileUserId, profileUsername }: {
   const [creating, setCreating] = useState(false);
   const [paymentInfo, setPaymentInfo] = useState<any>(null);
 
-  useEffect(() => {
-    async function loadCampaign() {
-      try {
-        const res = await fetch(`/api/donations/campaigns/user/${profileUserId}`);
-        if (res.ok) {
-          const data = await res.json();
-          setCampaign(data);
-        }
-      } finally {
-        setLoading(false);
-      }
-    }
-    loadCampaign();
-  }, [profileUserId]);
+  const { data: campaign, isLoading: loading } = useQuery<Campaign | null>({
+    queryKey: ["donate-campaign", profileUserId],
+    queryFn: async () => {
+      const res = await fetch(`/api/donations/campaigns/user/${profileUserId}`);
+      if (res.ok) return res.json();
+      return null;
+    },
+    staleTime: Infinity,
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
+    refetchOnReconnect: false,
+    refetchInterval: false,
+  });
 
   useEffect(() => {
     if (!showModal) return;
@@ -194,22 +193,22 @@ export default function DonateSection({ profileUserId, profileUsername }: {
     }
   }
 
-  function handleSuccess() {
+  const handleSuccess = useCallback(() => {
     setStep("done");
     toast({ title: l.success });
+    const donatedAmount = Math.round(parseFloat(amount) * 100);
+    queryClient.setQueryData<Campaign | null>(["donate-campaign", profileUserId], (prev) =>
+      prev ? { ...prev, totalRaised: prev.totalRaised + donatedAmount, donationCount: prev.donationCount + 1 } : prev
+    );
+    queryClient.invalidateQueries({ queryKey: ["campaigns-active"] });
     setTimeout(() => {
       setShowModal(false);
       setStep("amount");
       setAmount("");
       setClientSecret(null);
       setPaymentInfo(null);
-      setCampaign((prev) => prev ? {
-        ...prev,
-        totalRaised: prev.totalRaised + Math.round(parseFloat(amount) * 100),
-        donationCount: prev.donationCount + 1,
-      } : prev);
     }, 2000);
-  }
+  }, [amount, profileUserId, queryClient, toast, l.success]);
 
   if (loading || !campaign) return null;
 

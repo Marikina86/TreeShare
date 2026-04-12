@@ -1,5 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useAuth } from "@clerk/react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLang } from "@/lib/i18n";
 import { useToast } from "@/hooks/use-toast";
 
@@ -12,6 +13,8 @@ interface Campaign {
   totalRaised: number;
   donationCount: number;
 }
+
+const MIN_PAYOUT_BALANCE_CENTS = 600;
 
 const t = {
   it: {
@@ -84,38 +87,53 @@ export default function DonationCampaignManager({ accountType, stripeAccountId, 
   const { getToken } = useAuth();
   const { lang } = useLang();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const l = t[lang as Lang] || t.en;
 
-  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [formTitle, setFormTitle] = useState("");
   const [formDesc, setFormDesc] = useState("");
   const [formGoal, setFormGoal] = useState("");
   const [saving, setSaving] = useState(false);
-  const [balance, setBalance] = useState<any>(null);
   const [payingOut, setPayingOut] = useState(false);
   const [connectingStripe, setConnectingStripe] = useState(false);
+
   async function authFetch(url: string, opts?: RequestInit) {
     const token = await getToken();
     return fetch(url, { ...opts, headers: { ...opts?.headers, Authorization: `Bearer ${token}`, "Content-Type": "application/json" } });
   }
 
-  async function loadCampaigns() {
-    const res = await authFetch("/api/donations/my-campaigns");
-    if (res.ok) setCampaigns(await res.json());
-  }
+  const isOrg = accountType === "organization";
 
-  async function loadBalance() {
-    const res = await authFetch("/api/donations/balance");
-    if (res.ok) setBalance(await res.json());
-  }
+  const { data: campaigns = [] } = useQuery<Campaign[]>({
+    queryKey: ["my-campaigns"],
+    queryFn: async () => {
+      const res = await authFetch("/api/donations/my-campaigns");
+      if (res.ok) return res.json();
+      return [];
+    },
+    enabled: isOrg,
+    staleTime: Infinity,
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
+    refetchOnReconnect: false,
+    refetchInterval: false,
+  });
 
-  useEffect(() => {
-    if (accountType === "organization") {
-      loadCampaigns();
-      loadBalance();
-    }
-  }, [accountType]);
+  const { data: balance } = useQuery<any>({
+    queryKey: ["org-balance"],
+    queryFn: async () => {
+      const res = await authFetch("/api/donations/balance");
+      if (res.ok) return res.json();
+      return null;
+    },
+    enabled: isOrg,
+    staleTime: Infinity,
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
+    refetchOnReconnect: false,
+    refetchInterval: false,
+  });
 
   async function handleCreateCampaign(e: React.FormEvent) {
     e.preventDefault();
@@ -135,7 +153,7 @@ export default function DonationCampaignManager({ accountType, stripeAccountId, 
         setFormTitle("");
         setFormDesc("");
         setFormGoal("");
-        loadCampaigns();
+        queryClient.invalidateQueries({ queryKey: ["my-campaigns"] });
       }
     } finally {
       setSaving(false);
@@ -148,7 +166,7 @@ export default function DonationCampaignManager({ accountType, stripeAccountId, 
       body: JSON.stringify({ isActive: !isActive }),
     });
     toast({ title: l.updated });
-    loadCampaigns();
+    queryClient.invalidateQueries({ queryKey: ["my-campaigns"] });
   }
 
   async function handleConnectStripe() {
@@ -172,7 +190,7 @@ export default function DonationCampaignManager({ accountType, stripeAccountId, 
       const res = await authFetch("/api/donations/request-payout", { method: "POST" });
       if (res.ok) {
         toast({ title: l.payoutRequested });
-        loadBalance();
+        queryClient.invalidateQueries({ queryKey: ["org-balance"] });
       } else {
         const data = await res.json();
         toast({ title: data.error, variant: "destructive" });
@@ -182,7 +200,7 @@ export default function DonationCampaignManager({ accountType, stripeAccountId, 
     }
   }
 
-  if (accountType !== "organization") {
+  if (!isOrg) {
     return null;
   }
 
@@ -221,7 +239,7 @@ export default function DonationCampaignManager({ accountType, stripeAccountId, 
               <div className="text-[10px] text-muted-foreground">{l.totalPaidOut}</div>
             </div>
           </div>
-          {stripeAccountId && balance.organizationBalance.availableBalance >= 125 && (
+          {stripeAccountId && balance.organizationBalance.availableBalance >= MIN_PAYOUT_BALANCE_CENTS && (
             <div className="border-t border-border pt-3">
               <p className="text-[10px] text-muted-foreground mb-2">{l.payoutFee}</p>
               <button
@@ -233,7 +251,7 @@ export default function DonationCampaignManager({ accountType, stripeAccountId, 
               </button>
             </div>
           )}
-          {stripeAccountId && balance.organizationBalance.availableBalance < 125 && balance.organizationBalance.availableBalance > 0 && (
+          {stripeAccountId && balance.organizationBalance.availableBalance < MIN_PAYOUT_BALANCE_CENTS && balance.organizationBalance.availableBalance > 0 && (
             <p className="text-[10px] text-muted-foreground border-t border-border pt-2 mt-2">{l.minPayout}</p>
           )}
         </div>
