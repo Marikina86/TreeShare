@@ -90,12 +90,16 @@ const schema = z.object({
     .max(50)
     .regex(/^[a-zA-Z0-9_]+$/, "Solo lettere, numeri e underscore"),
   password: z.string().min(8, "Password minimo 8 caratteri").max(100),
+  confirmPassword: z.string().min(1, "Ripeti la password"),
   ruoloUtente: z.string().min(1, "Ruolo obbligatorio"),
   numeroLicenze: z.coerce
     .number({ invalid_type_error: "Numero non valido" })
     .int()
     .min(1, "Minimo 1 licenza")
     .max(10000, "Massimo 10.000 licenze"),
+}).refine((data) => data.password === data.confirmPassword, {
+  message: "Le password non coincidono",
+  path: ["confirmPassword"],
 });
 
 type FormValues = z.infer<typeof schema>;
@@ -163,6 +167,7 @@ export default function OrganizationSignupPage() {
   const [success, setSuccess] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [acceptPrivacy, setAcceptPrivacy] = useState(false);
   const [acceptTerms, setAcceptTerms] = useState(false);
   const [consentErrors, setConsentErrors] = useState<{ privacy?: string; terms?: string }>({});
@@ -206,6 +211,7 @@ export default function OrganizationSignupPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...data,
+          confirmPassword: undefined,
           numeroLicenze: Number(data.numeroLicenze),
           acceptPrivacy: true,
           acceptTerms: true,
@@ -618,6 +624,31 @@ export default function OrganizationSignupPage() {
                   </div>
                 )}
                 <FieldError message={errors.password?.message} />
+              </div>
+
+              <div>
+                <Label htmlFor="confirmPassword">
+                  Ripeti password <span className="text-destructive">*</span>
+                </Label>
+                <div className="relative">
+                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    id="confirmPassword"
+                    type={showConfirmPassword ? "text" : "password"}
+                    placeholder="Ripeti la password"
+                    className={`pl-9 pr-10 ${errors.confirmPassword ? "border-destructive" : ""}`}
+                    {...register("confirmPassword")}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmPassword((v) => !v)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                    tabIndex={-1}
+                  >
+                    {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+                <FieldError message={errors.confirmPassword?.message} />
               </div>
 
               <div>
