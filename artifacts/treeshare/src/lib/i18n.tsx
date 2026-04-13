@@ -6,7 +6,7 @@ const VALID_LANGS: Lang[] = ["it", "en", "fr", "pt", "es", "ja"];
 
 export const translations = {
   it: {
-    nav: { feed: "Feed", map: "Mappa", plant: "Pianta", events: "Eventi", profile: "Profilo", alerts: "Avvisi", tips: "Consigli" },
+    nav: { feed: "Feed", map: "Mappa", plant: "Pianta", events: "Eventi", profile: "Profilo", alerts: "Avvisi", tips: "Consigli", donate: "Dona" },
     auth: { signIn: "Accedi", signOut: "Esci", signUp: "Iscriviti", joinTreeShare: "Unisciti" },
     common: { cancel: "Annulla", delete: "Elimina", confirm: "Conferma", save: "Salva", loading: "Caricamento...", error: "Errore", back: "Torna indietro", create: "Crea", edit: "Modifica", close: "Chiudi" },
     landing: {
@@ -49,7 +49,7 @@ export const translations = {
   },
 
   en: {
-    nav: { feed: "Feed", map: "Map", plant: "Plant", events: "Events", profile: "Profile", alerts: "Alerts", tips: "Tips" },
+    nav: { feed: "Feed", map: "Map", plant: "Plant", events: "Events", profile: "Profile", alerts: "Alerts", tips: "Tips", donate: "Donate" },
     auth: { signIn: "Sign in", signOut: "Sign out", signUp: "Sign up", joinTreeShare: "Join TreeShare" },
     common: { cancel: "Cancel", delete: "Delete", confirm: "Confirm", save: "Save", loading: "Loading...", error: "Error", back: "Go back", create: "Create", edit: "Edit", close: "Close" },
     landing: {
@@ -92,7 +92,7 @@ export const translations = {
   },
 
   fr: {
-    nav: { feed: "Fil", map: "Carte", plant: "Planter", events: "Événements", profile: "Profil", alerts: "Alertes", tips: "Conseils" },
+    nav: { feed: "Fil", map: "Carte", plant: "Planter", events: "Événements", profile: "Profil", alerts: "Alertes", tips: "Conseils", donate: "Don" },
     auth: { signIn: "Se connecter", signOut: "Se déconnecter", signUp: "S'inscrire", joinTreeShare: "Rejoindre" },
     common: { cancel: "Annuler", delete: "Supprimer", confirm: "Confirmer", save: "Enregistrer", loading: "Chargement...", error: "Erreur", back: "Retour", create: "Créer", edit: "Modifier", close: "Fermer" },
     landing: {
@@ -135,7 +135,7 @@ export const translations = {
   },
 
   pt: {
-    nav: { feed: "Feed", map: "Mapa", plant: "Plantar", events: "Eventos", profile: "Perfil", alerts: "Avisos", tips: "Dicas" },
+    nav: { feed: "Feed", map: "Mapa", plant: "Plantar", events: "Eventos", profile: "Perfil", alerts: "Avisos", tips: "Dicas", donate: "Doar" },
     auth: { signIn: "Entrar", signOut: "Sair", signUp: "Registrar", joinTreeShare: "Participar" },
     common: { cancel: "Cancelar", delete: "Excluir", confirm: "Confirmar", save: "Salvar", loading: "Carregando...", error: "Erro", back: "Voltar", create: "Criar", edit: "Editar", close: "Fechar" },
     landing: {
@@ -178,7 +178,7 @@ export const translations = {
   },
 
   es: {
-    nav: { feed: "Feed", map: "Mapa", plant: "Plantar", events: "Eventos", profile: "Perfil", alerts: "Avisos", tips: "Consejos" },
+    nav: { feed: "Feed", map: "Mapa", plant: "Plantar", events: "Eventos", profile: "Perfil", alerts: "Avisos", tips: "Consejos", donate: "Donar" },
     auth: { signIn: "Iniciar sesión", signOut: "Cerrar sesión", signUp: "Registrarse", joinTreeShare: "Unirse" },
     common: { cancel: "Cancelar", delete: "Eliminar", confirm: "Confirmar", save: "Guardar", loading: "Cargando...", error: "Error", back: "Volver", create: "Crear", edit: "Editar", close: "Cerrar" },
     landing: {
@@ -221,7 +221,7 @@ export const translations = {
   },
 
   ja: {
-    nav: { feed: "フィード", map: "マップ", plant: "植える", events: "イベント", profile: "プロフィール", alerts: "お知らせ", tips: "ヒント" },
+    nav: { feed: "フィード", map: "マップ", plant: "植える", events: "イベント", profile: "プロフィール", alerts: "お知らせ", tips: "ヒント", donate: "寄付" },
     auth: { signIn: "ログイン", signOut: "ログアウト", signUp: "登録", joinTreeShare: "参加する" },
     common: { cancel: "キャンセル", delete: "削除", confirm: "確認", save: "保存", loading: "読み込み中...", error: "エラー", back: "戻る", create: "作成", edit: "編集", close: "閉じる" },
     landing: {
