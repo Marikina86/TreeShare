@@ -110,12 +110,12 @@ A plant/tree sharing social app. Community members document trees/plants they pl
 - Heart icon in both desktop and mobile headers links to campaigns page
 
 ### Organization Signup Email Verification
-- Org signup (`POST /api/register-ente`) creates Supabase auth user with `email_confirm: false` — email must be verified before login
-- After registration, `admin.generateLink({ type: "signup" })` triggers verification email via Supabase
+- Org signup (`POST /api/register-ente`) uses `supabase.auth.signUp()` with ANON key — this actually sends the verification email (unlike `admin.createUser` + `generateLink` which doesn't)
+- DB writes (users, organizations, consents) wrapped in a Drizzle transaction; if DB fails, Supabase auth user is cleaned up via `admin.deleteUser()`
 - Frontend shows verify step with instructions (check email → click link → sign in) and resend capability
-- Resend uses `supabase.auth.resend()` client-side with fallback to `POST /api/register-ente/resend-verification` backend endpoint
-- Resend endpoint validates email exists in `organizationsTable` before generating link (prevents enumeration)
-- Redirect URLs use server-side `APP_ORIGIN` / `REPLIT_DEV_DOMAIN` env vars (not request headers) for security
+- Resend uses `supabase.auth.resend()` client-side with fallback to `POST /api/register-ente/resend-verification` backend endpoint (also uses anon key `resend`)
+- **Login page resend**: When sign-in returns "Email not confirmed", shows a "Rinvia email di verifica" button; uses `supabase.auth.resend()` with backend fallback
+- Redirect URLs use server-side `APP_ORIGIN` / `REPLIT_DEV_DOMAIN` env vars for security
 
 ### DB Schema (22 tables)
 `users`, `trees`, `treeUpdates`, `treeSuns`, `events`, `eventParticipants`, `alerts`, `tips`, `problemReports`, `userNotifications`, `organizations`, `reports`, `weeklyWinners`, `policies`, `userConsents`, `cookieConsents`, `donationCampaigns`, `donations`, `orgBalances`, `payouts`, `platformRevenue`, `ledgerEntries`

@@ -16,6 +16,15 @@ function getSupabaseAdmin() {
   });
 }
 
+function getSupabaseAnon() {
+  const url = process.env.SUPABASE_URL;
+  const key = process.env.SUPABASE_ANON_KEY;
+  if (!url || !key) return null;
+  return createClient(url, key, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
+}
+
 router.post("/register-ente", async (req, res) => {
   const { website, segno_zodiacale } = req.body || {};
   if (website || segno_zodiacale) {
@@ -85,24 +94,28 @@ router.post("/register-ente", async (req, res) => {
       return;
     }
 
-    const supabase = getSupabaseAdmin();
-    if (!supabase) {
+    const supabaseAnon = getSupabaseAnon();
+    if (!supabaseAnon) {
       res.status(500).json({ error: "Servizio di autenticazione non disponibile" });
       return;
     }
 
-    const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+    const allowedOrigin = process.env.APP_ORIGIN || (process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : "");
+
+    const { data: authData, error: authError } = await supabaseAnon.auth.signUp({
       email: data.emailUfficiale,
       password: data.password,
-      email_confirm: false,
-      user_metadata: {
-        username: data.username,
-        full_name: `${data.referenteNome} ${data.referenteCognome}`,
+      options: {
+        emailRedirectTo: `${allowedOrigin}/feed`,
+        data: {
+          username: data.username,
+          full_name: `${data.referenteNome} ${data.referenteCognome}`,
+        },
       },
     });
 
-    if (authError || !authData.user) {
-      if (authError?.message?.includes("already been registered")) {
+    if (authError) {
+      if (authError.message?.includes("already registered") || authError.message?.includes("already been registered")) {
         res.status(409).json({
           error: "Email già registrata",
           fields: { emailUfficiale: "Questa email è già registrata. Usa il login." },
@@ -114,82 +127,103 @@ router.post("/register-ente", async (req, res) => {
       return;
     }
 
-    const supabaseUserId = authData.user.id;
+    if (!authData.user) {
+      res.status(500).json({ error: "Errore nella creazione dell'account" });
+      return;
+    }
 
-    await db.insert(usersTable).values({
-      clerkUserId: supabaseUserId,
-      username: data.username,
-      accountType: "organization",
-    });
+    if (authData.user.identities?.length === 0) {
+      res.status(409).json({
+        error: "Email già registrata",
+        fields: { emailUfficiale: "Questa email è già registrata. Usa il login." },
+      });
+      return;
+    }
+
+    const supabaseUserId = authData.user.id;
 
     const hashedPassword = await bcrypt.hash(data.password, 12);
 
-    const [org] = await db
-      .insert(organizationsTable)
-      .values({
-        ragioneSociale: data.ragioneSociale,
-        partitaIva: data.partitaIva,
-        codiceFiscale: data.codiceFiscale,
-        codiceUnivoco: data.codiceUnivoco.toUpperCase(),
-        formaGiuridica: data.formaGiuridica,
-        numeroRegistroImprese: data.numeroRegistroImprese ?? null,
-        indirizzoVia: data.indirizzoVia,
-        indirizzoCitta: data.indirizzoCitta,
-        indirizzoCap: data.indirizzoCap,
-        indirizzoStato: data.indirizzoStato,
-        emailUfficiale: data.emailUfficiale,
-        telefono: data.telefono,
-        referenteNome: data.referenteNome,
-        referenteCognome: data.referenteCognome,
-        username: data.username,
-        hashedPassword,
-        ruoloUtente: data.ruoloUtente,
-        numeroLicenze: data.numeroLicenze,
-      })
-      .returning();
-
-    const orgUserId = `org:${org!.id}`;
     const ipAddress =
       (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() ||
       req.socket?.remoteAddress ||
       null;
     const userAgent = req.headers["user-agent"] || null;
 
-    const activePolicies = await db
-      .select({ id: policiesTable.id, type: policiesTable.type })
-      .from(policiesTable)
-      .where(eq(policiesTable.isActive, true));
+    let orgResult: { id: number; ragioneSociale: string; username: string; emailUfficiale: string; createdAt: Date };
 
-    const privacyPolicy = activePolicies.find((p) => p.type === "privacy");
-    const termsPolicy = activePolicies.find((p) => p.type === "terms");
-
-    const consentRecords: { userId: string; policyId: string; accepted: boolean; ipAddress: string | null; userAgent: string | null }[] = [];
-    if (privacyPolicy) consentRecords.push({ userId: orgUserId, policyId: privacyPolicy.id, accepted: true, ipAddress, userAgent });
-    if (termsPolicy) consentRecords.push({ userId: orgUserId, policyId: termsPolicy.id, accepted: true, ipAddress, userAgent });
-    if (privacyPolicy) consentRecords.push({ userId: supabaseUserId, policyId: privacyPolicy.id, accepted: true, ipAddress, userAgent });
-    if (termsPolicy) consentRecords.push({ userId: supabaseUserId, policyId: termsPolicy.id, accepted: true, ipAddress, userAgent });
-
-    if (consentRecords.length > 0) {
-      await db.insert(userConsentsTable).values(consentRecords);
-    }
-
-    const allowedOrigin = process.env.APP_ORIGIN || (process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : "");
     try {
-      await supabase.auth.admin.generateLink({
-        type: "signup",
-        email: data.emailUfficiale,
-        options: { redirectTo: `${allowedOrigin}/feed` },
+      orgResult = await db.transaction(async (tx) => {
+        await tx.insert(usersTable).values({
+          clerkUserId: supabaseUserId,
+          username: data.username,
+          accountType: "organization",
+        });
+
+        const [org] = await tx
+          .insert(organizationsTable)
+          .values({
+            ragioneSociale: data.ragioneSociale,
+            partitaIva: data.partitaIva,
+            codiceFiscale: data.codiceFiscale,
+            codiceUnivoco: data.codiceUnivoco.toUpperCase(),
+            formaGiuridica: data.formaGiuridica,
+            numeroRegistroImprese: data.numeroRegistroImprese ?? null,
+            indirizzoVia: data.indirizzoVia,
+            indirizzoCitta: data.indirizzoCitta,
+            indirizzoCap: data.indirizzoCap,
+            indirizzoStato: data.indirizzoStato,
+            emailUfficiale: data.emailUfficiale,
+            telefono: data.telefono,
+            referenteNome: data.referenteNome,
+            referenteCognome: data.referenteCognome,
+            username: data.username,
+            hashedPassword,
+            ruoloUtente: data.ruoloUtente,
+            numeroLicenze: data.numeroLicenze,
+          })
+          .returning();
+
+        const orgUserId = `org:${org!.id}`;
+
+        const activePolicies = await tx
+          .select({ id: policiesTable.id, type: policiesTable.type })
+          .from(policiesTable)
+          .where(eq(policiesTable.isActive, true));
+
+        const privacyPolicy = activePolicies.find((p) => p.type === "privacy");
+        const termsPolicy = activePolicies.find((p) => p.type === "terms");
+
+        const consentRecords: { userId: string; policyId: string; accepted: boolean; ipAddress: string | null; userAgent: string | null }[] = [];
+        if (privacyPolicy) consentRecords.push({ userId: orgUserId, policyId: privacyPolicy.id, accepted: true, ipAddress, userAgent });
+        if (termsPolicy) consentRecords.push({ userId: orgUserId, policyId: termsPolicy.id, accepted: true, ipAddress, userAgent });
+        if (privacyPolicy) consentRecords.push({ userId: supabaseUserId, policyId: privacyPolicy.id, accepted: true, ipAddress, userAgent });
+        if (termsPolicy) consentRecords.push({ userId: supabaseUserId, policyId: termsPolicy.id, accepted: true, ipAddress, userAgent });
+
+        if (consentRecords.length > 0) {
+          await tx.insert(userConsentsTable).values(consentRecords);
+        }
+
+        return org!;
       });
-    } catch (linkErr) {
-      req.log?.warn?.({ err: linkErr }, "Could not generate signup verification link");
+    } catch (dbErr) {
+      req.log?.error?.({ err: dbErr }, "DB transaction failed for org registration, cleaning up Supabase user");
+      const supabaseAdmin = getSupabaseAdmin();
+      if (supabaseAdmin) {
+        await supabaseAdmin.auth.admin.deleteUser(supabaseUserId).catch((delErr) => {
+          req.log?.error?.({ err: delErr }, "Failed to delete Supabase user after DB rollback");
+        });
+      }
+      res.status(500).json({ error: "Errore nella creazione dell'account. Riprova." });
+      return;
     }
 
     res.status(201).json({
-      id: org!.id,
-      ragioneSociale: org!.ragioneSociale,
-      username: org!.username,
-      emailUfficiale: org!.emailUfficiale,
-      createdAt: org!.createdAt.toISOString(),
+      id: orgResult.id,
+      ragioneSociale: orgResult.ragioneSociale,
+      username: orgResult.username,
+      emailUfficiale: orgResult.emailUfficiale,
+      createdAt: orgResult.createdAt.toISOString(),
       emailVerificationRequired: true,
     });
   } catch (err) {
@@ -205,36 +239,25 @@ router.post("/register-ente/resend-verification", async (req, res) => {
     return;
   }
 
-  const trimmed = email.trim().toLowerCase();
+  const trimmed = email.trim();
 
-  const existingOrg = await db
-    .select({ id: organizationsTable.id })
-    .from(organizationsTable)
-    .where(eq(organizationsTable.emailUfficiale, trimmed))
-    .limit(1);
-
-  if (existingOrg.length === 0) {
-    res.json({ ok: true });
-    return;
-  }
-
-  const supabase = getSupabaseAdmin();
-  if (!supabase) {
+  const supabaseAnon = getSupabaseAnon();
+  if (!supabaseAnon) {
     res.status(500).json({ error: "Servizio non disponibile" });
     return;
   }
 
   try {
     const allowedOrigin = process.env.APP_ORIGIN || (process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : "");
-    const { error } = await supabase.auth.admin.generateLink({
+    const { error } = await supabaseAnon.auth.resend({
       type: "signup",
       email: trimmed,
-      options: { redirectTo: `${allowedOrigin}/feed` },
+      options: { emailRedirectTo: `${allowedOrigin}/feed` },
     });
 
     if (error) {
-      if (error.message?.includes("rate") || error.message?.includes("limit")) {
-        res.status(429).json({ error: "Troppe richieste. Attendi qualche minuto." });
+      if (error.message?.includes("rate") || error.message?.includes("limit") || error.message?.includes("exceeded")) {
+        res.status(429).json({ error: "Troppe richieste. Attendi qualche minuto prima di riprovare." });
         return;
       }
       req.log?.warn?.({ err: error }, "Resend verification link error");

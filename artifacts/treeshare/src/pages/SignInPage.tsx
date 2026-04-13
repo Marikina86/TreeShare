@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import { supabase } from "@/lib/supabase";
-import { Leaf, Eye, EyeOff, AlertCircle, ArrowLeft } from "lucide-react";
+import { Leaf, Eye, EyeOff, AlertCircle, ArrowLeft, CheckCircle2 } from "lucide-react";
 import { useLang } from "@/lib/i18n";
 
 export default function SignInPage() {
@@ -17,12 +17,19 @@ export default function SignInPage() {
   const [resetLoading, setResetLoading] = useState(false);
   const [resetSent, setResetSent] = useState(false);
   const [resetError, setResetError] = useState<string | null>(null);
+  const [emailNotConfirmed, setEmailNotConfirmed] = useState(false);
+  const [resendingVerification, setResendingVerification] = useState(false);
+  const [verificationResent, setVerificationResent] = useState(false);
+  const [verificationResendError, setVerificationResendError] = useState<string | null>(null);
 
   const L = (it: string, en: string) => (lang === "it" ? it : en);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    setEmailNotConfirmed(false);
+    setVerificationResent(false);
+    setVerificationResendError(null);
     setLoading(true);
     try {
       const { error: authError } = await supabase.auth.signInWithPassword({
@@ -34,6 +41,7 @@ export default function SignInPage() {
           setError(L("Email o password non corretti.", "Invalid email or password."));
         } else if (authError.message.includes("Email not confirmed")) {
           setError(L("Email non ancora verificata. Controlla la tua casella di posta.", "Email not yet verified. Check your inbox."));
+          setEmailNotConfirmed(true);
         } else {
           setError(authError.message);
         }
@@ -44,6 +52,39 @@ export default function SignInPage() {
       setError(L("Errore durante l'accesso. Riprova.", "Login error. Try again."));
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleResendVerification() {
+    setResendingVerification(true);
+    setVerificationResendError(null);
+    setVerificationResent(false);
+    try {
+      const { error } = await supabase.auth.resend({
+        type: "signup",
+        email: email.trim(),
+        options: { emailRedirectTo: `${window.location.origin}/feed` },
+      });
+      if (error) {
+        const res = await fetch("/api/register-ente/resend-verification", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: email.trim() }),
+        });
+        if (!res.ok) {
+          const json = await res.json().catch(() => ({}));
+          setVerificationResendError(
+            (json as { error?: string }).error ||
+            L("Errore nell'invio dell'email.", "Error sending verification email.")
+          );
+          return;
+        }
+      }
+      setVerificationResent(true);
+    } catch {
+      setVerificationResendError(L("Errore nell'invio dell'email. Riprova.", "Error sending email. Try again."));
+    } finally {
+      setResendingVerification(false);
     }
   }
 
@@ -186,6 +227,36 @@ export default function SignInPage() {
             <div className="bg-destructive/10 border border-destructive/20 rounded-lg px-4 py-3 text-sm text-destructive flex items-center gap-2">
               <AlertCircle className="h-4 w-4 flex-shrink-0" />
               {error}
+            </div>
+          )}
+
+          {emailNotConfirmed && (
+            <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg px-4 py-3 space-y-2">
+              {verificationResent && (
+                <div className="flex items-center gap-2 text-sm text-green-700 dark:text-green-300">
+                  <CheckCircle2 className="h-4 w-4 flex-shrink-0" />
+                  {L("Email di verifica rinviata! Controlla la tua casella (anche lo spam).", "Verification email resent! Check your inbox (and spam folder).")}
+                </div>
+              )}
+              {verificationResendError && (
+                <div className="flex items-center gap-2 text-sm text-destructive">
+                  <AlertCircle className="h-4 w-4 flex-shrink-0" />
+                  {verificationResendError}
+                </div>
+              )}
+              {!verificationResent && (
+                <button
+                  type="button"
+                  onClick={handleResendVerification}
+                  disabled={resendingVerification}
+                  className="w-full py-2 text-sm font-medium text-amber-800 dark:text-amber-200 hover:text-amber-900 disabled:opacity-50 flex items-center justify-center gap-2 transition-colors"
+                >
+                  {resendingVerification && (
+                    <div className="w-3 h-3 border-2 border-amber-600 border-t-transparent rounded-full animate-spin" />
+                  )}
+                  {L("Rinvia email di verifica", "Resend verification email")}
+                </button>
+              )}
             </div>
           )}
 
