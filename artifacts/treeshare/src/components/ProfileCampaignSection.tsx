@@ -181,10 +181,7 @@ export default function ProfileCampaignSection({ profileUserId, isOwnProfile }: 
     if (!showModal) return;
     async function initStripe() {
       if (!stripePromise) {
-        const token = await getToken();
-        const res = await fetch("/api/donations/stripe-config", {
-          headers: token ? { Authorization: `Bearer ${token}` } : {},
-        });
+        const res = await fetch("/api/donations/stripe-config");
         if (res.ok) {
           const { publishableKey } = await res.json();
           stripePromise = loadStripe(publishableKey);
@@ -203,9 +200,11 @@ export default function ProfileCampaignSection({ profileUserId, isOwnProfile }: 
     setCreating(true);
     try {
       const token = await getToken();
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (token) headers["Authorization"] = `Bearer ${token}`;
       const res = await fetch("/api/donations/create-payment-intent", {
         method: "POST",
-        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify({ campaignId: campaign.id, amount: numAmount }),
       });
 
@@ -231,9 +230,11 @@ export default function ProfileCampaignSection({ profileUserId, isOwnProfile }: 
       try {
         const piId = paymentInfo.clientSecret.split("_secret_")[0];
         const token = await getToken();
+        const headers: Record<string, string> = { "Content-Type": "application/json" };
+        if (token) headers["Authorization"] = `Bearer ${token}`;
         await fetch("/api/donations/confirm-payment", {
           method: "POST",
-          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+          headers,
           body: JSON.stringify({ paymentIntentId: piId }),
         });
       } catch {}
@@ -261,7 +262,7 @@ export default function ProfileCampaignSection({ profileUserId, isOwnProfile }: 
 
   const photos = Array.isArray(campaign.photos) ? campaign.photos : [];
   const progress = campaign.goalAmount ? Math.min(100, (campaign.totalRaised / campaign.goalAmount) * 100) : null;
-  const canDonate = !isOwnProfile && !!user;
+  const canDonate = !isOwnProfile;
 
   return (
     <>

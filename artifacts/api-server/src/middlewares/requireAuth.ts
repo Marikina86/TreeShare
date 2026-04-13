@@ -82,3 +82,26 @@ export const requireAuth = async (
   (req as AuthenticatedRequest).userId = userId;
   next();
 };
+
+export const optionalAuth = async (
+  req: Request,
+  _res: Response,
+  next: NextFunction,
+): Promise<void> => {
+  const authHeader = req.headers.authorization;
+
+  if (authHeader?.startsWith("Bearer ")) {
+    const supabase = getSupabaseAdmin();
+    if (supabase) {
+      const token = authHeader.slice(7);
+      try {
+        const { data, error } = await supabase.auth.getUser(token);
+        if (!error && data.user) {
+          (req as AuthenticatedRequest).userId = data.user.id;
+        }
+      } catch {}
+    }
+  }
+
+  next();
+};

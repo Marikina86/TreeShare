@@ -8,7 +8,7 @@ import {
   ledgerEntriesTable,
 } from "@workspace/db";
 import { eq, and, desc, sql } from "drizzle-orm";
-import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth";
+import { requireAuth, optionalAuth, type AuthenticatedRequest } from "../middlewares/requireAuth";
 import { getUncachableStripeClient, getStripePublishableKey } from "../lib/stripe";
 
 const PLATFORM_FEE_RATE = 0.20;
@@ -26,7 +26,7 @@ async function ensurePlatformRevenueRow(tx: any) {
 
 const router = Router();
 
-router.get("/donations/stripe-config", requireAuth, async (_req, res) => {
+router.get("/donations/stripe-config", async (_req, res) => {
   try {
     const publishableKey = await getStripePublishableKey();
     res.json({ publishableKey });
@@ -262,8 +262,8 @@ router.get("/donations/campaigns/user/:userId", async (req, res) => {
   }
 });
 
-router.post("/donations/create-payment-intent", requireAuth, async (req, res) => {
-  const donorUserId = (req as AuthenticatedRequest).userId;
+router.post("/donations/create-payment-intent", optionalAuth, async (req, res) => {
+  const donorUserId = (req as AuthenticatedRequest).userId || null;
   try {
     const { campaignId, amount } = req.body;
     const amountCents = Math.round(Number(amount) * 100);
@@ -311,7 +311,7 @@ router.post("/donations/create-payment-intent", requireAuth, async (req, res) =>
       },
       metadata: {
         campaignId: String(campaign.id),
-        donorUserId,
+        donorUserId: donorUserId || "guest",
         recipientUserId: campaign.userId,
         amountOrg: String(amountOrg),
         amountPlatform: String(amountPlatform),
@@ -345,8 +345,8 @@ router.post("/donations/create-payment-intent", requireAuth, async (req, res) =>
   }
 });
 
-router.post("/donations/confirm-payment", requireAuth, async (req, res) => {
-  const donorUserId = (req as AuthenticatedRequest).userId;
+router.post("/donations/confirm-payment", optionalAuth, async (req, res) => {
+  const donorUserId = (req as AuthenticatedRequest).userId || null;
   try {
     const { paymentIntentId } = req.body;
     if (!paymentIntentId) {
@@ -363,16 +363,20 @@ router.post("/donations/confirm-payment", requireAuth, async (req, res) => {
     }
 
     const result = await db.transaction(async (tx) => {
+      const whereConditions = [
+        eq(donationsTable.stripePaymentIntentId, paymentIntentId),
+        sql`${donationsTable.status} != 'completed'`,
+      ];
+      if (donorUserId) {
+        whereConditions.push(eq(donationsTable.donorUserId, donorUserId));
+      } else {
+        whereConditions.push(sql`${donationsTable.donorUserId} IS NULL`);
+      }
+
       const updatedRows = await tx
         .update(donationsTable)
         .set({ status: "completed" })
-        .where(
-          and(
-            eq(donationsTable.stripePaymentIntentId, paymentIntentId),
-            eq(donationsTable.donorUserId, donorUserId),
-            sql`${donationsTable.status} != 'completed'`
-          )
-        )
+        .where(and(...whereConditions))
         .returning();
 
       if (updatedRows.length === 0) {

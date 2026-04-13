@@ -295,10 +295,7 @@ export default function CampaignsPage() {
     if (!donatingCampaign) return;
     async function initStripe() {
       if (!stripePromise) {
-        const token = await getToken();
-        const res = await fetch("/api/donations/stripe-config", {
-          headers: token ? { Authorization: `Bearer ${token}` } : {},
-        });
+        const res = await fetch("/api/donations/stripe-config");
         if (res.ok) {
           const { publishableKey } = await res.json();
           stripePromise = loadStripe(publishableKey);
@@ -317,9 +314,11 @@ export default function CampaignsPage() {
     setCreating(true);
     try {
       const token = await getToken();
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (token) headers["Authorization"] = `Bearer ${token}`;
       const res = await fetch("/api/donations/create-payment-intent", {
         method: "POST",
-        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify({ campaignId: donatingCampaign.id, amount: numAmount }),
       });
 
@@ -345,9 +344,11 @@ export default function CampaignsPage() {
       try {
         const piId = paymentInfo.clientSecret.split("_secret_")[0];
         const token = await getToken();
+        const headers: Record<string, string> = { "Content-Type": "application/json" };
+        if (token) headers["Authorization"] = `Bearer ${token}`;
         await fetch("/api/donations/confirm-payment", {
           method: "POST",
-          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+          headers,
           body: JSON.stringify({ paymentIntentId: piId }),
         });
       } catch {}

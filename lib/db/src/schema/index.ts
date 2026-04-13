@@ -237,7 +237,7 @@ export const donationCampaignsTable = pgTable("donation_campaigns", {
 
 export const donationsTable = pgTable("donations", {
   id: serial("id").primaryKey(),
-  donorUserId: text("donor_user_id").notNull(),
+  donorUserId: text("donor_user_id"),
   recipientUserId: text("recipient_user_id").notNull(),
   campaignId: integer("campaign_id").notNull(),
   amountTotal: integer("amount_total").notNull(),
