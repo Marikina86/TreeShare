@@ -99,19 +99,19 @@ function PaymentForm({ clientSecret, onSuccess, onCancel, l }: {
     <form onSubmit={handleSubmit} className="space-y-4">
       <PaymentElement />
       {error && <p className="text-sm text-destructive">{error}</p>}
-      <div className="flex gap-2 sticky bottom-0 bg-background pt-3 pb-1">
+      <div className="flex gap-3 sticky bottom-0 bg-background pt-4 pb-2">
         <button
           type="button"
           onClick={onCancel}
           disabled={processing}
-          className="flex-1 py-2.5 border border-border rounded-xl text-sm font-medium hover:bg-muted disabled:opacity-50"
+          className="flex-1 py-3 border border-border rounded-xl text-sm font-medium hover:bg-muted disabled:opacity-50"
         >
           {l.cancel}
         </button>
         <button
           type="submit"
           disabled={processing || !stripe}
-          className="flex-1 py-2.5 bg-emerald-600 text-white rounded-xl text-sm font-semibold hover:bg-emerald-700 disabled:opacity-50"
+          className="flex-1 py-3.5 bg-emerald-600 text-white rounded-xl text-base font-bold hover:bg-emerald-700 disabled:opacity-50 shadow-lg shadow-emerald-600/25"
         >
           {processing ? l.processing : l.confirmPay}
         </button>
@@ -341,17 +341,17 @@ export default function DonateSection({ profileUserId, profileUsername }: {
                     <span>€{(parseFloat(amount) * 0.2).toFixed(2)}</span>
                   </div>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex gap-3">
                   <button
                     onClick={() => setStep("amount")}
-                    className="flex-1 py-2.5 border border-border rounded-xl text-sm font-medium hover:bg-muted"
+                    className="flex-1 py-3 border border-border rounded-xl text-sm font-medium hover:bg-muted"
                   >
                     {l.back}
                   </button>
                   <button
                     onClick={handleCreatePaymentIntent}
                     disabled={creating}
-                    className="flex-1 py-2.5 bg-emerald-600 text-white rounded-xl text-sm font-semibold hover:bg-emerald-700 disabled:opacity-50"
+                    className="flex-1 py-3.5 bg-emerald-600 text-white rounded-xl text-base font-bold hover:bg-emerald-700 disabled:opacity-50 shadow-lg shadow-emerald-600/25"
                   >
                     {creating ? l.processing : l.confirmPay}
                   </button>
