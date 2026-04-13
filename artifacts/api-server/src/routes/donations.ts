@@ -22,6 +22,51 @@ async function ensurePlatformRevenueRow(tx: any) {
   }
 }
 
+async function activateCampaign(campaignId: number, piId: string) {
+  return db.transaction(async (tx) => {
+    const [campaign] = await tx
+      .select()
+      .from(donationCampaignsTable)
+      .where(
+        and(
+          eq(donationCampaignsTable.id, campaignId),
+          eq(donationCampaignsTable.stripePaymentIntentId, piId),
+        ),
+      );
+
+    if (!campaign) return { error: "not_found" };
+    if (campaign.paymentStatus === "paid") return { idempotent: true, campaignId: campaign.id };
+
+    const durationDays = campaign.durationDays || 30;
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + durationDays);
+
+    await tx
+      .update(donationCampaignsTable)
+      .set({
+        paymentStatus: "paid",
+        isActive: true,
+        expiresAt,
+        updatedAt: new Date(),
+      })
+      .where(eq(donationCampaignsTable.id, campaign.id));
+
+    await ensurePlatformRevenueRow(tx);
+
+    const pricePaid = campaign.pricePaidCents || 0;
+    await tx
+      .update(platformRevenueTable)
+      .set({
+        totalCommissions: sql`${platformRevenueTable.totalCommissions} + ${pricePaid}`,
+        transactionCount: sql`${platformRevenueTable.transactionCount} + 1`,
+        updatedAt: new Date(),
+      })
+      .where(eq(platformRevenueTable.id, 1));
+
+    return { success: true, campaignId: campaign.id, expiresAt: expiresAt.toISOString(), durationDays };
+  });
+}
+
 const router = Router();
 
 router.get("/campaigns/stripe-config", async (_req, res) => {
@@ -113,7 +158,12 @@ router.get("/campaigns/my-campaigns", requireAuth, async (req, res) => {
     const campaigns = await db
       .select()
       .from(donationCampaignsTable)
-      .where(eq(donationCampaignsTable.userId, userId))
+      .where(
+        and(
+          eq(donationCampaignsTable.userId, userId),
+          eq(donationCampaignsTable.paymentStatus, "paid"),
+        ),
+      )
       .orderBy(desc(donationCampaignsTable.createdAt));
     res.json(campaigns);
   } catch (err) {
@@ -122,7 +172,7 @@ router.get("/campaigns/my-campaigns", requireAuth, async (req, res) => {
   }
 });
 
-router.post("/campaigns", requireAuth, async (req, res) => {
+router.post("/campaigns/initiate-payment", requireAuth, async (req, res) => {
   const userId = (req as AuthenticatedRequest).userId;
   try {
     const [user] = await db
@@ -135,26 +185,124 @@ router.post("/campaigns", requireAuth, async (req, res) => {
       return;
     }
 
-    const { title, description } = req.body;
+    const { title, description, photos, pricingId } = req.body;
     if (!title || !description) {
       res.status(400).json({ error: "Title and description required" });
       return;
     }
+    if (typeof title !== "string" || title.trim().length === 0 || title.trim().length > 200) {
+      res.status(400).json({ error: "Title must be 1-200 characters" });
+      return;
+    }
+    if (typeof description !== "string" || description.trim().length === 0 || description.trim().length > 2000) {
+      res.status(400).json({ error: "Description must be 1-2000 characters" });
+      return;
+    }
+    const finalPhotos = Array.isArray(photos) ? photos.slice(0, 3).filter((p: any) => typeof p === "string" && p.length > 0) : [];
+    if (!pricingId) {
+      res.status(400).json({ error: "pricingId required" });
+      return;
+    }
 
-    const [campaign] = await db
+    const [pricing] = await db
+      .select()
+      .from(campaignPricingTable)
+      .where(
+        and(
+          eq(campaignPricingTable.id, Number(pricingId)),
+          eq(campaignPricingTable.isActive, true),
+        ),
+      );
+
+    if (!pricing) {
+      res.status(404).json({ error: "Pricing option not found" });
+      return;
+    }
+
+    const stripe = await getUncachableStripeClient();
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount: pricing.priceCents,
+      currency: "eur",
+      metadata: {
+        userId,
+        pricingId: String(pricing.id),
+        durationDays: String(pricing.durationDays),
+        priceCents: String(pricing.priceCents),
+        type: "campaign_publication",
+      },
+    });
+
+    const [pendingCampaign] = await db
       .insert(donationCampaignsTable)
       .values({
         userId,
-        title,
-        description,
+        title: title.trim(),
+        description: description.trim(),
+        photos: finalPhotos,
         isActive: false,
-        paymentStatus: "draft",
+        paymentStatus: "pending",
+        stripePaymentIntentId: paymentIntent.id,
+        durationDays: pricing.durationDays,
+        pricePaidCents: pricing.priceCents,
       })
       .returning();
 
-    res.status(201).json(campaign);
+    res.json({
+      clientSecret: paymentIntent.client_secret,
+      paymentIntentId: paymentIntent.id,
+      campaignId: pendingCampaign.id,
+      priceCents: pricing.priceCents,
+      durationDays: pricing.durationDays,
+      label: pricing.label,
+    });
   } catch (err) {
-    console.error("[campaigns] create campaign error:", err);
+    console.error("[campaigns] initiate-payment error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.post("/campaigns/confirm-payment", requireAuth, async (req, res) => {
+  const userId = (req as AuthenticatedRequest).userId;
+  try {
+    const { paymentIntentId } = req.body;
+    if (!paymentIntentId) {
+      res.status(400).json({ error: "paymentIntentId required" });
+      return;
+    }
+
+    const stripe = await getUncachableStripeClient();
+    const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
+
+    if (paymentIntent.status !== "succeeded") {
+      res.status(400).json({ error: "Payment not yet succeeded", stripeStatus: paymentIntent.status });
+      return;
+    }
+
+    if (paymentIntent.metadata?.userId !== userId) {
+      res.status(403).json({ error: "Payment does not belong to this user" });
+      return;
+    }
+
+    const [campaign] = await db
+      .select()
+      .from(donationCampaignsTable)
+      .where(eq(donationCampaignsTable.stripePaymentIntentId, paymentIntentId));
+
+    if (!campaign) {
+      res.status(404).json({ error: "Campaign not found" });
+      return;
+    }
+
+    const result = await activateCampaign(campaign.id, paymentIntentId);
+
+    if ((result as any).error) {
+      res.status(404).json(result);
+      return;
+    }
+
+    res.json(result);
+  } catch (err) {
+    console.error("[campaigns] confirm-payment error:", err);
     res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -170,6 +318,7 @@ router.patch("/campaigns/:campaignId", requireAuth, async (req, res) => {
         and(
           eq(donationCampaignsTable.id, campaignId),
           eq(donationCampaignsTable.userId, userId),
+          eq(donationCampaignsTable.paymentStatus, "paid"),
         ),
       );
 
@@ -241,11 +390,6 @@ router.delete("/campaigns/:campaignId", requireAuth, async (req, res) => {
       return;
     }
 
-    if (campaign.paymentStatus === "paid") {
-      res.status(400).json({ error: "Cannot delete a paid campaign. Deactivate it instead." });
-      return;
-    }
-
     await db
       .delete(donationCampaignsTable)
       .where(eq(donationCampaignsTable.id, campaignId));
@@ -257,9 +401,8 @@ router.delete("/campaigns/:campaignId", requireAuth, async (req, res) => {
   }
 });
 
-router.get("/campaigns/active", async (req, res) => {
+router.get("/campaigns/active", async (_req, res) => {
   try {
-    const sortBy = req.query.sort as string || "recent";
     const now = new Date();
 
     const campaigns = await db
@@ -315,166 +458,6 @@ router.get("/campaigns/user/:userId", async (req, res) => {
     res.json(campaigns[0] || null);
   } catch (err) {
     console.error("[campaigns] get campaign error:", err);
-    res.status(500).json({ error: "Internal server error" });
-  }
-});
-
-router.post("/campaigns/:campaignId/create-payment", requireAuth, async (req, res) => {
-  const userId = (req as AuthenticatedRequest).userId;
-  const campaignId = Number(req.params.campaignId);
-  try {
-    const { pricingId } = req.body;
-    if (!pricingId) {
-      res.status(400).json({ error: "pricingId required" });
-      return;
-    }
-
-    const [campaign] = await db
-      .select()
-      .from(donationCampaignsTable)
-      .where(
-        and(
-          eq(donationCampaignsTable.id, campaignId),
-          eq(donationCampaignsTable.userId, userId),
-        ),
-      );
-
-    if (!campaign) {
-      res.status(404).json({ error: "Campaign not found" });
-      return;
-    }
-
-    if (campaign.paymentStatus === "paid") {
-      res.status(400).json({ error: "Campaign already paid" });
-      return;
-    }
-
-    const [pricing] = await db
-      .select()
-      .from(campaignPricingTable)
-      .where(
-        and(
-          eq(campaignPricingTable.id, Number(pricingId)),
-          eq(campaignPricingTable.isActive, true),
-        ),
-      );
-
-    if (!pricing) {
-      res.status(404).json({ error: "Pricing option not found" });
-      return;
-    }
-
-    const stripe = await getUncachableStripeClient();
-    const paymentIntent = await stripe.paymentIntents.create({
-      amount: pricing.priceCents,
-      currency: "eur",
-      metadata: {
-        campaignId: String(campaign.id),
-        userId,
-        pricingId: String(pricing.id),
-        durationDays: String(pricing.durationDays),
-        type: "campaign_publication",
-      },
-    });
-
-    await db
-      .update(donationCampaignsTable)
-      .set({
-        paymentStatus: "pending",
-        stripePaymentIntentId: paymentIntent.id,
-        durationDays: pricing.durationDays,
-        pricePaidCents: pricing.priceCents,
-        updatedAt: new Date(),
-      })
-      .where(eq(donationCampaignsTable.id, campaignId));
-
-    res.json({
-      clientSecret: paymentIntent.client_secret,
-      priceCents: pricing.priceCents,
-      durationDays: pricing.durationDays,
-      label: pricing.label,
-    });
-  } catch (err) {
-    console.error("[campaigns] create-payment error:", err);
-    res.status(500).json({ error: "Internal server error" });
-  }
-});
-
-router.post("/campaigns/:campaignId/confirm-payment", requireAuth, async (req, res) => {
-  const userId = (req as AuthenticatedRequest).userId;
-  const campaignId = Number(req.params.campaignId);
-  try {
-    const { paymentIntentId } = req.body;
-    if (!paymentIntentId) {
-      res.status(400).json({ error: "paymentIntentId required" });
-      return;
-    }
-
-    const stripe = await getUncachableStripeClient();
-    const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
-
-    if (paymentIntent.status !== "succeeded") {
-      res.status(400).json({ error: "Payment not yet succeeded", stripeStatus: paymentIntent.status });
-      return;
-    }
-
-    const result = await db.transaction(async (tx) => {
-      const [campaign] = await tx
-        .select()
-        .from(donationCampaignsTable)
-        .where(
-          and(
-            eq(donationCampaignsTable.id, campaignId),
-            eq(donationCampaignsTable.userId, userId),
-            eq(donationCampaignsTable.stripePaymentIntentId, paymentIntentId),
-          ),
-        );
-
-      if (!campaign) {
-        return { error: "Campaign not found" };
-      }
-
-      if (campaign.paymentStatus === "paid") {
-        return { idempotent: true };
-      }
-
-      const durationDays = campaign.durationDays || 30;
-      const expiresAt = new Date();
-      expiresAt.setDate(expiresAt.getDate() + durationDays);
-
-      await tx
-        .update(donationCampaignsTable)
-        .set({
-          paymentStatus: "paid",
-          isActive: true,
-          expiresAt,
-          updatedAt: new Date(),
-        })
-        .where(eq(donationCampaignsTable.id, campaignId));
-
-      await ensurePlatformRevenueRow(tx);
-
-      const pricePaid = campaign.pricePaidCents || 0;
-      await tx
-        .update(platformRevenueTable)
-        .set({
-          totalCommissions: sql`${platformRevenueTable.totalCommissions} + ${pricePaid}`,
-          transactionCount: sql`${platformRevenueTable.transactionCount} + 1`,
-          updatedAt: new Date(),
-        })
-        .where(eq(platformRevenueTable.id, 1));
-
-      return { success: true, expiresAt: expiresAt.toISOString(), durationDays };
-    });
-
-    if ((result as any).error) {
-      res.status(404).json(result);
-      return;
-    }
-
-    res.json(result);
-  } catch (err) {
-    console.error("[campaigns] confirm-payment error:", err);
     res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -543,52 +526,16 @@ export async function webhookHandler(req: Request, res: Response) {
       const piId = paymentIntent.id;
 
       if (paymentIntent.metadata?.type === "campaign_publication") {
-        const result = await db.transaction(async (tx) => {
-          const [campaign] = await tx
-            .select()
-            .from(donationCampaignsTable)
-            .where(
-              and(
-                eq(donationCampaignsTable.stripePaymentIntentId, piId),
-                sql`${donationCampaignsTable.paymentStatus} != 'paid'`,
-              ),
-            );
+        const [campaign] = await db
+          .select({ id: donationCampaignsTable.id, paymentStatus: donationCampaignsTable.paymentStatus })
+          .from(donationCampaignsTable)
+          .where(eq(donationCampaignsTable.stripePaymentIntentId, piId));
 
-          if (!campaign) {
-            return { idempotent: true };
+        if (campaign && campaign.paymentStatus !== "paid") {
+          const result = await activateCampaign(campaign.id, piId);
+          if (!(result as any).idempotent) {
+            console.info(`[campaigns] webhook activated campaign=${campaign.id} for PI=${piId}`);
           }
-
-          const durationDays = campaign.durationDays || 30;
-          const expiresAt = new Date();
-          expiresAt.setDate(expiresAt.getDate() + durationDays);
-
-          await tx
-            .update(donationCampaignsTable)
-            .set({
-              paymentStatus: "paid",
-              isActive: true,
-              expiresAt,
-              updatedAt: new Date(),
-            })
-            .where(eq(donationCampaignsTable.id, campaign.id));
-
-          await ensurePlatformRevenueRow(tx);
-
-          const pricePaid = campaign.pricePaidCents || 0;
-          await tx
-            .update(platformRevenueTable)
-            .set({
-              totalCommissions: sql`${platformRevenueTable.totalCommissions} + ${pricePaid}`,
-              transactionCount: sql`${platformRevenueTable.transactionCount} + 1`,
-              updatedAt: new Date(),
-            })
-            .where(eq(platformRevenueTable.id, 1));
-
-          return { campaignId: campaign.id, durationDays, pricePaid };
-        });
-
-        if (!(result as any).idempotent) {
-          console.info(`[campaigns] payment_intent.succeeded: ${piId}, campaign=${(result as any).campaignId}`);
         }
       }
     }

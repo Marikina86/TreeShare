@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, boolean, real, timestamp, index, varchar, json } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, boolean, real, timestamp, index, uniqueIndex, varchar, json } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
@@ -245,6 +245,7 @@ export const donationCampaignsTable = pgTable("donation_campaigns", {
 }, (table) => [
   index("donation_campaigns_user_id_idx").on(table.userId),
   index("donation_campaigns_payment_status_idx").on(table.paymentStatus),
+  uniqueIndex("donation_campaigns_stripe_pi_idx").on(table.stripePaymentIntentId),
 ]);
 
 export const platformRevenueTable = pgTable("platform_revenue", {

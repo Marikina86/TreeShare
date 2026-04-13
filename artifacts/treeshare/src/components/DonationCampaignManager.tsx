@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useCallback } from "react";
 import { useAuth } from "@/lib/auth";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLang } from "@/lib/i18n";
@@ -35,15 +35,9 @@ const t = {
     create: "Crea campagna",
     campaignTitle: "Titolo campagna",
     campaignDesc: "Descrizione",
-    save: "Salva",
     cancel: "Annulla",
     active: "Attiva",
-    inactive: "Non attiva",
-    draft: "Bozza",
-    pending: "In attesa",
-    paid: "Pagata",
-    failed: "Fallita",
-    created: "Campagna creata",
+    expired: "Scaduta",
     updated: "Campagna aggiornata",
     deleted: "Campagna eliminata",
     noData: "Nessuna campagna creata",
@@ -51,11 +45,11 @@ const t = {
     photoUploading: "Caricamento...",
     maxPhotos: "Max 3 foto",
     edit: "Modifica",
+    save: "Salva",
     delete: "Elimina",
     confirmDelete: "Sei sicuro di voler eliminare questa campagna?",
     confirmDeleteBtn: "Elimina",
     cancelDelete: "Annulla",
-    publish: "Pubblica",
     selectDuration: "Seleziona durata",
     days: "giorni",
     expiresOn: "Scade il",
@@ -63,23 +57,24 @@ const t = {
     processing: "Elaborazione...",
     paymentSuccess: "Pagamento completato! La campagna è ora attiva.",
     paymentError: "Errore nel pagamento",
-    expired: "Scaduta",
-    cannotDeletePaid: "Non puoi eliminare una campagna pagata.",
+    noPricing: "Nessun piano tariffario disponibile.",
+    fillFields: "Compila titolo e descrizione",
+    selectPlan: "Seleziona un piano",
+    proceedPayment: "Procedi al pagamento",
+    back: "Indietro",
+    step1: "Dettagli campagna",
+    step2: "Seleziona piano",
+    step3: "Pagamento",
+    next: "Avanti",
   },
   en: {
     title: "My campaigns",
     create: "Create campaign",
     campaignTitle: "Campaign title",
     campaignDesc: "Description",
-    save: "Save",
     cancel: "Cancel",
     active: "Active",
-    inactive: "Inactive",
-    draft: "Draft",
-    pending: "Pending",
-    paid: "Paid",
-    failed: "Failed",
-    created: "Campaign created",
+    expired: "Expired",
     updated: "Campaign updated",
     deleted: "Campaign deleted",
     noData: "No campaigns created",
@@ -87,11 +82,11 @@ const t = {
     photoUploading: "Uploading...",
     maxPhotos: "Max 3 photos",
     edit: "Edit",
+    save: "Save",
     delete: "Delete",
     confirmDelete: "Are you sure you want to delete this campaign?",
     confirmDeleteBtn: "Delete",
     cancelDelete: "Cancel",
-    publish: "Publish",
     selectDuration: "Select duration",
     days: "days",
     expiresOn: "Expires on",
@@ -99,8 +94,15 @@ const t = {
     processing: "Processing...",
     paymentSuccess: "Payment completed! Campaign is now active.",
     paymentError: "Payment error",
-    expired: "Expired",
-    cannotDeletePaid: "Cannot delete a paid campaign.",
+    noPricing: "No pricing plans available.",
+    fillFields: "Fill in title and description",
+    selectPlan: "Select a plan",
+    proceedPayment: "Proceed to payment",
+    back: "Back",
+    step1: "Campaign details",
+    step2: "Select plan",
+    step3: "Payment",
+    next: "Next",
   },
 };
 
@@ -108,7 +110,7 @@ type Lang = keyof typeof t;
 
 let stripePromise: ReturnType<typeof loadStripe> | null = null;
 
-function PublishPaymentForm({ clientSecret, onSuccess, onCancel, l }: {
+function PaymentForm({ clientSecret, onSuccess, onCancel, l }: {
   clientSecret: string;
   onSuccess: () => void;
   onCancel: () => void;
@@ -174,9 +176,11 @@ export default function DonationCampaignManager({ accountType }: {
   const l = t[lang as Lang] || t.en;
 
   const [showForm, setShowForm] = useState(false);
+  const [formStep, setFormStep] = useState<1 | 2 | 3>(1);
   const [formTitle, setFormTitle] = useState("");
   const [formDesc, setFormDesc] = useState("");
   const [formPhotos, setFormPhotos] = useState<string[]>([]);
+  const [selectedPricing, setSelectedPricing] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [uploadingForCampaign, setUploadingForCampaign] = useState<number | null>(null);
@@ -184,10 +188,7 @@ export default function DonationCampaignManager({ accountType }: {
   const [editTitle, setEditTitle] = useState("");
   const [editDesc, setEditDesc] = useState("");
   const [deletingId, setDeletingId] = useState<number | null>(null);
-  const [publishingId, setPublishingId] = useState<number | null>(null);
-  const [selectedPricing, setSelectedPricing] = useState<number | null>(null);
   const [clientSecret, setClientSecret] = useState<string | null>(null);
-  const [paymentCampaignId, setPaymentCampaignId] = useState<number | null>(null);
   const [paymentIntentId, setPaymentIntentId] = useState<string | null>(null);
   const [stripeReady, setStripeReady] = useState(!!stripePromise);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -316,37 +317,6 @@ export default function DonationCampaignManager({ accountType }: {
     }
   }
 
-  async function handleCreateCampaign(e: React.FormEvent) {
-    e.preventDefault();
-    setSaving(true);
-    try {
-      const res = await authFetch("/api/donations/campaigns", {
-        method: "POST",
-        body: JSON.stringify({
-          title: formTitle,
-          description: formDesc,
-        }),
-      });
-      if (res.ok) {
-        const created = await res.json();
-        if (formPhotos.length > 0) {
-          await authFetch(`/api/donations/campaigns/${created.id}`, {
-            method: "PATCH",
-            body: JSON.stringify({ photos: formPhotos }),
-          });
-        }
-        toast({ title: l.created });
-        setShowForm(false);
-        setFormTitle("");
-        setFormDesc("");
-        setFormPhotos([]);
-        queryClient.invalidateQueries({ queryKey: ["my-campaigns"] });
-      }
-    } finally {
-      setSaving(false);
-    }
-  }
-
   function startEdit(c: Campaign) {
     setEditingId(c.id);
     setEditTitle(c.title);
@@ -384,7 +354,7 @@ export default function DonationCampaignManager({ accountType }: {
         queryClient.invalidateQueries({ queryKey: ["my-campaigns"] });
       } else {
         const data = await res.json();
-        toast({ title: data.error || l.cannotDeletePaid, variant: "destructive" });
+        toast({ title: data.error || "Error", variant: "destructive" });
         setDeletingId(null);
       }
     } catch {
@@ -393,37 +363,37 @@ export default function DonationCampaignManager({ accountType }: {
     }
   }
 
-  async function handleStartPublish(campaignId: number) {
-    setPublishingId(campaignId);
-    setSelectedPricing(null);
-    setClientSecret(null);
-    setPaymentCampaignId(null);
-    setPaymentIntentId(null);
-
-    if (!stripePromise) {
-      const res = await fetch("/api/donations/campaigns/stripe-config");
-      if (res.ok) {
-        const { publishableKey } = await res.json();
-        stripePromise = loadStripe(publishableKey);
-        setStripeReady(true);
-      }
-    }
-  }
-
-  async function handlePayForPublication() {
-    if (!publishingId || !selectedPricing) return;
+  async function handleGoToPayment() {
+    if (!selectedPricing || !formTitle.trim() || !formDesc.trim()) return;
     setSaving(true);
     try {
-      const res = await authFetch(`/api/donations/campaigns/${publishingId}/create-payment`, {
+      if (!stripePromise) {
+        const configRes = await fetch("/api/donations/campaigns/stripe-config");
+        if (configRes.ok) {
+          const { publishableKey } = await configRes.json();
+          stripePromise = loadStripe(publishableKey);
+          setStripeReady(true);
+        } else {
+          toast({ title: l.paymentError, variant: "destructive" });
+          return;
+        }
+      }
+
+      const res = await authFetch("/api/donations/campaigns/initiate-payment", {
         method: "POST",
-        body: JSON.stringify({ pricingId: selectedPricing }),
+        body: JSON.stringify({
+          title: formTitle.trim(),
+          description: formDesc.trim(),
+          photos: formPhotos,
+          pricingId: selectedPricing,
+        }),
       });
+
       if (res.ok) {
         const data = await res.json();
         setClientSecret(data.clientSecret);
-        setPaymentCampaignId(publishingId);
-        const piId = data.clientSecret.split("_secret_")[0];
-        setPaymentIntentId(piId);
+        setPaymentIntentId(data.paymentIntentId);
+        setFormStep(3);
       } else {
         const err = await res.json();
         toast({ title: err.error || l.paymentError, variant: "destructive" });
@@ -434,31 +404,36 @@ export default function DonationCampaignManager({ accountType }: {
   }
 
   const handlePaymentSuccess = useCallback(async () => {
-    toast({ title: l.paymentSuccess });
+    if (!paymentIntentId) return;
 
-    if (paymentIntentId && paymentCampaignId) {
-      try {
-        await authFetch(`/api/donations/campaigns/${paymentCampaignId}/confirm-payment`, {
-          method: "POST",
-          body: JSON.stringify({ paymentIntentId }),
-        });
-      } catch {}
+    try {
+      const res = await authFetch("/api/donations/campaigns/confirm-payment", {
+        method: "POST",
+        body: JSON.stringify({ paymentIntentId }),
+      });
+
+      if (res.ok) {
+        toast({ title: l.paymentSuccess });
+        resetForm();
+        queryClient.invalidateQueries({ queryKey: ["my-campaigns"] });
+      } else {
+        const data = await res.json().catch(() => ({}));
+        toast({ title: data.error || l.paymentError, variant: "destructive" });
+      }
+    } catch {
+      toast({ title: l.paymentError, variant: "destructive" });
     }
+  }, [paymentIntentId, queryClient, toast, l.paymentSuccess, l.paymentError]);
 
-    setPublishingId(null);
-    setClientSecret(null);
-    setPaymentCampaignId(null);
-    setPaymentIntentId(null);
+  function resetForm() {
+    setShowForm(false);
+    setFormStep(1);
+    setFormTitle("");
+    setFormDesc("");
+    setFormPhotos([]);
     setSelectedPricing(null);
-    queryClient.invalidateQueries({ queryKey: ["my-campaigns"] });
-  }, [paymentIntentId, paymentCampaignId, queryClient, toast, l.paymentSuccess]);
-
-  function cancelPublish() {
-    setPublishingId(null);
     setClientSecret(null);
-    setPaymentCampaignId(null);
     setPaymentIntentId(null);
-    setSelectedPricing(null);
   }
 
   function statusBadge(c: Campaign) {
@@ -466,16 +441,7 @@ export default function DonationCampaignManager({ accountType }: {
     if (c.paymentStatus === "paid" && c.isActive && c.expiresAt && new Date(c.expiresAt) > now) {
       return { label: l.active, cls: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400" };
     }
-    if (c.paymentStatus === "paid" && c.expiresAt && new Date(c.expiresAt) <= now) {
-      return { label: l.expired, cls: "bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400" };
-    }
-    if (c.paymentStatus === "pending") {
-      return { label: l.pending, cls: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400" };
-    }
-    if (c.paymentStatus === "failed") {
-      return { label: l.failed, cls: "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400" };
-    }
-    return { label: l.draft, cls: "bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400" };
+    return { label: l.expired, cls: "bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400" };
   }
 
   if (!isOrg) return null;
@@ -491,7 +457,6 @@ export default function DonationCampaignManager({ accountType }: {
           const photos = Array.isArray(c.photos) ? c.photos : [];
           const isEditing = editingId === c.id;
           const isDeleting = deletingId === c.id;
-          const isPublishing = publishingId === c.id;
           const badge = statusBadge(c);
 
           return (
@@ -545,59 +510,6 @@ export default function DonationCampaignManager({ accountType }: {
                       {saving ? "..." : l.save}
                     </button>
                   </div>
-                </div>
-              ) : isPublishing ? (
-                <div className="space-y-4">
-                  {!clientSecret ? (
-                    <>
-                      <h3 className="text-sm font-semibold text-foreground">{l.selectDuration}</h3>
-                      <div className="space-y-2">
-                        {pricing.map((p) => (
-                          <button
-                            key={p.id}
-                            onClick={() => setSelectedPricing(p.id)}
-                            className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border text-sm transition-colors ${
-                              selectedPricing === p.id
-                                ? "border-emerald-500 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300"
-                                : "border-border hover:bg-muted text-foreground"
-                            }`}
-                          >
-                            <span className="font-medium">{p.label} ({p.durationDays} {l.days})</span>
-                            <span className="font-bold">€{(p.priceCents / 100).toFixed(2)}</span>
-                          </button>
-                        ))}
-                      </div>
-                      {pricing.length === 0 && (
-                        <p className="text-sm text-muted-foreground text-center py-4">
-                          {lang === "it" ? "Nessun piano tariffario disponibile." : "No pricing plans available."}
-                        </p>
-                      )}
-                      <div className="flex gap-2">
-                        <button
-                          onClick={cancelPublish}
-                          className="flex-1 py-2 border border-border rounded-xl text-sm font-medium text-foreground hover:bg-muted"
-                        >
-                          {l.cancel}
-                        </button>
-                        <button
-                          onClick={handlePayForPublication}
-                          disabled={!selectedPricing || saving}
-                          className="flex-1 py-2.5 bg-emerald-600 text-white rounded-xl text-sm font-bold hover:bg-emerald-700 disabled:opacity-50"
-                        >
-                          {saving ? l.processing : l.payNow}
-                        </button>
-                      </div>
-                    </>
-                  ) : stripeReady && stripePromise ? (
-                    <Elements stripe={stripePromise} options={{ clientSecret, appearance: { theme: "stripe" } }}>
-                      <PublishPaymentForm
-                        clientSecret={clientSecret}
-                        onSuccess={handlePaymentSuccess}
-                        onCancel={cancelPublish}
-                        l={l}
-                      />
-                    </Elements>
-                  ) : null}
                 </div>
               ) : (
                 <>
@@ -660,29 +572,15 @@ export default function DonationCampaignManager({ accountType }: {
                       {l.edit}
                     </button>
 
-                    {c.paymentStatus === "draft" && pricing.length > 0 && (
-                      <button
-                        onClick={() => handleStartPublish(c.id)}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-emerald-300 text-emerald-600 hover:bg-emerald-50 dark:border-emerald-700 dark:text-emerald-400 dark:hover:bg-emerald-900/30"
-                      >
-                        <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                          <path d="M12 19V5M5 12l7-7 7 7" strokeLinecap="round" strokeLinejoin="round"/>
-                        </svg>
-                        {l.publish}
-                      </button>
-                    )}
-
-                    {c.paymentStatus !== "paid" && (
-                      <button
-                        onClick={() => setDeletingId(c.id)}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-red-300 text-red-600 hover:bg-red-50 dark:border-red-700 dark:text-red-400 dark:hover:bg-red-900/30"
-                      >
-                        <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                          <path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6h14" strokeLinecap="round" strokeLinejoin="round"/>
-                        </svg>
-                        {l.delete}
-                      </button>
-                    )}
+                    <button
+                      onClick={() => setDeletingId(c.id)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-red-300 text-red-600 hover:bg-red-50 dark:border-red-700 dark:text-red-400 dark:hover:bg-red-900/30"
+                    >
+                      <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                        <path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6h14" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                      {l.delete}
+                    </button>
                   </div>
                 </>
               )}
@@ -695,80 +593,164 @@ export default function DonationCampaignManager({ accountType }: {
         )}
 
         {showForm ? (
-          <form onSubmit={handleCreateCampaign} className="px-5 py-4 space-y-3">
-            <input
-              value={formTitle}
-              onChange={(e) => setFormTitle(e.target.value)}
-              placeholder={l.campaignTitle}
-              required
-              className="w-full px-3 py-2 border border-border rounded-xl text-sm bg-background"
-            />
-            <textarea
-              value={formDesc}
-              onChange={(e) => setFormDesc(e.target.value)}
-              placeholder={l.campaignDesc}
-              required
-              rows={3}
-              className="w-full px-3 py-2 border border-border rounded-xl text-sm bg-background resize-none"
-            />
+          <div className="px-5 py-4">
+            <div className="flex items-center gap-2 mb-4">
+              {[1, 2, 3].map((step) => (
+                <div key={step} className="flex items-center gap-1">
+                  <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${
+                    formStep === step
+                      ? "bg-emerald-600 text-white"
+                      : formStep > step
+                        ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400"
+                        : "bg-muted text-muted-foreground"
+                  }`}>
+                    {formStep > step ? (
+                      <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3"><path d="M5 13l4 4L19 7" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                    ) : step}
+                  </div>
+                  <span className={`text-xs font-medium hidden sm:inline ${formStep === step ? "text-foreground" : "text-muted-foreground"}`}>
+                    {step === 1 ? l.step1 : step === 2 ? l.step2 : l.step3}
+                  </span>
+                  {step < 3 && <div className="w-6 h-px bg-border mx-1" />}
+                </div>
+              ))}
+            </div>
 
-            {formPhotos.length > 0 && (
-              <div className="flex gap-2 flex-wrap">
-                {formPhotos.map((p, i) => (
-                  <div key={i} className="relative w-16 h-16 rounded-lg overflow-hidden border border-border">
-                    <img src={p.startsWith("http") ? p : `/api/storage${p.startsWith("/") ? "" : "/"}${p}`} alt="" className="w-full h-full object-cover" />
+            {formStep === 1 && (
+              <div className="space-y-3">
+                <input
+                  value={formTitle}
+                  onChange={(e) => setFormTitle(e.target.value)}
+                  placeholder={l.campaignTitle}
+                  className="w-full px-3 py-2 border border-border rounded-xl text-sm bg-background"
+                />
+                <textarea
+                  value={formDesc}
+                  onChange={(e) => setFormDesc(e.target.value)}
+                  placeholder={l.campaignDesc}
+                  rows={3}
+                  className="w-full px-3 py-2 border border-border rounded-xl text-sm bg-background resize-none"
+                />
+
+                {formPhotos.length > 0 && (
+                  <div className="flex gap-2 flex-wrap">
+                    {formPhotos.map((p, i) => (
+                      <div key={i} className="relative w-16 h-16 rounded-lg overflow-hidden border border-border">
+                        <img src={p.startsWith("http") ? p : `/api/storage${p.startsWith("/") ? "" : "/"}${p}`} alt="" className="w-full h-full object-cover" />
+                        <button
+                          type="button"
+                          onClick={() => setFormPhotos((prev) => prev.filter((_, j) => j !== i))}
+                          className="absolute top-0.5 right-0.5 w-5 h-5 bg-black/60 rounded-full flex items-center justify-center text-white"
+                        >
+                          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                            <path d="M18 6L6 18M6 6l12 12"/>
+                          </svg>
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {formPhotos.length < MAX_CAMPAIGN_PHOTOS && (
+                  <>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      className="hidden"
+                      onChange={handleFormPhotoUpload}
+                    />
                     <button
                       type="button"
-                      onClick={() => setFormPhotos((prev) => prev.filter((_, j) => j !== i))}
-                      className="absolute top-0.5 right-0.5 w-5 h-5 bg-black/60 rounded-full flex items-center justify-center text-white"
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={uploadingPhoto}
+                      className="px-3 py-1.5 text-xs font-medium border border-dashed border-border rounded-lg text-muted-foreground hover:bg-muted disabled:opacity-50"
                     >
-                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
-                        <path d="M18 6L6 18M6 6l12 12"/>
-                      </svg>
+                      {uploadingPhoto ? l.photoUploading : `${l.addPhotos} (${formPhotos.length}/${MAX_CAMPAIGN_PHOTOS})`}
                     </button>
-                  </div>
-                ))}
+                  </>
+                )}
+
+                <div className="flex gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={resetForm}
+                    className="flex-1 py-2 border border-border rounded-xl text-sm font-medium text-foreground hover:bg-muted"
+                  >
+                    {l.cancel}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setFormStep(2)}
+                    disabled={!formTitle.trim() || !formDesc.trim()}
+                    className="flex-1 py-2 bg-primary text-primary-foreground rounded-xl text-sm font-medium hover:opacity-90 disabled:opacity-50"
+                  >
+                    {l.next}
+                  </button>
+                </div>
               </div>
             )}
 
-            {formPhotos.length < MAX_CAMPAIGN_PHOTOS && (
-              <>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  className="hidden"
-                  onChange={handleFormPhotoUpload}
-                />
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={uploadingPhoto}
-                  className="px-3 py-1.5 text-xs font-medium border border-dashed border-border rounded-lg text-muted-foreground hover:bg-muted disabled:opacity-50"
-                >
-                  {uploadingPhoto ? l.photoUploading : `${l.addPhotos} (${formPhotos.length}/${MAX_CAMPAIGN_PHOTOS})`}
-                </button>
-              </>
+            {formStep === 2 && (
+              <div className="space-y-3">
+                <h3 className="text-sm font-semibold text-foreground">{l.selectDuration}</h3>
+                <div className="space-y-2">
+                  {pricing.map((p) => (
+                    <button
+                      key={p.id}
+                      onClick={() => setSelectedPricing(p.id)}
+                      className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border text-sm transition-colors ${
+                        selectedPricing === p.id
+                          ? "border-emerald-500 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300"
+                          : "border-border hover:bg-muted text-foreground"
+                      }`}
+                    >
+                      <span className="font-medium">{p.label} ({p.durationDays} {l.days})</span>
+                      <span className="font-bold">€{(p.priceCents / 100).toFixed(2)}</span>
+                    </button>
+                  ))}
+                </div>
+                {pricing.length === 0 && (
+                  <p className="text-sm text-muted-foreground text-center py-4">{l.noPricing}</p>
+                )}
+                <div className="flex gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setFormStep(1)}
+                    className="flex-1 py-2 border border-border rounded-xl text-sm font-medium text-foreground hover:bg-muted"
+                  >
+                    {l.back}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleGoToPayment}
+                    disabled={!selectedPricing || saving}
+                    className="flex-1 py-2.5 bg-emerald-600 text-white rounded-xl text-sm font-bold hover:bg-emerald-700 disabled:opacity-50"
+                  >
+                    {saving ? l.processing : l.proceedPayment}
+                  </button>
+                </div>
+              </div>
             )}
 
-            <div className="flex gap-2 pt-1">
-              <button
-                type="button"
-                onClick={() => { setShowForm(false); setFormTitle(""); setFormDesc(""); setFormPhotos([]); }}
-                className="flex-1 py-2 border border-border rounded-xl text-sm font-medium text-foreground hover:bg-muted"
-              >
-                {l.cancel}
-              </button>
-              <button
-                type="submit"
-                disabled={saving || !formTitle || !formDesc}
-                className="flex-1 py-2 bg-primary text-primary-foreground rounded-xl text-sm font-medium hover:opacity-90 disabled:opacity-50"
-              >
-                {saving ? "..." : l.save}
-              </button>
-            </div>
-          </form>
+            {formStep === 3 && clientSecret && stripeReady && stripePromise && (
+              <div className="space-y-4">
+                <div className="bg-emerald-50 dark:bg-emerald-950/20 rounded-xl p-3 text-sm">
+                  <p className="font-medium text-emerald-700 dark:text-emerald-300">{formTitle}</p>
+                  <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{formDesc}</p>
+                </div>
+                <Elements stripe={stripePromise} options={{ clientSecret, appearance: { theme: "stripe" } }}>
+                  <PaymentForm
+                    clientSecret={clientSecret}
+                    onSuccess={handlePaymentSuccess}
+                    onCancel={resetForm}
+                    l={l}
+                  />
+                </Elements>
+              </div>
+            )}
+          </div>
         ) : (
           <button
             onClick={() => setShowForm(true)}
