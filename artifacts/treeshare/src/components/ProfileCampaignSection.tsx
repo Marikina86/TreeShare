@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useLang } from "@/lib/i18n";
+import { useShare } from "@/hooks/useShare";
 
 interface Campaign {
   id: number;
@@ -31,6 +32,7 @@ export default function ProfileCampaignSection({ profileUserId, isOwnProfile }: 
 }) {
   const { lang } = useLang();
   const l = labels[lang as Lang] || labels.en;
+  const { share } = useShare();
 
   const { data: campaign } = useQuery<Campaign | null>({
     queryKey: ["profile-campaign", profileUserId],
@@ -66,6 +68,22 @@ export default function ProfileCampaignSection({ profileUserId, isOwnProfile }: 
           <h3 className="text-sm font-semibold text-emerald-800 dark:text-emerald-200">{campaign.title}</h3>
           <p className="text-xs text-emerald-700 dark:text-emerald-300 mt-1 line-clamp-2">{campaign.description}</p>
         </div>
+        <button
+          onClick={() => share({
+            title: campaign.title,
+            text: campaign.description,
+            path: `/profile/${profileUserId}`,
+          })}
+          className="flex-shrink-0 p-1.5 rounded-lg text-emerald-500 hover:text-emerald-700 dark:hover:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 transition-colors"
+          title="Condividi"
+        >
+          <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+            <circle cx="18" cy="5" r="3"/>
+            <circle cx="6" cy="12" r="3"/>
+            <circle cx="18" cy="19" r="3"/>
+            <path d="M8.59 13.51l6.83 3.98M15.41 6.51l-6.82 3.98"/>
+          </svg>
+        </button>
       </div>
 
       <CampaignPhotoGridCompact photos={photos} className="mb-3" />

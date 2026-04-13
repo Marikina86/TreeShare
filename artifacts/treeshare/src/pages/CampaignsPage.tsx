@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth";
 import Layout from "@/components/Layout";
 import { useLang } from "@/lib/i18n";
+import { useShare } from "@/hooks/useShare";
 
 interface Campaign {
   id: number;
@@ -35,6 +36,7 @@ const t = {
     sortFunded: "Più finanziate",
     by: "di",
     viewProfile: "Vedi profilo",
+    share: "Condividi",
   },
   en: {
     title: "Active campaigns",
@@ -49,6 +51,7 @@ const t = {
     sortFunded: "Most funded",
     by: "by",
     viewProfile: "View profile",
+    share: "Share",
   },
   fr: {
     title: "Campagnes actives",
@@ -63,6 +66,7 @@ const t = {
     sortFunded: "Plus financées",
     by: "par",
     viewProfile: "Voir profil",
+    share: "Partager",
   },
   pt: {
     title: "Campanhas ativas",
@@ -77,6 +81,7 @@ const t = {
     sortFunded: "Mais financiadas",
     by: "por",
     viewProfile: "Ver perfil",
+    share: "Compartilhar",
   },
   es: {
     title: "Campañas activas",
@@ -91,6 +96,7 @@ const t = {
     sortFunded: "Más financiadas",
     by: "por",
     viewProfile: "Ver perfil",
+    share: "Compartir",
   },
   ja: {
     title: "アクティブなキャンペーン",
@@ -105,6 +111,7 @@ const t = {
     sortFunded: "最も資金調達済み",
     by: "",
     viewProfile: "プロフィール",
+    share: "共有",
   },
 };
 
@@ -114,6 +121,7 @@ export default function CampaignsPage() {
   const { getToken } = useAuth();
   const { lang } = useLang();
   const l = t[lang as Lang] || t.en;
+  const { share } = useShare();
 
   const [sort, setSort] = useState<"recent" | "popular" | "funded">("recent");
 
@@ -227,11 +235,29 @@ export default function CampaignsPage() {
                       </div>
                     )}
 
-                    <Link href={`/profile/${c.userId}`}>
-                      <button className="w-full py-2.5 bg-emerald-600 text-white rounded-xl text-sm font-medium hover:bg-emerald-700 transition-colors">
-                        {l.donate}
+                    <div className="flex gap-2">
+                      <Link href={`/profile/${c.userId}`} className="flex-1">
+                        <button className="w-full py-2.5 bg-emerald-600 text-white rounded-xl text-sm font-medium hover:bg-emerald-700 transition-colors">
+                          {l.donate}
+                        </button>
+                      </Link>
+                      <button
+                        onClick={() => share({
+                          title: c.title,
+                          text: c.description,
+                          path: `/profile/${c.userId}`,
+                        })}
+                        className="flex items-center justify-center w-11 h-11 border border-border rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                        title={l.share}
+                      >
+                        <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                          <circle cx="18" cy="5" r="3"/>
+                          <circle cx="6" cy="12" r="3"/>
+                          <circle cx="18" cy="19" r="3"/>
+                          <path d="M8.59 13.51l6.83 3.98M15.41 6.51l-6.82 3.98"/>
+                        </svg>
                       </button>
-                    </Link>
+                    </div>
                   </div>
                 </div>
               );

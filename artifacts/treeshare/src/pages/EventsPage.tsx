@@ -3,6 +3,7 @@ import { useUser, useAuth } from "@/lib/auth";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Layout from "@/components/Layout";
 import { useToast } from "@/hooks/use-toast";
+import { useShare } from "@/hooks/useShare";
 import LocationSearch, { type LocationResult } from "@/components/LocationSearch";
 
 const LAST_SEEN_KEY = "events_last_seen_at";
@@ -588,6 +589,7 @@ const EVENT_REPORT_REASONS = [
 function EventCard({ event, currentUserId, onJoin, onLeave, onDelete, onEdit, today }: EventCardProps) {
   const { toast } = useToast();
   const { getToken } = useAuth();
+  const { share } = useShare();
   const isOwner = event.userId === currentUserId;
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [editMode, setEditMode] = useState(false);
@@ -813,19 +815,38 @@ function EventCard({ event, currentUserId, onJoin, onLeave, onDelete, onEdit, to
             </button>
           )}
         </div>
-        {!isOwner && (
+        <div className="flex items-center gap-3">
           <button
-            onClick={() => setReportOpen(true)}
-            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-destructive transition-colors"
-            title="Segnala evento"
+            onClick={() => share({
+              title: event.title,
+              text: event.description || event.title,
+              path: `/events`,
+            })}
+            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-primary transition-colors"
+            title="Condividi"
           >
-            <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-              <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z" strokeLinecap="round" strokeLinejoin="round"/>
-              <line x1="4" y1="22" x2="4" y2="15" strokeLinecap="round"/>
+            <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+              <circle cx="18" cy="5" r="3"/>
+              <circle cx="6" cy="12" r="3"/>
+              <circle cx="18" cy="19" r="3"/>
+              <path d="M8.59 13.51l6.83 3.98M15.41 6.51l-6.82 3.98"/>
             </svg>
-            Segnala
+            Condividi
           </button>
-        )}
+          {!isOwner && (
+            <button
+              onClick={() => setReportOpen(true)}
+              className="flex items-center gap-1 text-xs text-muted-foreground hover:text-destructive transition-colors"
+              title="Segnala evento"
+            >
+              <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z" strokeLinecap="round" strokeLinejoin="round"/>
+                <line x1="4" y1="22" x2="4" y2="15" strokeLinecap="round"/>
+              </svg>
+              Segnala
+            </button>
+          )}
+        </div>
       </div>
 
       {reportOpen && (

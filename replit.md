@@ -75,24 +75,21 @@ A plant/tree sharing social app. Community members document trees/plants they pl
 - **Smart feed refresh**: `useFeed` hook checks lightweight `GET /api/trees/feed-meta` before full feed fetch
 - **Badge counts**: Shown in nav, only update on app open or manual refresh
 
-### Donation System (Stripe) — Fund Separation Architecture
+### Donation System (Stripe Connect — Destination Charges)
 - **Campaign photos**: Max 3 photos per campaign; stored as JSON array of paths in `donation_campaigns.photos`; upload via existing `/api/storage/uploads/request-url` flow; photos shown on campaigns page, profile (DonateSection for visitors, ProfileCampaignSection for owner), and DonationCampaignManager
 - **Account types**: Users can be `"user"` (default) or `"organization"` — only orgs can create campaigns
 - **Stripe integration**: Uses Replit Stripe connector (NOT env vars); `getUncachableStripeClient()` called fresh each request
-- **Platform model**: Platform collects all funds; 20% platform fee, 80% to org; payout fee €5.00 (500 cents)
+- **Stripe Connect model**: Destination charges — 80% goes directly to org's Stripe Connect account, 20% kept by platform as `application_fee_amount`
+- **No manual payouts**: Funds route automatically via Stripe Connect; no `request-payout` endpoint, no payout fees, no `org_balances` updates
 - **Amounts**: All stored in cents (integer) — `goalAmount`, `amountTotal`, `amountOrg`, `amountPlatform`
-- **FUND SEPARATION** (critical design constraint):
-  - `org_balances` table: ONLY org data — `total_org_received` (cumulative 80% share), `available_balance`, `total_paid_out`
-  - `platform_revenue` table: ONLY platform data — `total_commissions` (cumulative 20% fees), `total_payout_fees`, `transaction_count`
-  - `ledger_entries` table: Full audit trail — every credit/debit logged with `entry_type`, `amount_cents`, `org_user_id`, `donation_id`/`payout_id`, `description`
-  - Org balance NEVER includes platform commission; platform revenue NEVER includes org funds
-  - Payouts calculated ONLY from `available_balance` (org funds); platform fee deducted and credited to `platform_revenue.total_payout_fees`
-  - Ledger entry types: `donation_org_credit`, `donation_platform_fee`, `payout_org`, `payout_fee_platform`
+- **Ledger tracking**:
+  - `platform_revenue` table: `total_commissions` (cumulative 20% application fees), `transaction_count`
+  - `ledger_entries` table: Full audit trail — `donation_org_credit`, `donation_platform_fee`
+  - `org_balances`, `payouts` tables retained in schema for legacy data but no longer written to
 - **Webhook security**: Raw body via `express.raw()` mounted before `express.json()`; strict signature verification; rejects unsigned events
 - **Idempotency**: Webhook uses conditional UPDATE (`WHERE status != 'completed'`) — no double-crediting
-- **Payout safety**: Atomic balance deduction via conditional UPDATE with balance rollback if Stripe transfer fails; min payout €6.00 (balance must cover fee)
 - **Webhook handler**: Exported as `webhookHandler` from donations.ts, mounted directly in app.ts at `/api/donations/webhook`
-- **Admin endpoints**: `GET /api/donations/platform-revenue` (platform earnings), `GET /api/donations/audit` (full ledger) — admin-only
+- **Admin endpoints**: `GET /api/donations/platform-revenue` (platform earnings), `GET /api/donations/admin-finance` (full overview) — admin-only
 - **Frontend**: `DonationCampaignManager` in SettingsPage (org management); `DonateSection` on ProfilePage (visitor donation)
 - **Stripe Connect**: Express accounts for orgs; onboarding via account links
 
@@ -100,6 +97,12 @@ A plant/tree sharing social app. Community members document trees/plants they pl
 - Computed client-side from `trees.data` using `plantedAt` field
 - Formula: `Σ(years_since_plantedAt × 22 kg)`, fallback to `createdAt` if `plantedAt` null
 - Emerald UI card on profile pages; multilingual (6 languages); no new API calls
+
+### Share Feature (Campaigns & Events)
+- Reusable `useShare` hook (`src/hooks/useShare.ts`) — uses Web Share API when available, falls back to clipboard copy with toast
+- Share buttons on: CampaignsPage cards, EventCard action bar, ProfileCampaignSection
+- Accessible to all users (no auth required to share)
+- Multilingual toast messages (6 languages)
 
 ### Public CampaignsPage
 - Route `/campaigns` — public (no auth required), lists active campaigns with sort filters (Recent/Popular/Most funded)
