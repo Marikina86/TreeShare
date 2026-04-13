@@ -16,14 +16,6 @@ function getSupabaseAdmin() {
   });
 }
 
-function getSupabaseAnon() {
-  const url = process.env.SUPABASE_URL;
-  const key = process.env.SUPABASE_ANON_KEY;
-  if (!url || !key) return null;
-  return createClient(url, key, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  });
-}
 
 router.post("/register-ente", async (req, res) => {
   const { website, segno_zodiacale } = req.body || {};
@@ -94,28 +86,26 @@ router.post("/register-ente", async (req, res) => {
       return;
     }
 
-    const supabaseAnon = getSupabaseAnon();
-    if (!supabaseAnon) {
+    const supabaseAdmin = getSupabaseAdmin();
+    if (!supabaseAdmin) {
       res.status(500).json({ error: "Servizio di autenticazione non disponibile" });
       return;
     }
 
     const allowedOrigin = process.env.APP_ORIGIN || (process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : "");
 
-    const { data: authData, error: authError } = await supabaseAnon.auth.signUp({
+    const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
       email: data.emailUfficiale,
       password: data.password,
-      options: {
-        emailRedirectTo: `${allowedOrigin}/feed`,
-        data: {
-          username: data.username,
-          full_name: `${data.referenteNome} ${data.referenteCognome}`,
-        },
+      email_confirm: false,
+      user_metadata: {
+        username: data.username,
+        full_name: `${data.referenteNome} ${data.referenteCognome}`,
       },
     });
 
     if (authError) {
-      if (authError.message?.includes("already registered") || authError.message?.includes("already been registered")) {
+      if (authError.message?.includes("already registered") || authError.message?.includes("already been registered") || authError.message?.includes("already exists")) {
         res.status(409).json({
           error: "Email già registrata",
           fields: { emailUfficiale: "Questa email è già registrata. Usa il login." },
@@ -132,12 +122,16 @@ router.post("/register-ente", async (req, res) => {
       return;
     }
 
-    if (authData.user.identities?.length === 0) {
-      res.status(409).json({
-        error: "Email già registrata",
-        fields: { emailUfficiale: "Questa email è già registrata. Usa il login." },
-      });
-      return;
+    const { error: linkError } = await supabaseAdmin.auth.admin.generateLink({
+      type: "signup",
+      email: data.emailUfficiale,
+      options: {
+        redirectTo: `${allowedOrigin}/feed`,
+      },
+    });
+
+    if (linkError) {
+      req.log?.warn?.({ err: linkError }, "Failed to generate verification link, user created but email not sent");
     }
 
     const supabaseUserId = authData.user.id;
@@ -241,18 +235,20 @@ router.post("/register-ente/resend-verification", async (req, res) => {
 
   const trimmed = email.trim();
 
-  const supabaseAnon = getSupabaseAnon();
-  if (!supabaseAnon) {
+  const supabaseAdmin = getSupabaseAdmin();
+  if (!supabaseAdmin) {
     res.status(500).json({ error: "Servizio non disponibile" });
     return;
   }
 
   try {
     const allowedOrigin = process.env.APP_ORIGIN || (process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : "");
-    const { error } = await supabaseAnon.auth.resend({
+    const { error } = await supabaseAdmin.auth.admin.generateLink({
       type: "signup",
       email: trimmed,
-      options: { emailRedirectTo: `${allowedOrigin}/feed` },
+      options: {
+        redirectTo: `${allowedOrigin}/feed`,
+      },
     });
 
     if (error) {
