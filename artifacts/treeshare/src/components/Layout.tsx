@@ -310,7 +310,7 @@ export default function Layout({ children }: LayoutProps) {
         </Link>
 
         <nav className="flex items-center gap-1">
-          {navItems.map((item) => (
+          {navItems.filter((item) => user || (item.path !== "/alerts" && item.path !== "/profile")).map((item) => (
             <Link
               key={item.path}
               href={item.path}
@@ -331,9 +331,11 @@ export default function Layout({ children }: LayoutProps) {
         </nav>
 
         <div className="flex items-center gap-2">
-          <span className="text-sm text-muted-foreground truncate max-w-[120px]">
-            {user?.username || user?.firstName}
-          </span>
+          {user && (
+            <span className="text-sm text-muted-foreground truncate max-w-[120px]">
+              {user?.username || user?.firstName}
+            </span>
+          )}
           <Link
             href="/campaigns"
             className={`p-2 rounded-lg transition-colors ${
@@ -359,27 +361,31 @@ export default function Layout({ children }: LayoutProps) {
               </svg>
             </Link>
           )}
-          <Link
-            href="/settings"
-            title={t.settings.title}
-            className={`p-2 rounded-lg transition-colors ${
-              location === "/settings" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground"
-            }`}
-          >
-            <SettingsIcon />
-          </Link>
-          <button
-            onClick={() => setShowLogoutModal(true)}
-            data-testid="button-signout"
-            className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-destructive transition-colors px-3 py-1.5 rounded-lg hover:bg-destructive/10"
-          >
-            <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" strokeLinecap="round"/>
-              <polyline points="16 17 21 12 16 7" strokeLinecap="round" strokeLinejoin="round"/>
-              <line x1="21" y1="12" x2="9" y2="12" strokeLinecap="round"/>
-            </svg>
-            {t.auth.signOut}
-          </button>
+          {user && (
+            <>
+              <Link
+                href="/settings"
+                title={t.settings.title}
+                className={`p-2 rounded-lg transition-colors ${
+                  location === "/settings" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                }`}
+              >
+                <SettingsIcon />
+              </Link>
+              <button
+                onClick={() => setShowLogoutModal(true)}
+                data-testid="button-signout"
+                className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-destructive transition-colors px-3 py-1.5 rounded-lg hover:bg-destructive/10"
+              >
+                <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                  <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" strokeLinecap="round"/>
+                  <polyline points="16 17 21 12 16 7" strokeLinecap="round" strokeLinejoin="round"/>
+                  <line x1="21" y1="12" x2="9" y2="12" strokeLinecap="round"/>
+                </svg>
+                {t.auth.signOut}
+              </button>
+            </>
+          )}
         </div>
       </header>
 
@@ -420,43 +426,47 @@ export default function Layout({ children }: LayoutProps) {
               </svg>
             </Link>
           )}
-          <Link
-            href="/alerts"
-            className={`relative p-2 rounded-lg transition-colors ${
-              location.startsWith("/alerts") ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"
-            }`}
-            title={t.nav.alerts}
-          >
-            <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-              <path d="M15 17h5l-1.405-1.405A2.032 2.032 0 0 1 18 14.158V11a6.002 6.002 0 0 0-4-5.659V5a2 2 0 1 0-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 1 1-6 0v-1m6 0H9" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
-            {(newAlertsCount + newNotifsCount) > 0 && !location.startsWith("/alerts") && (
-              <span className="absolute top-0.5 right-0.5 min-w-[16px] h-4 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center px-0.5 leading-none">
-                {(newAlertsCount + newNotifsCount) > 9 ? "9+" : (newAlertsCount + newNotifsCount)}
-              </span>
-            )}
-          </Link>
-          <Link
-            href="/settings"
-            className={`p-2 rounded-lg transition-colors ${
-              location === "/settings" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"
-            }`}
-            title={t.settings.title}
-          >
-            <SettingsIcon />
-          </Link>
-          <button
-            onClick={() => setShowLogoutModal(true)}
-            data-testid="button-signout-mobile"
-            className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-destructive transition-colors px-2.5 py-1.5 rounded-lg hover:bg-destructive/10"
-          >
-            <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" strokeLinecap="round"/>
-              <polyline points="16 17 21 12 16 7" strokeLinecap="round" strokeLinejoin="round"/>
-              <line x1="21" y1="12" x2="9" y2="12" strokeLinecap="round"/>
-            </svg>
-            {t.auth.signOut}
-          </button>
+          {user && (
+            <>
+              <Link
+                href="/alerts"
+                className={`relative p-2 rounded-lg transition-colors ${
+                  location.startsWith("/alerts") ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"
+                }`}
+                title={t.nav.alerts}
+              >
+                <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                  <path d="M15 17h5l-1.405-1.405A2.032 2.032 0 0 1 18 14.158V11a6.002 6.002 0 0 0-4-5.659V5a2 2 0 1 0-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 1 1-6 0v-1m6 0H9" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+                {(newAlertsCount + newNotifsCount) > 0 && !location.startsWith("/alerts") && (
+                  <span className="absolute top-0.5 right-0.5 min-w-[16px] h-4 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center px-0.5 leading-none">
+                    {(newAlertsCount + newNotifsCount) > 9 ? "9+" : (newAlertsCount + newNotifsCount)}
+                  </span>
+                )}
+              </Link>
+              <Link
+                href="/settings"
+                className={`p-2 rounded-lg transition-colors ${
+                  location === "/settings" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"
+                }`}
+                title={t.settings.title}
+              >
+                <SettingsIcon />
+              </Link>
+              <button
+                onClick={() => setShowLogoutModal(true)}
+                data-testid="button-signout-mobile"
+                className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-destructive transition-colors px-2.5 py-1.5 rounded-lg hover:bg-destructive/10"
+              >
+                <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                  <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" strokeLinecap="round"/>
+                  <polyline points="16 17 21 12 16 7" strokeLinecap="round" strokeLinejoin="round"/>
+                  <line x1="21" y1="12" x2="9" y2="12" strokeLinecap="round"/>
+                </svg>
+                {t.auth.signOut}
+              </button>
+            </>
+          )}
         </div>
       </header>
 
@@ -467,8 +477,8 @@ export default function Layout({ children }: LayoutProps) {
 
       {/* Mobile bottom nav — 6 voci (Avvisi è nella top bar) */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-card border-t border-border z-50">
-        <div className="grid grid-cols-6">
-          {navItems.filter((item) => item.path !== "/alerts").map((item) => (
+        <div className={user ? "grid grid-cols-6" : "grid grid-cols-5"}>
+          {navItems.filter((item) => item.path !== "/alerts" && (user || item.path !== "/profile")).map((item) => (
             <Link
               key={item.path}
               href={item.path}
