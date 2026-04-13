@@ -365,12 +365,12 @@ export default function ProfilePage() {
             {isOwnProfile && (
               <div className="mt-4 space-y-3">
                 {/* Email display */}
-                {user?.primaryEmailAddress?.emailAddress && (
+                {user?.emailAddresses?.[0]?.emailAddress && (
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
                     <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" className="flex-shrink-0">
                       <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/>
                     </svg>
-                    <span className="truncate">{user.primaryEmailAddress.emailAddress}</span>
+                    <span className="truncate">{user.emailAddresses[0].emailAddress}</span>
                   </div>
                 )}
 
