@@ -190,7 +190,7 @@ export const policiesTable = pgTable("policies", {
 
 export const userConsentsTable = pgTable("user_consents", {
   id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
-  userId: text("user_id").notNull(), // clerk_user_id
+  userId: text("user_id").notNull(),
   policyId: varchar("policy_id", { length: 36 }).notNull(),
   accepted: boolean("accepted").notNull(),
   acceptedAt: timestamp("accepted_at").notNull().defaultNow(),
@@ -203,7 +203,7 @@ export const userConsentsTable = pgTable("user_consents", {
 
 export const cookieConsentsTable = pgTable("cookie_consents", {
   id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
-  userId: text("user_id"), // nullable — utenti anonimi
+  userId: text("user_id"),
   sessionId: text("session_id").notNull(),
   necessary: boolean("necessary").notNull().default(true),
   analytics: boolean("analytics").notNull().default(false),
@@ -217,51 +217,35 @@ export const cookieConsentsTable = pgTable("cookie_consents", {
   index("cookie_consents_session_id_idx").on(table.sessionId),
 ]);
 
-// ── Donations ─────────────────────────────────────────────────────────────────
+// ── Campaigns (paid publication) ─────────────────────────────────────────────
+
+export const campaignPricingTable = pgTable("campaign_pricing", {
+  id: serial("id").primaryKey(),
+  durationDays: integer("duration_days").notNull(),
+  priceCents: integer("price_cents").notNull(),
+  label: text("label").notNull(),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
 
 export const donationCampaignsTable = pgTable("donation_campaigns", {
   id: serial("id").primaryKey(),
   userId: text("user_id").notNull(),
   title: text("title").notNull(),
   description: text("description").notNull(),
-  goalAmount: integer("goal_amount"),
-  isActive: boolean("is_active").notNull().default(true),
-  totalRaised: integer("total_raised").notNull().default(0),
-  donationCount: integer("donation_count").notNull().default(0),
+  isActive: boolean("is_active").notNull().default(false),
   photos: json("photos").notNull().default([]),
+  durationDays: integer("duration_days"),
+  expiresAt: timestamp("expires_at"),
+  paymentStatus: text("payment_status").notNull().default("draft"),
+  stripePaymentIntentId: text("stripe_payment_intent_id"),
+  pricePaidCents: integer("price_paid_cents"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 }, (table) => [
   index("donation_campaigns_user_id_idx").on(table.userId),
+  index("donation_campaigns_payment_status_idx").on(table.paymentStatus),
 ]);
-
-export const donationsTable = pgTable("donations", {
-  id: serial("id").primaryKey(),
-  donorUserId: text("donor_user_id"),
-  recipientUserId: text("recipient_user_id").notNull(),
-  campaignId: integer("campaign_id").notNull(),
-  amountTotal: integer("amount_total").notNull(),
-  amountOrg: integer("amount_org").notNull(),
-  amountPlatform: integer("amount_platform").notNull(),
-  currency: text("currency").notNull().default("eur"),
-  status: text("status").notNull().default("pending"),
-  stripePaymentIntentId: text("stripe_payment_intent_id").unique(),
-  createdAt: timestamp("created_at").notNull().defaultNow(),
-}, (table) => [
-  index("donations_donor_idx").on(table.donorUserId),
-  index("donations_recipient_idx").on(table.recipientUserId),
-  index("donations_campaign_idx").on(table.campaignId),
-  index("donations_stripe_pi_idx").on(table.stripePaymentIntentId),
-]);
-
-export const orgBalancesTable = pgTable("org_balances", {
-  id: serial("id").primaryKey(),
-  userId: text("user_id").notNull().unique(),
-  totalOrgReceived: integer("total_org_received").notNull().default(0),
-  availableBalance: integer("available_balance").notNull().default(0),
-  totalPaidOut: integer("total_paid_out").notNull().default(0),
-  updatedAt: timestamp("updated_at").notNull().defaultNow(),
-});
 
 export const platformRevenueTable = pgTable("platform_revenue", {
   id: serial("id").primaryKey(),
@@ -270,35 +254,6 @@ export const platformRevenueTable = pgTable("platform_revenue", {
   transactionCount: integer("transaction_count").notNull().default(0),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
-
-export const ledgerEntriesTable = pgTable("ledger_entries", {
-  id: serial("id").primaryKey(),
-  entryType: text("entry_type").notNull(),
-  amountCents: integer("amount_cents").notNull(),
-  orgUserId: text("org_user_id"),
-  donationId: integer("donation_id"),
-  payoutId: integer("payout_id"),
-  description: text("description").notNull(),
-  createdAt: timestamp("created_at").notNull().defaultNow(),
-}, (table) => [
-  index("ledger_entries_type_idx").on(table.entryType),
-  index("ledger_entries_org_user_idx").on(table.orgUserId),
-  index("ledger_entries_donation_idx").on(table.donationId),
-]);
-
-export const payoutsTable = pgTable("payouts", {
-  id: serial("id").primaryKey(),
-  userId: text("user_id").notNull(),
-  amountGross: integer("amount_gross").notNull(),
-  payoutFee: integer("payout_fee").notNull().default(500),
-  amountNet: integer("amount_net").notNull(),
-  status: text("status").notNull().default("pending"),
-  stripeTransferId: text("stripe_transfer_id"),
-  requestedAt: timestamp("requested_at").notNull().defaultNow(),
-  executedAt: timestamp("executed_at"),
-}, (table) => [
-  index("payouts_user_id_idx").on(table.userId),
-]);
 
 export const insertUserSchema = createInsertSchema(usersTable).omit({ id: true, createdAt: true });
 export type InsertUser = z.infer<typeof insertUserSchema>;

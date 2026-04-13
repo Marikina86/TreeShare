@@ -190,14 +190,13 @@ export default function AdminPage() {
   const [alertForm, setAlertForm] = useState({ title: "", message: "", priority: "normal" });
 
   interface FinanceData {
-    platformRevenue: { totalCommissions: number; totalRevenue: number; transactionCount: number };
-    recentLedger: { id: number; entryType: string; amountCents: number; orgUserId: string | null; description: string | null; createdAt: string }[];
-    recentDonations: { id: number; donorUsername: string; recipientUsername: string; amountTotal: number; amountOrg: number; amountPlatform: number; status: string; createdAt: string }[];
+    platformRevenue: { totalCommissions: number; transactionCount: number };
+    recentPaidCampaigns: { id: number; title: string; userId: string; paymentStatus: string; pricePaidCents: number | null; durationDays: number | null; expiresAt: string | null; createdAt: string; orgUsername: string | null }[];
   }
   const { data: financeData, isLoading: financeLoading } = useQuery<FinanceData>({
     queryKey: ["admin-finance"],
     queryFn: async () => {
-      const res = await authFetch("/api/donations/admin-finance");
+      const res = await authFetch("/api/donations/admin/finance");
       if (res.ok) return res.json();
       throw new Error("Failed to load finance data");
     },
@@ -1884,152 +1883,63 @@ export default function AdminPage() {
               </div>
             ) : (
               <>
-                {/* Riepilogo ricavi piattaforma */}
                 <div className="bg-card border border-border rounded-2xl p-5">
                   <h2 className="font-semibold text-foreground mb-4 flex items-center gap-2">
                     <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6" strokeLinecap="round" strokeLinejoin="round"/></svg>
-                    {lang === "it" ? "Ricavi piattaforma (20% commissioni)" : "Platform revenue (20% commissions)"}
+                    {lang === "it" ? "Ricavi piattaforma" : "Platform revenue"}
                   </h2>
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                  <div className="grid grid-cols-2 gap-4">
                     <div className="bg-emerald-50 dark:bg-emerald-950/20 rounded-xl p-4 text-center">
                       <div className="text-2xl font-bold text-emerald-700 dark:text-emerald-400">€{(financeData.platformRevenue.totalCommissions / 100).toFixed(2)}</div>
-                      <div className="text-xs text-muted-foreground mt-1">{lang === "it" ? "Application fee (20%)" : "Application fee (20%)"}</div>
-                    </div>
-                    <div className="bg-purple-50 dark:bg-purple-950/20 rounded-xl p-4 text-center">
-                      <div className="text-2xl font-bold text-purple-700 dark:text-purple-400">€{(financeData.platformRevenue.totalRevenue / 100).toFixed(2)}</div>
                       <div className="text-xs text-muted-foreground mt-1">{lang === "it" ? "Totale ricavi" : "Total revenue"}</div>
                     </div>
                     <div className="bg-amber-50 dark:bg-amber-950/20 rounded-xl p-4 text-center">
                       <div className="text-2xl font-bold text-amber-700 dark:text-amber-400">{financeData.platformRevenue.transactionCount}</div>
-                      <div className="text-xs text-muted-foreground mt-1">{lang === "it" ? "Transazioni" : "Transactions"}</div>
+                      <div className="text-xs text-muted-foreground mt-1">{lang === "it" ? "Campagne pagate" : "Paid campaigns"}</div>
                     </div>
                   </div>
                   <p className="text-xs text-muted-foreground mt-4 bg-muted/50 rounded-lg p-3">
                     {lang === "it"
-                      ? "Con Stripe Connect, l'80% di ogni donazione va direttamente all'organizzazione. Il 20% resta alla piattaforma come commissione (application fee)."
-                      : "With Stripe Connect, 80% of each donation goes directly to the organization. 20% stays with the platform as an application fee."}
+                      ? "Le organizzazioni pagano per pubblicare le campagne per una durata selezionabile. Il pagamento va interamente alla piattaforma."
+                      : "Organizations pay to publish campaigns for a selectable duration. Payment goes entirely to the platform."}
                   </p>
                 </div>
 
-                {/* Donazioni recenti */}
                 <div className="bg-card border border-border rounded-2xl p-5">
                   <h2 className="font-semibold text-foreground mb-4 flex items-center gap-2">
                     <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" strokeLinecap="round" strokeLinejoin="round"/></svg>
-                    {lang === "it" ? "Donazioni recenti" : "Recent donations"}
+                    {lang === "it" ? "Campagne pagate recenti" : "Recent paid campaigns"}
                   </h2>
-                  {financeData.recentDonations.length === 0 ? (
-                    <p className="text-sm text-muted-foreground py-4 text-center">{lang === "it" ? "Nessuna donazione" : "No donations yet"}</p>
+                  {financeData.recentPaidCampaigns.length === 0 ? (
+                    <p className="text-sm text-muted-foreground py-4 text-center">{lang === "it" ? "Nessuna campagna pagata" : "No paid campaigns yet"}</p>
                   ) : (
                     <div className="overflow-x-auto">
                       <table className="w-full text-sm">
                         <thead>
                           <tr className="border-b border-border">
-                            <th className="text-left py-2 px-2 text-xs font-medium text-muted-foreground">{lang === "it" ? "Donatore" : "Donor"}</th>
-                            <th className="text-left py-2 px-2 text-xs font-medium text-muted-foreground">{lang === "it" ? "Destinatario" : "Recipient"}</th>
-                            <th className="text-right py-2 px-2 text-xs font-medium text-muted-foreground">{lang === "it" ? "Totale" : "Total"}</th>
-                            <th className="text-right py-2 px-2 text-xs font-medium text-muted-foreground">{lang === "it" ? "Org (80%)" : "Org (80%)"}</th>
-                            <th className="text-right py-2 px-2 text-xs font-medium text-muted-foreground">{lang === "it" ? "Piattaf. (20%)" : "Platform (20%)"}</th>
-                            <th className="text-center py-2 px-2 text-xs font-medium text-muted-foreground">Status</th>
+                            <th className="text-left py-2 px-2 text-xs font-medium text-muted-foreground">{lang === "it" ? "Campagna" : "Campaign"}</th>
+                            <th className="text-left py-2 px-2 text-xs font-medium text-muted-foreground">{lang === "it" ? "Organizzazione" : "Organization"}</th>
+                            <th className="text-right py-2 px-2 text-xs font-medium text-muted-foreground">{lang === "it" ? "Prezzo" : "Price"}</th>
+                            <th className="text-right py-2 px-2 text-xs font-medium text-muted-foreground">{lang === "it" ? "Durata" : "Duration"}</th>
+                            <th className="text-right py-2 px-2 text-xs font-medium text-muted-foreground">{lang === "it" ? "Scadenza" : "Expires"}</th>
                             <th className="text-right py-2 px-2 text-xs font-medium text-muted-foreground">{lang === "it" ? "Data" : "Date"}</th>
                           </tr>
                         </thead>
                         <tbody>
-                          {financeData.recentDonations.map((d) => (
-                            <tr key={d.id} className="border-b border-border/50">
-                              <td className="py-2 px-2">@{d.donorUsername}</td>
-                              <td className="py-2 px-2">@{d.recipientUsername}</td>
-                              <td className="py-2 px-2 text-right font-semibold">€{(d.amountTotal / 100).toFixed(2)}</td>
-                              <td className="py-2 px-2 text-right text-emerald-600">€{(d.amountOrg / 100).toFixed(2)}</td>
-                              <td className="py-2 px-2 text-right text-purple-600">€{(d.amountPlatform / 100).toFixed(2)}</td>
-                              <td className="py-2 px-2 text-center">
-                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                                  d.status === "completed" ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" :
-                                  d.status === "pending" ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400" :
-                                  "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
-                                }`}>{d.status}</span>
-                              </td>
-                              <td className="py-2 px-2 text-right text-xs text-muted-foreground">{new Date(d.createdAt).toLocaleDateString(lang === "it" ? "it-IT" : "en-GB", { day: "2-digit", month: "short" })}</td>
+                          {financeData.recentPaidCampaigns.map((c) => (
+                            <tr key={c.id} className="border-b border-border/50">
+                              <td className="py-2 px-2 max-w-[150px] truncate">{c.title}</td>
+                              <td className="py-2 px-2">@{c.orgUsername || "?"}</td>
+                              <td className="py-2 px-2 text-right font-semibold text-emerald-600">€{((c.pricePaidCents || 0) / 100).toFixed(2)}</td>
+                              <td className="py-2 px-2 text-right">{c.durationDays || "-"} {lang === "it" ? "gg" : "d"}</td>
+                              <td className="py-2 px-2 text-right text-xs text-muted-foreground">{c.expiresAt ? new Date(c.expiresAt).toLocaleDateString(lang === "it" ? "it-IT" : "en-GB", { day: "2-digit", month: "short" }) : "-"}</td>
+                              <td className="py-2 px-2 text-right text-xs text-muted-foreground">{new Date(c.createdAt).toLocaleDateString(lang === "it" ? "it-IT" : "en-GB", { day: "2-digit", month: "short" })}</td>
                             </tr>
                           ))}
                         </tbody>
                       </table>
                     </div>
                   )}
-                </div>
-
-                {/* Prelievi recenti */}
-                {/* Registro contabile (ledger) */}
-                <div className="bg-card border border-border rounded-2xl p-5">
-                  <h2 className="font-semibold text-foreground mb-4 flex items-center gap-2">
-                    <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" strokeLinecap="round" strokeLinejoin="round"/><path d="M14 2v6h6M16 13H8M16 17H8M10 9H8" strokeLinecap="round" strokeLinejoin="round"/></svg>
-                    {lang === "it" ? "Registro contabile (ledger)" : "Accounting ledger"}
-                  </h2>
-                  {financeData.recentLedger.length === 0 ? (
-                    <p className="text-sm text-muted-foreground py-4 text-center">{lang === "it" ? "Nessun movimento" : "No entries yet"}</p>
-                  ) : (
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-sm">
-                        <thead>
-                          <tr className="border-b border-border">
-                            <th className="text-left py-2 px-2 text-xs font-medium text-muted-foreground">{lang === "it" ? "Tipo" : "Type"}</th>
-                            <th className="text-right py-2 px-2 text-xs font-medium text-muted-foreground">{lang === "it" ? "Importo" : "Amount"}</th>
-                            <th className="text-left py-2 px-2 text-xs font-medium text-muted-foreground">{lang === "it" ? "Descrizione" : "Description"}</th>
-                            <th className="text-right py-2 px-2 text-xs font-medium text-muted-foreground">{lang === "it" ? "Data" : "Date"}</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {financeData.recentLedger.map((entry) => {
-                            const isCredit = entry.amountCents > 0;
-                            const typeLabels: Record<string, { it: string; en: string }> = {
-                              donation_org_credit: { it: "Credito org (80%)", en: "Org credit (80%)" },
-                              donation_platform_fee: { it: "Comm. piattaforma (20%)", en: "Platform fee (20%)" },
-                            };
-                            const label = typeLabels[entry.entryType]?.[lang === "it" ? "it" : "en"] || entry.entryType;
-                            return (
-                              <tr key={entry.id} className="border-b border-border/50">
-                                <td className="py-2 px-2">
-                                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                                    entry.entryType.includes("platform") ? "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400" :
-                                    "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
-                                  }`}>{label}</span>
-                                </td>
-                                <td className={`py-2 px-2 text-right font-medium ${isCredit ? "text-emerald-600" : "text-red-500"}`}>
-                                  {isCredit ? "+" : ""}€{(entry.amountCents / 100).toFixed(2)}
-                                </td>
-                                <td className="py-2 px-2 text-xs text-muted-foreground max-w-[200px] truncate">{entry.description || "-"}</td>
-                                <td className="py-2 px-2 text-right text-xs text-muted-foreground">{new Date(entry.createdAt).toLocaleDateString(lang === "it" ? "it-IT" : "en-GB", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}</td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-                </div>
-
-                {/* Schema flusso fondi */}
-                <div className="bg-card border border-border rounded-2xl p-5">
-                  <h2 className="font-semibold text-foreground mb-4">{lang === "it" ? "Come funziona il flusso fondi (Stripe Connect)" : "How fund flow works (Stripe Connect)"}</h2>
-                  <div className="space-y-3 text-sm">
-                    <div className="flex items-start gap-3">
-                      <div className="w-7 h-7 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center flex-shrink-0 text-xs font-bold text-emerald-700">1</div>
-                      <p className="text-muted-foreground">{lang === "it"
-                        ? "L'utente dona → Stripe crea un destination charge"
-                        : "User donates → Stripe creates a destination charge"}</p>
-                    </div>
-                    <div className="flex items-start gap-3">
-                      <div className="w-7 h-7 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center flex-shrink-0 text-xs font-bold text-emerald-700">2</div>
-                      <p className="text-muted-foreground">{lang === "it"
-                        ? "L'80% va direttamente all'account Stripe Connect dell'organizzazione"
-                        : "80% goes directly to the organization's Stripe Connect account"}</p>
-                    </div>
-                    <div className="flex items-start gap-3">
-                      <div className="w-7 h-7 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center flex-shrink-0 text-xs font-bold text-emerald-700">3</div>
-                      <p className="text-muted-foreground">{lang === "it"
-                        ? "Il 20% resta alla piattaforma come application fee — automaticamente"
-                        : "20% stays with the platform as an application fee — automatically"}</p>
-                    </div>
-                  </div>
                 </div>
               </>
             )}

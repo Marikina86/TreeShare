@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { usersTable, treesTable, treeSunsTable, treeUpdatesTable, eventsTable, eventParticipantsTable, problemReportsTable, userConsentsTable, cookieConsentsTable, userNotificationsTable, donationCampaignsTable, donationsTable, orgBalancesTable, ledgerEntriesTable, payoutsTable, weeklyWinnersTable, reportsTable, organizationsTable } from "@workspace/db";
+import { usersTable, treesTable, treeSunsTable, treeUpdatesTable, eventsTable, eventParticipantsTable, problemReportsTable, userConsentsTable, cookieConsentsTable, userNotificationsTable, donationCampaignsTable, weeklyWinnersTable, reportsTable, organizationsTable } from "@workspace/db";
 import { eq, desc, count, sql } from "drizzle-orm";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth";
 import { UpsertMyProfileBody } from "@workspace/api-zod";
@@ -180,12 +180,7 @@ router.delete("/users/me/delete", requireAuth, async (req, res) => {
     await db.delete(eventParticipantsTable).where(eq(eventParticipantsTable.userId, userId));
     await db.delete(eventsTable).where(eq(eventsTable.userId, userId));
 
-    await db.delete(donationsTable).where(eq(donationsTable.donorUserId, userId));
     await db.delete(donationCampaignsTable).where(eq(donationCampaignsTable.userId, userId));
-
-    await db.delete(ledgerEntriesTable).where(eq(ledgerEntriesTable.orgUserId, userId));
-    await db.delete(payoutsTable).where(eq(payoutsTable.userId, userId));
-    await db.delete(orgBalancesTable).where(eq(orgBalancesTable.userId, userId));
 
     await db.delete(weeklyWinnersTable).where(eq(weeklyWinnersTable.userId, userId));
     await db.delete(problemReportsTable).where(eq(problemReportsTable.userId, userId));

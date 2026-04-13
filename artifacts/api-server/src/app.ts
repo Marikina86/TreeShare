@@ -29,6 +29,7 @@ app.use(
 
 app.use(cors({ credentials: true, origin: true }));
 
+app.post("/api/campaigns/webhook", express.raw({ type: "application/json" }), webhookHandler);
 app.post("/api/donations/webhook", express.raw({ type: "application/json" }), webhookHandler);
 
 app.use(express.json({ limit: "10mb" }));

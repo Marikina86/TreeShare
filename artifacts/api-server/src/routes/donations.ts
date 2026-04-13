@@ -3,15 +3,13 @@ import { db } from "@workspace/db";
 import {
   usersTable,
   donationCampaignsTable,
-  donationsTable,
+  campaignPricingTable,
   platformRevenueTable,
-  ledgerEntriesTable,
 } from "@workspace/db";
-import { eq, and, desc, sql } from "drizzle-orm";
-import { requireAuth, optionalAuth, type AuthenticatedRequest } from "../middlewares/requireAuth";
+import { eq, and, desc, sql, gt } from "drizzle-orm";
+import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth";
+import { requireAdmin } from "../middlewares/requireAdmin";
 import { getUncachableStripeClient, getStripePublishableKey } from "../lib/stripe";
-
-const PLATFORM_FEE_RATE = 0.20;
 
 async function ensurePlatformRevenueRow(tx: any) {
   const [existing] = await tx.select({ id: platformRevenueTable.id }).from(platformRevenueTable).where(eq(platformRevenueTable.id, 1));
@@ -26,17 +24,90 @@ async function ensurePlatformRevenueRow(tx: any) {
 
 const router = Router();
 
-router.get("/donations/stripe-config", async (_req, res) => {
+router.get("/campaigns/stripe-config", async (_req, res) => {
   try {
     const publishableKey = await getStripePublishableKey();
     res.json({ publishableKey });
   } catch (err) {
-    console.error("[donations] stripe-config error:", err);
+    console.error("[campaigns] stripe-config error:", err);
     res.status(500).json({ error: "Stripe not configured" });
   }
 });
 
-router.get("/donations/my-campaigns", requireAuth, async (req, res) => {
+router.get("/campaigns/pricing", async (_req, res) => {
+  try {
+    const pricing = await db
+      .select()
+      .from(campaignPricingTable)
+      .where(eq(campaignPricingTable.isActive, true))
+      .orderBy(campaignPricingTable.durationDays);
+    res.json(pricing);
+  } catch (err) {
+    console.error("[campaigns] pricing error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.post("/admin/campaign-pricing", requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const { durationDays, priceCents, label } = req.body;
+    if (!durationDays || !priceCents || !label) {
+      res.status(400).json({ error: "durationDays, priceCents, label required" });
+      return;
+    }
+    const [created] = await db
+      .insert(campaignPricingTable)
+      .values({
+        durationDays: Number(durationDays),
+        priceCents: Number(priceCents),
+        label: String(label).trim(),
+      })
+      .returning();
+    res.status(201).json(created);
+  } catch (err) {
+    console.error("[campaigns] create pricing error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.patch("/admin/campaign-pricing/:id", requireAuth, requireAdmin, async (req, res) => {
+  const id = Number(req.params.id);
+  try {
+    const updates: Record<string, any> = {};
+    if (req.body.durationDays !== undefined) updates.durationDays = Number(req.body.durationDays);
+    if (req.body.priceCents !== undefined) updates.priceCents = Number(req.body.priceCents);
+    if (req.body.label !== undefined) updates.label = String(req.body.label).trim();
+    if (req.body.isActive !== undefined) updates.isActive = Boolean(req.body.isActive);
+
+    const [updated] = await db
+      .update(campaignPricingTable)
+      .set(updates)
+      .where(eq(campaignPricingTable.id, id))
+      .returning();
+
+    if (!updated) {
+      res.status(404).json({ error: "Pricing not found" });
+      return;
+    }
+    res.json(updated);
+  } catch (err) {
+    console.error("[campaigns] update pricing error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.delete("/admin/campaign-pricing/:id", requireAuth, requireAdmin, async (req, res) => {
+  const id = Number(req.params.id);
+  try {
+    await db.delete(campaignPricingTable).where(eq(campaignPricingTable.id, id));
+    res.json({ success: true });
+  } catch (err) {
+    console.error("[campaigns] delete pricing error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.get("/campaigns/my-campaigns", requireAuth, async (req, res) => {
   const userId = (req as AuthenticatedRequest).userId;
   try {
     const campaigns = await db
@@ -46,12 +117,12 @@ router.get("/donations/my-campaigns", requireAuth, async (req, res) => {
       .orderBy(desc(donationCampaignsTable.createdAt));
     res.json(campaigns);
   } catch (err) {
-    console.error("[donations] my-campaigns error:", err);
+    console.error("[campaigns] my-campaigns error:", err);
     res.status(500).json({ error: "Internal server error" });
   }
 });
 
-router.post("/donations/campaigns", requireAuth, async (req, res) => {
+router.post("/campaigns", requireAuth, async (req, res) => {
   const userId = (req as AuthenticatedRequest).userId;
   try {
     const [user] = await db
@@ -64,7 +135,7 @@ router.post("/donations/campaigns", requireAuth, async (req, res) => {
       return;
     }
 
-    const { title, description, goalAmount } = req.body;
+    const { title, description } = req.body;
     if (!title || !description) {
       res.status(400).json({ error: "Title and description required" });
       return;
@@ -76,18 +147,19 @@ router.post("/donations/campaigns", requireAuth, async (req, res) => {
         userId,
         title,
         description,
-        goalAmount: goalAmount ? Math.round(Number(goalAmount) * 100) : null,
+        isActive: false,
+        paymentStatus: "draft",
       })
       .returning();
 
     res.status(201).json(campaign);
   } catch (err) {
-    console.error("[donations] create campaign error:", err);
+    console.error("[campaigns] create campaign error:", err);
     res.status(500).json({ error: "Internal server error" });
   }
 });
 
-router.patch("/donations/campaigns/:campaignId", requireAuth, async (req, res) => {
+router.patch("/campaigns/:campaignId", requireAuth, async (req, res) => {
   const userId = (req as AuthenticatedRequest).userId;
   const campaignId = Number(req.params.campaignId);
   try {
@@ -121,19 +193,6 @@ router.patch("/donations/campaigns/:campaignId", requireAuth, async (req, res) =
       }
       updates.description = req.body.description.trim();
     }
-    if (req.body.goalAmount !== undefined) {
-      if (req.body.goalAmount !== null) {
-        const goal = Number(req.body.goalAmount);
-        if (!Number.isFinite(goal) || goal <= 0) {
-          res.status(400).json({ error: "Goal must be a positive number" });
-          return;
-        }
-        updates.goalAmount = Math.round(goal * 100);
-      } else {
-        updates.goalAmount = null;
-      }
-    }
-    if (req.body.isActive !== undefined) updates.isActive = Boolean(req.body.isActive);
     if (req.body.photos !== undefined) {
       if (!Array.isArray(req.body.photos)) {
         res.status(400).json({ error: "Photos must be an array" });
@@ -158,12 +217,12 @@ router.patch("/donations/campaigns/:campaignId", requireAuth, async (req, res) =
 
     res.json(updated);
   } catch (err) {
-    console.error("[donations] update campaign error:", err);
+    console.error("[campaigns] update campaign error:", err);
     res.status(500).json({ error: "Internal server error" });
   }
 });
 
-router.delete("/donations/campaigns/:campaignId", requireAuth, async (req, res) => {
+router.delete("/campaigns/:campaignId", requireAuth, async (req, res) => {
   const userId = (req as AuthenticatedRequest).userId;
   const campaignId = Number(req.params.campaignId);
   try {
@@ -182,13 +241,8 @@ router.delete("/donations/campaigns/:campaignId", requireAuth, async (req, res) 
       return;
     }
 
-    const [donationRow] = await db
-      .select({ count: sql<number>`count(*)::int` })
-      .from(donationsTable)
-      .where(eq(donationsTable.campaignId, campaignId));
-
-    if (campaign.donationCount > 0 || (donationRow && donationRow.count > 0)) {
-      res.status(400).json({ error: "Cannot delete campaign with donations. Deactivate it instead." });
+    if (campaign.paymentStatus === "paid") {
+      res.status(400).json({ error: "Cannot delete a paid campaign. Deactivate it instead." });
       return;
     }
 
@@ -198,14 +252,15 @@ router.delete("/donations/campaigns/:campaignId", requireAuth, async (req, res) 
 
     res.json({ success: true });
   } catch (err) {
-    console.error("[donations] delete campaign error:", err);
+    console.error("[campaigns] delete campaign error:", err);
     res.status(500).json({ error: "Internal server error" });
   }
 });
 
-router.get("/donations/campaigns/active", async (req, res) => {
+router.get("/campaigns/active", async (req, res) => {
   try {
     const sortBy = req.query.sort as string || "recent";
+    const now = new Date();
 
     const campaigns = await db
       .select({
@@ -213,36 +268,36 @@ router.get("/donations/campaigns/active", async (req, res) => {
         userId: donationCampaignsTable.userId,
         title: donationCampaignsTable.title,
         description: donationCampaignsTable.description,
-        goalAmount: donationCampaignsTable.goalAmount,
-        totalRaised: donationCampaignsTable.totalRaised,
-        donationCount: donationCampaignsTable.donationCount,
         photos: donationCampaignsTable.photos,
+        durationDays: donationCampaignsTable.durationDays,
+        expiresAt: donationCampaignsTable.expiresAt,
         createdAt: donationCampaignsTable.createdAt,
         orgUsername: usersTable.username,
         orgPhotoUrl: usersTable.photoUrl,
       })
       .from(donationCampaignsTable)
       .innerJoin(usersTable, eq(donationCampaignsTable.userId, usersTable.clerkUserId))
-      .where(eq(donationCampaignsTable.isActive, true))
-      .orderBy(
-        sortBy === "popular"
-          ? desc(donationCampaignsTable.donationCount)
-          : sortBy === "funded"
-            ? desc(donationCampaignsTable.totalRaised)
-            : desc(donationCampaignsTable.createdAt)
+      .where(
+        and(
+          eq(donationCampaignsTable.isActive, true),
+          eq(donationCampaignsTable.paymentStatus, "paid"),
+          gt(donationCampaignsTable.expiresAt, now),
+        ),
       )
+      .orderBy(desc(donationCampaignsTable.createdAt))
       .limit(50);
 
     res.json(campaigns);
   } catch (err) {
-    console.error("[donations] active campaigns error:", err);
+    console.error("[campaigns] active campaigns error:", err);
     res.status(500).json({ error: "Internal server error" });
   }
 });
 
-router.get("/donations/campaigns/user/:userId", async (req, res) => {
+router.get("/campaigns/user/:userId", async (req, res) => {
   const targetUserId = req.params.userId;
   try {
+    const now = new Date();
     const campaigns = await db
       .select()
       .from(donationCampaignsTable)
@@ -250,6 +305,8 @@ router.get("/donations/campaigns/user/:userId", async (req, res) => {
         and(
           eq(donationCampaignsTable.userId, targetUserId),
           eq(donationCampaignsTable.isActive, true),
+          eq(donationCampaignsTable.paymentStatus, "paid"),
+          gt(donationCampaignsTable.expiresAt, now),
         ),
       )
       .orderBy(desc(donationCampaignsTable.createdAt))
@@ -257,19 +314,18 @@ router.get("/donations/campaigns/user/:userId", async (req, res) => {
 
     res.json(campaigns[0] || null);
   } catch (err) {
-    console.error("[donations] get campaign error:", err);
+    console.error("[campaigns] get campaign error:", err);
     res.status(500).json({ error: "Internal server error" });
   }
 });
 
-router.post("/donations/create-payment-intent", optionalAuth, async (req, res) => {
-  const donorUserId = (req as AuthenticatedRequest).userId || null;
+router.post("/campaigns/:campaignId/create-payment", requireAuth, async (req, res) => {
+  const userId = (req as AuthenticatedRequest).userId;
+  const campaignId = Number(req.params.campaignId);
   try {
-    const { campaignId, amount } = req.body;
-    const amountCents = Math.round(Number(amount) * 100);
-
-    if (!campaignId || !amountCents || amountCents < 100) {
-      res.status(400).json({ error: "Valid campaign and amount (min €1) required" });
+    const { pricingId } = req.body;
+    if (!pricingId) {
+      res.status(400).json({ error: "pricingId required" });
       return;
     }
 
@@ -278,75 +334,75 @@ router.post("/donations/create-payment-intent", optionalAuth, async (req, res) =
       .from(donationCampaignsTable)
       .where(
         and(
-          eq(donationCampaignsTable.id, Number(campaignId)),
-          eq(donationCampaignsTable.isActive, true),
+          eq(donationCampaignsTable.id, campaignId),
+          eq(donationCampaignsTable.userId, userId),
         ),
       );
 
     if (!campaign) {
-      res.status(404).json({ error: "Campaign not found or inactive" });
+      res.status(404).json({ error: "Campaign not found" });
       return;
     }
 
-    const amountPlatform = Math.round(amountCents * PLATFORM_FEE_RATE);
-    const amountOrg = amountCents - amountPlatform;
+    if (campaign.paymentStatus === "paid") {
+      res.status(400).json({ error: "Campaign already paid" });
+      return;
+    }
 
-    const [recipientUser] = await db
-      .select({ stripeAccountId: usersTable.stripeAccountId })
-      .from(usersTable)
-      .where(eq(usersTable.clerkUserId, campaign.userId));
+    const [pricing] = await db
+      .select()
+      .from(campaignPricingTable)
+      .where(
+        and(
+          eq(campaignPricingTable.id, Number(pricingId)),
+          eq(campaignPricingTable.isActive, true),
+        ),
+      );
 
-    if (!recipientUser?.stripeAccountId) {
-      res.status(400).json({ error: "Organization has not connected Stripe yet" });
+    if (!pricing) {
+      res.status(404).json({ error: "Pricing option not found" });
       return;
     }
 
     const stripe = await getUncachableStripeClient();
     const paymentIntent = await stripe.paymentIntents.create({
-      amount: amountCents,
+      amount: pricing.priceCents,
       currency: "eur",
-      application_fee_amount: amountPlatform,
-      transfer_data: {
-        destination: recipientUser.stripeAccountId,
-      },
       metadata: {
         campaignId: String(campaign.id),
-        donorUserId: donorUserId || "guest",
-        recipientUserId: campaign.userId,
-        amountOrg: String(amountOrg),
-        amountPlatform: String(amountPlatform),
+        userId,
+        pricingId: String(pricing.id),
+        durationDays: String(pricing.durationDays),
+        type: "campaign_publication",
       },
     });
 
-    const [donation] = await db
-      .insert(donationsTable)
-      .values({
-        donorUserId,
-        recipientUserId: campaign.userId,
-        campaignId: campaign.id,
-        amountTotal: amountCents,
-        amountOrg,
-        amountPlatform,
-        status: "pending",
+    await db
+      .update(donationCampaignsTable)
+      .set({
+        paymentStatus: "pending",
         stripePaymentIntentId: paymentIntent.id,
+        durationDays: pricing.durationDays,
+        pricePaidCents: pricing.priceCents,
+        updatedAt: new Date(),
       })
-      .returning();
+      .where(eq(donationCampaignsTable.id, campaignId));
 
     res.json({
       clientSecret: paymentIntent.client_secret,
-      donationId: donation.id,
-      amountTotal: amountCents,
-      amountOrg,
-      amountPlatform,
+      priceCents: pricing.priceCents,
+      durationDays: pricing.durationDays,
+      label: pricing.label,
     });
   } catch (err) {
-    console.error("[donations] create-payment-intent error:", err);
+    console.error("[campaigns] create-payment error:", err);
     res.status(500).json({ error: "Internal server error" });
   }
 });
 
-router.post("/donations/confirm-payment", optionalAuth, async (req, res) => {
-  const donorUserId = (req as AuthenticatedRequest).userId || null;
+router.post("/campaigns/:campaignId/confirm-payment", requireAuth, async (req, res) => {
+  const userId = (req as AuthenticatedRequest).userId;
+  const campaignId = Number(req.params.campaignId);
   try {
     const { paymentIntentId } = req.body;
     if (!paymentIntentId) {
@@ -363,167 +419,95 @@ router.post("/donations/confirm-payment", optionalAuth, async (req, res) => {
     }
 
     const result = await db.transaction(async (tx) => {
-      const whereConditions = [
-        eq(donationsTable.stripePaymentIntentId, paymentIntentId),
-        sql`${donationsTable.status} != 'completed'`,
-      ];
-      if (donorUserId) {
-        whereConditions.push(eq(donationsTable.donorUserId, donorUserId));
-      } else {
-        whereConditions.push(sql`${donationsTable.donorUserId} IS NULL`);
+      const [campaign] = await tx
+        .select()
+        .from(donationCampaignsTable)
+        .where(
+          and(
+            eq(donationCampaignsTable.id, campaignId),
+            eq(donationCampaignsTable.userId, userId),
+            eq(donationCampaignsTable.stripePaymentIntentId, paymentIntentId),
+          ),
+        );
+
+      if (!campaign) {
+        return { error: "Campaign not found" };
       }
 
-      const updatedRows = await tx
-        .update(donationsTable)
-        .set({ status: "completed" })
-        .where(and(...whereConditions))
-        .returning();
-
-      if (updatedRows.length === 0) {
+      if (campaign.paymentStatus === "paid") {
         return { idempotent: true };
       }
 
-      const donation = updatedRows[0];
-      const donationId = donation.id;
-      const campaignId = donation.campaignId;
-      const recipientUserId = donation.recipientUserId;
-      const amountOrg = donation.amountOrg ?? 0;
-      const amountPlatform = donation.amountPlatform ?? 0;
-      const amountTotal = donation.amountTotal ?? (amountOrg + amountPlatform);
+      const durationDays = campaign.durationDays || 30;
+      const expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + durationDays);
 
-      if (campaignId) {
-        await tx
-          .update(donationCampaignsTable)
-          .set({
-            totalRaised: sql`${donationCampaignsTable.totalRaised} + ${amountTotal}`,
-            donationCount: sql`${donationCampaignsTable.donationCount} + 1`,
-            updatedAt: new Date(),
-          })
-          .where(eq(donationCampaignsTable.id, campaignId));
-      }
-
-      await tx.insert(ledgerEntriesTable).values({
-        entryType: "donation_org_credit",
-        amountCents: amountOrg,
-        orgUserId: recipientUserId || null,
-        donationId,
-        description: `Stripe Connect destination charge: org receives €${(amountOrg / 100).toFixed(2)} of €${(amountTotal / 100).toFixed(2)} total`,
-      });
+      await tx
+        .update(donationCampaignsTable)
+        .set({
+          paymentStatus: "paid",
+          isActive: true,
+          expiresAt,
+          updatedAt: new Date(),
+        })
+        .where(eq(donationCampaignsTable.id, campaignId));
 
       await ensurePlatformRevenueRow(tx);
 
+      const pricePaid = campaign.pricePaidCents || 0;
       await tx
         .update(platformRevenueTable)
         .set({
-          totalCommissions: sql`${platformRevenueTable.totalCommissions} + ${amountPlatform}`,
+          totalCommissions: sql`${platformRevenueTable.totalCommissions} + ${pricePaid}`,
           transactionCount: sql`${platformRevenueTable.transactionCount} + 1`,
           updatedAt: new Date(),
         })
         .where(eq(platformRevenueTable.id, 1));
 
-      await tx.insert(ledgerEntriesTable).values({
-        entryType: "donation_platform_fee",
-        amountCents: amountPlatform,
-        orgUserId: recipientUserId || null,
-        donationId,
-        description: `Platform application fee: €${(amountPlatform / 100).toFixed(2)} (${(PLATFORM_FEE_RATE * 100).toFixed(0)}% of €${(amountTotal / 100).toFixed(2)})`,
-      });
-
-      return { idempotent: false, donationId, amountOrg, amountPlatform };
+      return { success: true, expiresAt: expiresAt.toISOString(), durationDays };
     });
 
-    res.json({ success: true, ...result });
+    if ((result as any).error) {
+      res.status(404).json(result);
+      return;
+    }
+
+    res.json(result);
   } catch (err) {
-    console.error("[donations] confirm-payment error:", err);
+    console.error("[campaigns] confirm-payment error:", err);
     res.status(500).json({ error: "Internal server error" });
   }
 });
 
-router.get("/donations/balance", requireAuth, async (req, res) => {
-  const userId = (req as AuthenticatedRequest).userId;
+router.get("/admin/finance", requireAuth, requireAdmin, async (_req, res) => {
   try {
-    const [user] = await db
-      .select({ accountType: usersTable.accountType })
-      .from(usersTable)
-      .where(eq(usersTable.clerkUserId, userId));
+    const [revenue] = await db.select().from(platformRevenueTable).where(eq(platformRevenueTable.id, 1));
 
-    if (!user || user.accountType !== "organization") {
-      res.status(403).json({ error: "Only organizations can view balance" });
-      return;
-    }
-
-    const [totals] = await db
+    const recentCampaigns = await db
       .select({
-        totalReceived: sql<number>`COALESCE(SUM(CASE WHEN ${donationsTable.status} = 'completed' THEN ${donationsTable.amountOrg} ELSE 0 END), 0)`,
-        donationCount: sql<number>`COUNT(CASE WHEN ${donationsTable.status} = 'completed' THEN 1 END)`,
+        id: donationCampaignsTable.id,
+        title: donationCampaignsTable.title,
+        userId: donationCampaignsTable.userId,
+        paymentStatus: donationCampaignsTable.paymentStatus,
+        pricePaidCents: donationCampaignsTable.pricePaidCents,
+        durationDays: donationCampaignsTable.durationDays,
+        expiresAt: donationCampaignsTable.expiresAt,
+        createdAt: donationCampaignsTable.createdAt,
+        orgUsername: usersTable.username,
       })
-      .from(donationsTable)
-      .where(eq(donationsTable.recipientUserId, userId));
-
-    const recentLedger = await db
-      .select()
-      .from(ledgerEntriesTable)
-      .where(eq(ledgerEntriesTable.orgUserId, userId))
-      .orderBy(desc(ledgerEntriesTable.createdAt))
+      .from(donationCampaignsTable)
+      .leftJoin(usersTable, eq(donationCampaignsTable.userId, usersTable.clerkUserId))
+      .where(eq(donationCampaignsTable.paymentStatus, "paid"))
+      .orderBy(desc(donationCampaignsTable.createdAt))
       .limit(20);
 
     res.json({
-      organizationBalance: {
-        totalOrgReceived: totals.totalReceived,
-        completedDonations: totals.donationCount,
-      },
-      ledger: recentLedger,
+      platformRevenue: revenue || { totalCommissions: 0, transactionCount: 0 },
+      recentPaidCampaigns: recentCampaigns,
     });
   } catch (err) {
-    console.error("[donations] balance error:", err);
+    console.error("[campaigns] admin-finance error:", err);
     res.status(500).json({ error: "Internal server error" });
-  }
-});
-
-router.post("/donations/connect-stripe", requireAuth, async (req, res) => {
-  const userId = (req as AuthenticatedRequest).userId;
-  try {
-    const [user] = await db
-      .select()
-      .from(usersTable)
-      .where(eq(usersTable.clerkUserId, userId));
-
-    if (!user || user.accountType !== "organization") {
-      res.status(403).json({ error: "Only organizations" });
-      return;
-    }
-
-    if (user.stripeAccountId) {
-      res.json({ stripeAccountId: user.stripeAccountId, alreadyConnected: true });
-      return;
-    }
-
-    const stripe = await getUncachableStripeClient();
-    const account = await stripe.accounts.create({
-      type: "express",
-      metadata: { userId },
-    });
-
-    await db
-      .update(usersTable)
-      .set({ stripeAccountId: account.id })
-      .where(eq(usersTable.clerkUserId, userId));
-
-    const host = req.get("host") || "localhost";
-    const protocol = req.get("x-forwarded-proto") || "https";
-    const baseUrl = `${protocol}://${host}`;
-
-    const accountLink = await stripe.accountLinks.create({
-      account: account.id,
-      refresh_url: `${baseUrl}/settings`,
-      return_url: `${baseUrl}/settings`,
-      type: "account_onboarding",
-    });
-
-    res.json({ url: accountLink.url, stripeAccountId: account.id });
-  } catch (err) {
-    console.error("[donations] connect-stripe error:", err);
-    res.status(500).json({ error: "Failed to connect Stripe" });
   }
 });
 
@@ -534,7 +518,7 @@ export async function webhookHandler(req: Request, res: Response) {
     const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
     if (!webhookSecret) {
-      console.error("[donations] STRIPE_WEBHOOK_SECRET not configured");
+      console.error("[campaigns] STRIPE_WEBHOOK_SECRET not configured");
       res.status(500).json({ error: "Webhook not configured" });
       return;
     }
@@ -549,7 +533,7 @@ export async function webhookHandler(req: Request, res: Response) {
       const rawBody = Buffer.isBuffer(req.body) ? req.body : Buffer.from(req.body);
       event = stripe.webhooks.constructEvent(rawBody, sig, webhookSecret);
     } catch (err: any) {
-      console.error("[donations] webhook signature verification failed:", err.message);
+      console.error("[campaigns] webhook signature verification failed:", err.message);
       res.status(400).json({ error: "Invalid signature" });
       return;
     }
@@ -558,274 +542,76 @@ export async function webhookHandler(req: Request, res: Response) {
       const paymentIntent = event.data.object as any;
       const piId = paymentIntent.id;
 
-      const result = await db.transaction(async (tx) => {
-        const updatedRows = await tx
-          .update(donationsTable)
-          .set({ status: "completed" })
-          .where(
-            and(
-              eq(donationsTable.stripePaymentIntentId, piId),
-              sql`${donationsTable.status} != 'completed'`
-            )
-          )
-          .returning();
+      if (paymentIntent.metadata?.type === "campaign_publication") {
+        const result = await db.transaction(async (tx) => {
+          const [campaign] = await tx
+            .select()
+            .from(donationCampaignsTable)
+            .where(
+              and(
+                eq(donationCampaignsTable.stripePaymentIntentId, piId),
+                sql`${donationCampaignsTable.paymentStatus} != 'paid'`,
+              ),
+            );
 
-        if (updatedRows.length === 0) {
-          return { idempotent: true };
-        }
+          if (!campaign) {
+            return { idempotent: true };
+          }
 
-        const donation = updatedRows[0];
-        const donationId = donation.id;
-        const campaignId = donation.campaignId;
-        const recipientUserId = donation.recipientUserId;
-        const amountOrg = donation.amountOrg ?? 0;
-        const amountPlatform = donation.amountPlatform ?? 0;
-        const amountTotal = donation.amountTotal ?? (amountOrg + amountPlatform);
+          const durationDays = campaign.durationDays || 30;
+          const expiresAt = new Date();
+          expiresAt.setDate(expiresAt.getDate() + durationDays);
 
-        if (campaignId) {
           await tx
             .update(donationCampaignsTable)
             .set({
-              totalRaised: sql`${donationCampaignsTable.totalRaised} + ${amountTotal}`,
-              donationCount: sql`${donationCampaignsTable.donationCount} + 1`,
+              paymentStatus: "paid",
+              isActive: true,
+              expiresAt,
               updatedAt: new Date(),
             })
-            .where(eq(donationCampaignsTable.id, campaignId));
+            .where(eq(donationCampaignsTable.id, campaign.id));
+
+          await ensurePlatformRevenueRow(tx);
+
+          const pricePaid = campaign.pricePaidCents || 0;
+          await tx
+            .update(platformRevenueTable)
+            .set({
+              totalCommissions: sql`${platformRevenueTable.totalCommissions} + ${pricePaid}`,
+              transactionCount: sql`${platformRevenueTable.transactionCount} + 1`,
+              updatedAt: new Date(),
+            })
+            .where(eq(platformRevenueTable.id, 1));
+
+          return { campaignId: campaign.id, durationDays, pricePaid };
+        });
+
+        if (!(result as any).idempotent) {
+          console.info(`[campaigns] payment_intent.succeeded: ${piId}, campaign=${(result as any).campaignId}`);
         }
-
-        await tx.insert(ledgerEntriesTable).values({
-          entryType: "donation_org_credit",
-          amountCents: amountOrg,
-          orgUserId: recipientUserId || null,
-          donationId,
-          description: `Stripe Connect destination charge: org receives €${(amountOrg / 100).toFixed(2)} of €${(amountTotal / 100).toFixed(2)} total`,
-        });
-
-        await ensurePlatformRevenueRow(tx);
-
-        await tx
-          .update(platformRevenueTable)
-          .set({
-            totalCommissions: sql`${platformRevenueTable.totalCommissions} + ${amountPlatform}`,
-            transactionCount: sql`${platformRevenueTable.transactionCount} + 1`,
-            updatedAt: new Date(),
-          })
-          .where(eq(platformRevenueTable.id, 1));
-
-        await tx.insert(ledgerEntriesTable).values({
-          entryType: "donation_platform_fee",
-          amountCents: amountPlatform,
-          orgUserId: recipientUserId || null,
-          donationId,
-          description: `Platform application fee: €${(amountPlatform / 100).toFixed(2)} (${(PLATFORM_FEE_RATE * 100).toFixed(0)}% of €${(amountTotal / 100).toFixed(2)})`,
-        });
-
-        return { idempotent: false, campaignId, amountOrg, amountPlatform };
-      });
-
-      if (result.idempotent) {
-        res.json({ received: true, idempotent: true });
-        return;
       }
-
-      console.info(`[donations] payment_intent.succeeded: ${piId}, campaign=${result.campaignId}, org=€${((result.amountOrg ?? 0) / 100).toFixed(2)}, platform=€${((result.amountPlatform ?? 0) / 100).toFixed(2)}`);
     }
 
     if (event.type === "payment_intent.payment_failed") {
       const paymentIntent = event.data.object as any;
       const piId = paymentIntent.id;
-      await db
-        .update(donationsTable)
-        .set({ status: "failed" })
-        .where(eq(donationsTable.stripePaymentIntentId, piId));
 
-      console.warn(`[donations] payment_intent.payment_failed: ${piId}`);
+      if (paymentIntent.metadata?.type === "campaign_publication") {
+        await db
+          .update(donationCampaignsTable)
+          .set({ paymentStatus: "failed", updatedAt: new Date() })
+          .where(eq(donationCampaignsTable.stripePaymentIntentId, piId));
+
+        console.warn(`[campaigns] payment_intent.payment_failed: ${piId}`);
+      }
     }
 
     res.json({ received: true });
   } catch (err) {
-    console.error("[donations] webhook error:", err);
+    console.error("[campaigns] webhook error:", err);
     res.status(500).json({ error: "Webhook processing failed" });
   }
 }
-
-router.get("/donations/my-donations", requireAuth, async (req, res) => {
-  const userId = (req as AuthenticatedRequest).userId;
-  try {
-    const myDonations = await db
-      .select({
-        id: donationsTable.id,
-        amountTotal: donationsTable.amountTotal,
-        amountOrg: donationsTable.amountOrg,
-        amountPlatform: donationsTable.amountPlatform,
-        status: donationsTable.status,
-        createdAt: donationsTable.createdAt,
-        campaignTitle: donationCampaignsTable.title,
-        recipientUsername: usersTable.username,
-      })
-      .from(donationsTable)
-      .leftJoin(donationCampaignsTable, eq(donationsTable.campaignId, donationCampaignsTable.id))
-      .leftJoin(usersTable, eq(donationsTable.recipientUserId, usersTable.clerkUserId))
-      .where(eq(donationsTable.donorUserId, userId))
-      .orderBy(desc(donationsTable.createdAt))
-      .limit(50);
-
-    const totalDonated = myDonations
-      .filter(d => d.status === "completed")
-      .reduce((sum, d) => sum + (d.amountTotal ?? 0), 0);
-
-    res.json({ donations: myDonations, totalDonated });
-  } catch (err) {
-    console.error("[donations] my-donations error:", err);
-    res.status(500).json({ error: "Internal server error" });
-  }
-});
-
-router.get("/donations/platform-revenue", requireAuth, async (req, res) => {
-  const userId = (req as AuthenticatedRequest).userId;
-  const adminIds = (process.env.ADMIN_USER_IDS || process.env.ADMIN_CLERK_USER_IDS || "").split(",").map((s: string) => s.trim()).filter(Boolean);
-  if (!adminIds.includes(userId)) {
-    res.status(403).json({ error: "Admin only" });
-    return;
-  }
-
-  try {
-    const [revenue] = await db.select().from(platformRevenueTable).where(eq(platformRevenueTable.id, 1));
-
-    const recentPlatformLedger = await db
-      .select()
-      .from(ledgerEntriesTable)
-      .where(
-        sql`${ledgerEntriesTable.entryType} = 'donation_platform_fee'`
-      )
-      .orderBy(desc(ledgerEntriesTable.createdAt))
-      .limit(50);
-
-    res.json({
-      platformRevenue: {
-        totalCommissions: revenue?.totalCommissions ?? 0,
-        totalRevenue: revenue?.totalCommissions ?? 0,
-        transactionCount: revenue?.transactionCount ?? 0,
-      },
-      recentLedger: recentPlatformLedger,
-    });
-  } catch (err) {
-    console.error("[donations] platform-revenue error:", err);
-    res.status(500).json({ error: "Internal server error" });
-  }
-});
-
-router.get("/donations/audit", requireAuth, async (req, res) => {
-  const userId = (req as AuthenticatedRequest).userId;
-  const adminIds = (process.env.ADMIN_USER_IDS || process.env.ADMIN_CLERK_USER_IDS || "").split(",").map((s: string) => s.trim()).filter(Boolean);
-  if (!adminIds.includes(userId)) {
-    res.status(403).json({ error: "Admin only" });
-    return;
-  }
-
-  try {
-    const limit = Math.min(Number(req.query.limit) || 50, 200);
-    const offset = Number(req.query.offset) || 0;
-
-    const entries = await db
-      .select()
-      .from(ledgerEntriesTable)
-      .orderBy(desc(ledgerEntriesTable.createdAt))
-      .limit(limit)
-      .offset(offset);
-
-    const [countResult] = await db
-      .select({ count: sql<number>`count(*)` })
-      .from(ledgerEntriesTable);
-
-    res.json({
-      entries,
-      total: countResult.count,
-      limit,
-      offset,
-    });
-  } catch (err) {
-    console.error("[donations] audit error:", err);
-    res.status(500).json({ error: "Internal server error" });
-  }
-});
-
-router.get("/donations/admin-finance", requireAuth, async (req, res) => {
-  const userId = (req as AuthenticatedRequest).userId;
-  const adminIds = (process.env.ADMIN_USER_IDS || process.env.ADMIN_CLERK_USER_IDS || "").split(",").map((s: string) => s.trim()).filter(Boolean);
-  if (!adminIds.includes(userId)) {
-    res.status(403).json({ error: "Admin only" });
-    return;
-  }
-
-  try {
-    await ensurePlatformRevenueRow(db);
-    const [revenue] = await db.select().from(platformRevenueTable).where(eq(platformRevenueTable.id, 1));
-
-    const recentLedger = await db
-      .select()
-      .from(ledgerEntriesTable)
-      .orderBy(desc(ledgerEntriesTable.createdAt))
-      .limit(50);
-
-    const recentDonations = await db
-      .select({
-        id: donationsTable.id,
-        donorUsername: sql<string>`donor.username`,
-        recipientUsername: sql<string>`recipient.username`,
-        amountTotal: donationsTable.amountTotal,
-        amountOrg: donationsTable.amountOrg,
-        amountPlatform: donationsTable.amountPlatform,
-        status: donationsTable.status,
-        createdAt: donationsTable.createdAt,
-      })
-      .from(donationsTable)
-      .innerJoin(sql`users AS donor`, sql`donor.clerk_user_id = ${donationsTable.donorUserId}`)
-      .innerJoin(sql`users AS recipient`, sql`recipient.clerk_user_id = ${donationsTable.recipientUserId}`)
-      .orderBy(desc(donationsTable.createdAt))
-      .limit(30);
-
-    res.json({
-      platformRevenue: {
-        totalCommissions: revenue?.totalCommissions ?? 0,
-        totalRevenue: revenue?.totalCommissions ?? 0,
-        transactionCount: revenue?.transactionCount ?? 0,
-      },
-      recentLedger,
-      recentDonations,
-    });
-  } catch (err) {
-    console.error("[donations] admin-finance error:", err);
-    res.status(500).json({ error: "Internal server error" });
-  }
-});
-
-router.put("/users/me/account-type", requireAuth, async (req, res) => {
-  const userId = (req as AuthenticatedRequest).userId;
-  const { accountType } = req.body;
-
-  if (!accountType || !["user", "organization"].includes(accountType)) {
-    res.status(400).json({ error: "Invalid account type" });
-    return;
-  }
-
-  try {
-    const [updated] = await db
-      .update(usersTable)
-      .set({ accountType })
-      .where(eq(usersTable.clerkUserId, userId))
-      .returning();
-
-    if (!updated) {
-      res.status(404).json({ error: "User not found" });
-      return;
-    }
-
-    res.json({ accountType: updated.accountType });
-  } catch (err) {
-    console.error("[donations] update account-type error:", err);
-    res.status(500).json({ error: "Internal server error" });
-  }
-});
 
 export default router;

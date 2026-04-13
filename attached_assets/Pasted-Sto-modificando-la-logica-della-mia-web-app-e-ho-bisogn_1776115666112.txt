@@ -1,0 +1,92 @@
+Sto modificando la logica della mia web app e ho bisogno di una refactor importante ma senza rompere la struttura esistente.
+🎯 Nuova logica delle campagne
+Le campagne possono essere create solo da enti / società / organizzazioni
+Le campagne NON servono più per ricevere donazioni
+Le campagne diventano contenuti pubblicabili sulla piattaforma
+💳 Nuovo modello di pagamento
+La creazione di una campagna deve essere a pagamento
+Prima della pubblicazione:
+l’utente deve completare un pagamento tramite Stripe
+Il pagamento è:
+verso la piattaforma
+NON verso enti o terze parti
+⏱️ Durata campagna
+Durante la creazione della campagna:
+l’utente deve selezionare una durata (es: 7 giorni, 30 giorni, 90 giorni)
+La durata deve essere:
+salvata nel database
+utilizzata per determinare la visibilità/scadenza della campagna
+⚙️ Gestione prezzo da admin
+L’admin deve poter gestire il costo della campagna da pannello di controllo
+Il prezzo deve essere:
+configurabile dinamicamente (non hardcoded)
+eventualmente differenziabile per durata (opzionale ma consigliato)
+Salvare i prezzi in configurazione o database (es: campaignPricing)
+❌ Da rimuovere completamente
+Eliminare tutta la logica legata alle donazioni verso enti:
+Flusso donazioni
+Checkout per donazioni
+Split pagamento (80% ente / 20% piattaforma)
+Payment intent legati a donazioni
+Database fields tipo:
+donationAmount
+charityId
+UI:
+Pulsanti “Dona”
+Sezioni donazioni nelle campagne
+✅ Da mantenere
+Struttura generale delle campagne (CRUD)
+Autenticazione utenti
+UI esistente (dove possibile)
+Integrazione Stripe (riutilizzandola per il nuovo pagamento)
+🔄 Nuovo flusso da implementare
+Utente (ente/organizzazione) crea una campagna
+Seleziona:
+durata campagna
+Prima della pubblicazione:
+viene richiesto pagamento (in base al prezzo configurato dall’admin)
+Stripe checkout / payment intent
+Se pagamento completato:
+campagna → published = true
+impostare data di scadenza in base alla durata
+Se pagamento NON completato:
+campagna resta in stato draft
+🧠 Logica backend
+Aggiungere campi:
+duration
+expiresAt
+paymentStatus (es: pending, paid)
+Bloccare pubblicazione se non pagata
+Creare sistema prezzi configurabile:
+es: tabella/config campaignPricing
+Endpoint da aggiornare:
+creazione campagna
+pubblicazione campagna
+Creare nuovo endpoint tipo:
+/create-campaign-payment
+🎨 Frontend
+Rimuovere:
+pulsanti donazione
+Aggiungere:
+selezione durata campagna
+bottone “Pubblica campagna”
+Se non pagata:
+mostra schermata pagamento
+Mostrare prezzo dinamico in base alla durata
+Feedback chiari all’utente
+⚠️ Vincoli IMPORTANTI
+NON rompere l’architettura esistente
+NON eliminare Stripe, ma adattarlo
+NON introdurre regressioni su:
+autenticazione
+gestione campagne
+Codice pulito e modulare
+🛠️ Richiesta
+Refactor completo:
+da donazioni → pagamento per pubblicazione campagne
+Rimozione codice inutilizzato
+Implementazione:
+durata campagna
+pricing gestito da admin
+Codice aggiornato (frontend + backend)
+Breve spiegazione delle modifiche

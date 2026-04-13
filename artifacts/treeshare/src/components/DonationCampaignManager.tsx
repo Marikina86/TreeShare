@@ -1,46 +1,51 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { useAuth } from "@/lib/auth";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLang } from "@/lib/i18n";
 import { useToast } from "@/hooks/use-toast";
 import { ManagerPhotoThumbnails } from "@/components/PhotoLightbox";
+import { loadStripe } from "@stripe/stripe-js";
+import { Elements, PaymentElement, useStripe, useElements } from "@stripe/react-stripe-js";
 
 interface Campaign {
   id: number;
   title: string;
   description: string;
-  goalAmount: number | null;
   isActive: boolean;
-  totalRaised: number;
-  donationCount: number;
   photos: string[];
+  durationDays: number | null;
+  expiresAt: string | null;
+  paymentStatus: string;
+  pricePaidCents: number | null;
+  createdAt: string;
+}
+
+interface PricingOption {
+  id: number;
+  durationDays: number;
+  priceCents: number;
+  label: string;
 }
 
 const MAX_CAMPAIGN_PHOTOS = 3;
 
 const t = {
   it: {
-    title: "Campagne donazioni",
+    title: "Le mie campagne",
     create: "Crea campagna",
     campaignTitle: "Titolo campagna",
     campaignDesc: "Descrizione",
-    goalOptional: "Obiettivo € (opzionale)",
     save: "Salva",
     cancel: "Annulla",
     active: "Attiva",
     inactive: "Non attiva",
-    raised: "Raccolti",
-    donations: "donazioni",
-    noGoal: "Nessun obiettivo",
-    activate: "Attiva",
-    deactivate: "Disattiva",
+    draft: "Bozza",
+    pending: "In attesa",
+    paid: "Pagata",
+    failed: "Fallita",
     created: "Campagna creata",
     updated: "Campagna aggiornata",
     deleted: "Campagna eliminata",
-    connectStripe: "Collega Stripe",
-    connectStripeDesc: "Per ricevere i pagamenti, collega il tuo account Stripe. I fondi arrivano direttamente sul tuo conto (80%), la piattaforma trattiene il 20%.",
-    stripeConnected: "Stripe collegato",
-    totalReceived: "Totale ricevuto (80%)",
     noData: "Nessuna campagna creata",
     addPhotos: "Aggiungi foto",
     photoUploading: "Caricamento...",
@@ -50,32 +55,33 @@ const t = {
     confirmDelete: "Sei sicuro di voler eliminare questa campagna?",
     confirmDeleteBtn: "Elimina",
     cancelDelete: "Annulla",
-    cannotDelete: "Non puoi eliminare una campagna con donazioni. Puoi solo disattivarla.",
-    goal: "Obiettivo",
-    fundsInfo: "I fondi arrivano direttamente sul tuo account Stripe Connect.",
+    publish: "Pubblica",
+    selectDuration: "Seleziona durata",
+    days: "giorni",
+    expiresOn: "Scade il",
+    payNow: "Paga e pubblica",
+    processing: "Elaborazione...",
+    paymentSuccess: "Pagamento completato! La campagna è ora attiva.",
+    paymentError: "Errore nel pagamento",
+    expired: "Scaduta",
+    cannotDeletePaid: "Non puoi eliminare una campagna pagata.",
   },
   en: {
-    title: "Donation campaigns",
+    title: "My campaigns",
     create: "Create campaign",
     campaignTitle: "Campaign title",
     campaignDesc: "Description",
-    goalOptional: "Goal € (optional)",
     save: "Save",
     cancel: "Cancel",
     active: "Active",
     inactive: "Inactive",
-    raised: "Raised",
-    donations: "donations",
-    noGoal: "No goal",
-    activate: "Activate",
-    deactivate: "Deactivate",
+    draft: "Draft",
+    pending: "Pending",
+    paid: "Paid",
+    failed: "Failed",
     created: "Campaign created",
     updated: "Campaign updated",
     deleted: "Campaign deleted",
-    connectStripe: "Connect Stripe",
-    connectStripeDesc: "To receive payments, connect your Stripe account. Funds go directly to your account (80%), platform retains 20%.",
-    stripeConnected: "Stripe connected",
-    totalReceived: "Total received (80%)",
     noData: "No campaigns created",
     addPhotos: "Add photos",
     photoUploading: "Uploading...",
@@ -85,23 +91,81 @@ const t = {
     confirmDelete: "Are you sure you want to delete this campaign?",
     confirmDeleteBtn: "Delete",
     cancelDelete: "Cancel",
-    cannotDelete: "Cannot delete a campaign with donations. You can deactivate it instead.",
-    goal: "Goal",
-    fundsInfo: "Funds go directly to your Stripe Connect account.",
+    publish: "Publish",
+    selectDuration: "Select duration",
+    days: "days",
+    expiresOn: "Expires on",
+    payNow: "Pay and publish",
+    processing: "Processing...",
+    paymentSuccess: "Payment completed! Campaign is now active.",
+    paymentError: "Payment error",
+    expired: "Expired",
+    cannotDeletePaid: "Cannot delete a paid campaign.",
   },
 };
 
 type Lang = keyof typeof t;
 
-function photoSrc(url: string) {
-  if (url.startsWith("http")) return url;
-  return `/api/storage${url.startsWith("/") ? "" : "/"}${url}`;
+let stripePromise: ReturnType<typeof loadStripe> | null = null;
+
+function PublishPaymentForm({ clientSecret, onSuccess, onCancel, l }: {
+  clientSecret: string;
+  onSuccess: () => void;
+  onCancel: () => void;
+  l: typeof t.en;
+}) {
+  const stripe = useStripe();
+  const elements = useElements();
+  const [processing, setProcessing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!stripe || !elements) return;
+    setProcessing(true);
+    setError(null);
+
+    const result = await stripe.confirmPayment({
+      elements,
+      confirmParams: { return_url: window.location.href },
+      redirect: "if_required",
+    });
+
+    if (result.error) {
+      setError(result.error.message || l.paymentError);
+      setProcessing(false);
+    } else {
+      onSuccess();
+    }
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <PaymentElement />
+      {error && <p className="text-sm text-destructive">{error}</p>}
+      <div className="flex gap-3 pt-4">
+        <button
+          type="button"
+          onClick={onCancel}
+          disabled={processing}
+          className="flex-1 py-3 border border-border rounded-xl text-sm font-medium hover:bg-muted disabled:opacity-50"
+        >
+          {l.cancel}
+        </button>
+        <button
+          type="submit"
+          disabled={processing || !stripe}
+          className="flex-1 py-3.5 bg-emerald-600 text-white rounded-xl text-base font-bold hover:bg-emerald-700 disabled:opacity-50 shadow-lg shadow-emerald-600/25"
+        >
+          {processing ? l.processing : l.payNow}
+        </button>
+      </div>
+    </form>
+  );
 }
 
-export default function DonationCampaignManager({ accountType, stripeAccountId, onRefreshProfile }: {
+export default function DonationCampaignManager({ accountType }: {
   accountType: string;
-  stripeAccountId: string | null;
-  onRefreshProfile: () => void;
 }) {
   const { getToken } = useAuth();
   const { lang } = useLang();
@@ -112,17 +176,20 @@ export default function DonationCampaignManager({ accountType, stripeAccountId, 
   const [showForm, setShowForm] = useState(false);
   const [formTitle, setFormTitle] = useState("");
   const [formDesc, setFormDesc] = useState("");
-  const [formGoal, setFormGoal] = useState("");
   const [formPhotos, setFormPhotos] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
-  const [connectingStripe, setConnectingStripe] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [uploadingForCampaign, setUploadingForCampaign] = useState<number | null>(null);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editTitle, setEditTitle] = useState("");
   const [editDesc, setEditDesc] = useState("");
-  const [editGoal, setEditGoal] = useState("");
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [publishingId, setPublishingId] = useState<number | null>(null);
+  const [selectedPricing, setSelectedPricing] = useState<number | null>(null);
+  const [clientSecret, setClientSecret] = useState<string | null>(null);
+  const [paymentCampaignId, setPaymentCampaignId] = useState<number | null>(null);
+  const [paymentIntentId, setPaymentIntentId] = useState<string | null>(null);
+  const [stripeReady, setStripeReady] = useState(!!stripePromise);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   async function authFetch(url: string, opts?: RequestInit) {
@@ -135,7 +202,7 @@ export default function DonationCampaignManager({ accountType, stripeAccountId, 
   const { data: campaigns = [] } = useQuery<Campaign[]>({
     queryKey: ["my-campaigns"],
     queryFn: async () => {
-      const res = await authFetch("/api/donations/my-campaigns");
+      const res = await authFetch("/api/donations/campaigns/my-campaigns");
       if (res.ok) return res.json();
       return [];
     },
@@ -147,12 +214,12 @@ export default function DonationCampaignManager({ accountType, stripeAccountId, 
     refetchInterval: false,
   });
 
-  const { data: balance } = useQuery<any>({
-    queryKey: ["org-balance"],
+  const { data: pricing = [] } = useQuery<PricingOption[]>({
+    queryKey: ["campaign-pricing"],
     queryFn: async () => {
-      const res = await authFetch("/api/donations/balance");
+      const res = await fetch("/api/donations/campaigns/pricing");
       if (res.ok) return res.json();
-      return null;
+      return [];
     },
     enabled: isOrg,
     staleTime: Infinity,
@@ -258,7 +325,6 @@ export default function DonationCampaignManager({ accountType, stripeAccountId, 
         body: JSON.stringify({
           title: formTitle,
           description: formDesc,
-          goalAmount: formGoal ? Number(formGoal) : null,
         }),
       });
       if (res.ok) {
@@ -273,7 +339,6 @@ export default function DonationCampaignManager({ accountType, stripeAccountId, 
         setShowForm(false);
         setFormTitle("");
         setFormDesc("");
-        setFormGoal("");
         setFormPhotos([]);
         queryClient.invalidateQueries({ queryKey: ["my-campaigns"] });
       }
@@ -286,7 +351,6 @@ export default function DonationCampaignManager({ accountType, stripeAccountId, 
     setEditingId(c.id);
     setEditTitle(c.title);
     setEditDesc(c.description);
-    setEditGoal(c.goalAmount ? String(c.goalAmount / 100) : "");
   }
 
   async function handleSaveEdit(campaignId: number) {
@@ -297,7 +361,6 @@ export default function DonationCampaignManager({ accountType, stripeAccountId, 
         body: JSON.stringify({
           title: editTitle,
           description: editDesc,
-          goalAmount: editGoal ? Number(editGoal) : null,
         }),
       });
       if (res.ok) {
@@ -307,20 +370,6 @@ export default function DonationCampaignManager({ accountType, stripeAccountId, 
       }
     } finally {
       setSaving(false);
-    }
-  }
-
-  async function handleToggleCampaign(id: number, isActive: boolean) {
-    const res = await authFetch(`/api/donations/campaigns/${id}`, {
-      method: "PATCH",
-      body: JSON.stringify({ isActive: !isActive }),
-    });
-    if (res.ok) {
-      toast({ title: l.updated });
-      queryClient.invalidateQueries({ queryKey: ["my-campaigns"] });
-    } else {
-      const data = await res.json().catch(() => ({}));
-      toast({ title: data.error || "Error", variant: "destructive" });
     }
   }
 
@@ -335,7 +384,7 @@ export default function DonationCampaignManager({ accountType, stripeAccountId, 
         queryClient.invalidateQueries({ queryKey: ["my-campaigns"] });
       } else {
         const data = await res.json();
-        toast({ title: data.error || l.cannotDelete, variant: "destructive" });
+        toast({ title: data.error || l.cannotDeletePaid, variant: "destructive" });
         setDeletingId(null);
       }
     } catch {
@@ -344,19 +393,89 @@ export default function DonationCampaignManager({ accountType, stripeAccountId, 
     }
   }
 
-  async function handleConnectStripe() {
-    setConnectingStripe(true);
+  async function handleStartPublish(campaignId: number) {
+    setPublishingId(campaignId);
+    setSelectedPricing(null);
+    setClientSecret(null);
+    setPaymentCampaignId(null);
+    setPaymentIntentId(null);
+
+    if (!stripePromise) {
+      const res = await fetch("/api/donations/campaigns/stripe-config");
+      if (res.ok) {
+        const { publishableKey } = await res.json();
+        stripePromise = loadStripe(publishableKey);
+        setStripeReady(true);
+      }
+    }
+  }
+
+  async function handlePayForPublication() {
+    if (!publishingId || !selectedPricing) return;
+    setSaving(true);
     try {
-      const res = await authFetch("/api/donations/connect-stripe", { method: "POST" });
-      const data = await res.json();
-      if (data.url) window.location.href = data.url;
-      else if (data.alreadyConnected) {
-        toast({ title: l.stripeConnected });
-        onRefreshProfile();
+      const res = await authFetch(`/api/donations/campaigns/${publishingId}/create-payment`, {
+        method: "POST",
+        body: JSON.stringify({ pricingId: selectedPricing }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setClientSecret(data.clientSecret);
+        setPaymentCampaignId(publishingId);
+        const piId = data.clientSecret.split("_secret_")[0];
+        setPaymentIntentId(piId);
+      } else {
+        const err = await res.json();
+        toast({ title: err.error || l.paymentError, variant: "destructive" });
       }
     } finally {
-      setConnectingStripe(false);
+      setSaving(false);
     }
+  }
+
+  const handlePaymentSuccess = useCallback(async () => {
+    toast({ title: l.paymentSuccess });
+
+    if (paymentIntentId && paymentCampaignId) {
+      try {
+        await authFetch(`/api/donations/campaigns/${paymentCampaignId}/confirm-payment`, {
+          method: "POST",
+          body: JSON.stringify({ paymentIntentId }),
+        });
+      } catch {}
+    }
+
+    setPublishingId(null);
+    setClientSecret(null);
+    setPaymentCampaignId(null);
+    setPaymentIntentId(null);
+    setSelectedPricing(null);
+    queryClient.invalidateQueries({ queryKey: ["my-campaigns"] });
+  }, [paymentIntentId, paymentCampaignId, queryClient, toast, l.paymentSuccess]);
+
+  function cancelPublish() {
+    setPublishingId(null);
+    setClientSecret(null);
+    setPaymentCampaignId(null);
+    setPaymentIntentId(null);
+    setSelectedPricing(null);
+  }
+
+  function statusBadge(c: Campaign) {
+    const now = new Date();
+    if (c.paymentStatus === "paid" && c.isActive && c.expiresAt && new Date(c.expiresAt) > now) {
+      return { label: l.active, cls: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400" };
+    }
+    if (c.paymentStatus === "paid" && c.expiresAt && new Date(c.expiresAt) <= now) {
+      return { label: l.expired, cls: "bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400" };
+    }
+    if (c.paymentStatus === "pending") {
+      return { label: l.pending, cls: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400" };
+    }
+    if (c.paymentStatus === "failed") {
+      return { label: l.failed, cls: "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400" };
+    }
+    return { label: l.draft, cls: "bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400" };
   }
 
   if (!isOrg) return null;
@@ -367,34 +486,13 @@ export default function DonationCampaignManager({ accountType, stripeAccountId, 
         {l.title}
       </h2>
 
-      {!stripeAccountId && (
-        <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-2xl p-4 mb-4">
-          <p className="text-sm text-amber-800 dark:text-amber-300 mb-3">{l.connectStripeDesc}</p>
-          <button
-            onClick={handleConnectStripe}
-            disabled={connectingStripe}
-            className="px-4 py-2 bg-[#635bff] text-white rounded-xl text-sm font-semibold hover:opacity-90 disabled:opacity-50"
-          >
-            {connectingStripe ? "..." : l.connectStripe}
-          </button>
-        </div>
-      )}
-
-      {stripeAccountId && balance && (
-        <div className="bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 rounded-2xl p-4 mb-4">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-sm font-medium text-emerald-800 dark:text-emerald-300">{l.totalReceived}</span>
-            <span className="text-lg font-bold text-emerald-600 dark:text-emerald-400">€{(balance.organizationBalance.totalOrgReceived / 100).toFixed(2)}</span>
-          </div>
-          <p className="text-[10px] text-emerald-700 dark:text-emerald-400">{l.fundsInfo}</p>
-        </div>
-      )}
-
       <div className="bg-card border border-border rounded-2xl overflow-hidden divide-y divide-border">
         {campaigns.map((c) => {
           const photos = Array.isArray(c.photos) ? c.photos : [];
           const isEditing = editingId === c.id;
           const isDeleting = deletingId === c.id;
+          const isPublishing = publishingId === c.id;
+          const badge = statusBadge(c);
 
           return (
             <div key={c.id} className="px-5 py-4">
@@ -431,14 +529,6 @@ export default function DonationCampaignManager({ accountType, stripeAccountId, 
                     rows={3}
                     className="w-full px-3 py-2 border border-border rounded-xl text-sm bg-background resize-none"
                   />
-                  <input
-                    value={editGoal}
-                    onChange={(e) => setEditGoal(e.target.value.replace(/[^0-9.]/g, ""))}
-                    placeholder={l.goalOptional}
-                    type="text"
-                    inputMode="decimal"
-                    className="w-full px-3 py-2 border border-border rounded-xl text-sm bg-background"
-                  />
                   <div className="flex gap-2">
                     <button
                       type="button"
@@ -456,19 +546,76 @@ export default function DonationCampaignManager({ accountType, stripeAccountId, 
                     </button>
                   </div>
                 </div>
+              ) : isPublishing ? (
+                <div className="space-y-4">
+                  {!clientSecret ? (
+                    <>
+                      <h3 className="text-sm font-semibold text-foreground">{l.selectDuration}</h3>
+                      <div className="space-y-2">
+                        {pricing.map((p) => (
+                          <button
+                            key={p.id}
+                            onClick={() => setSelectedPricing(p.id)}
+                            className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border text-sm transition-colors ${
+                              selectedPricing === p.id
+                                ? "border-emerald-500 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300"
+                                : "border-border hover:bg-muted text-foreground"
+                            }`}
+                          >
+                            <span className="font-medium">{p.label} ({p.durationDays} {l.days})</span>
+                            <span className="font-bold">€{(p.priceCents / 100).toFixed(2)}</span>
+                          </button>
+                        ))}
+                      </div>
+                      {pricing.length === 0 && (
+                        <p className="text-sm text-muted-foreground text-center py-4">
+                          {lang === "it" ? "Nessun piano tariffario disponibile." : "No pricing plans available."}
+                        </p>
+                      )}
+                      <div className="flex gap-2">
+                        <button
+                          onClick={cancelPublish}
+                          className="flex-1 py-2 border border-border rounded-xl text-sm font-medium text-foreground hover:bg-muted"
+                        >
+                          {l.cancel}
+                        </button>
+                        <button
+                          onClick={handlePayForPublication}
+                          disabled={!selectedPricing || saving}
+                          className="flex-1 py-2.5 bg-emerald-600 text-white rounded-xl text-sm font-bold hover:bg-emerald-700 disabled:opacity-50"
+                        >
+                          {saving ? l.processing : l.payNow}
+                        </button>
+                      </div>
+                    </>
+                  ) : stripeReady && stripePromise ? (
+                    <Elements stripe={stripePromise} options={{ clientSecret, appearance: { theme: "stripe" } }}>
+                      <PublishPaymentForm
+                        clientSecret={clientSecret}
+                        onSuccess={handlePaymentSuccess}
+                        onCancel={cancelPublish}
+                        l={l}
+                      />
+                    </Elements>
+                  ) : null}
+                </div>
               ) : (
                 <>
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-medium text-foreground truncate">{c.title}</p>
                       <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{c.description}</p>
-                      <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
-                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${c.isActive ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400" : "bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400"}`}>
-                          {c.isActive ? l.active : l.inactive}
+                      <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground flex-wrap">
+                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${badge.cls}`}>
+                          {badge.label}
                         </span>
-                        <span>€{(c.totalRaised / 100).toFixed(2)} {l.raised}</span>
-                        <span>{c.donationCount} {l.donations}</span>
-                        {c.goalAmount && <span>/ €{(c.goalAmount / 100).toFixed(2)}</span>}
+                        {c.pricePaidCents != null && (
+                          <span>€{(c.pricePaidCents / 100).toFixed(2)}</span>
+                        )}
+                        {c.durationDays && <span>{c.durationDays} {l.days}</span>}
+                        {c.expiresAt && (
+                          <span>{l.expiresOn}: {new Date(c.expiresAt).toLocaleDateString(lang === "it" ? "it-IT" : "en-US", { day: "2-digit", month: "short", year: "numeric" })}</span>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -479,7 +626,7 @@ export default function DonationCampaignManager({ accountType, stripeAccountId, 
                     campaignId={c.id}
                   />
 
-                  <div className="flex items-center gap-2 mt-3 pt-2 border-t border-border/50">
+                  <div className="flex items-center gap-2 mt-3 pt-2 border-t border-border/50 flex-wrap">
                     {photos.length < MAX_CAMPAIGN_PHOTOS && (
                       <>
                         <input
@@ -513,28 +660,29 @@ export default function DonationCampaignManager({ accountType, stripeAccountId, 
                       {l.edit}
                     </button>
 
-                    <button
-                      onClick={() => handleToggleCampaign(c.id, c.isActive)}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-medium border ${c.isActive ? "border-gray-300 text-gray-600 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-400" : "border-emerald-300 text-emerald-600 hover:bg-emerald-50 dark:border-emerald-700 dark:text-emerald-400"}`}
-                    >
-                      {c.isActive ? l.deactivate : l.activate}
-                    </button>
+                    {c.paymentStatus === "draft" && pricing.length > 0 && (
+                      <button
+                        onClick={() => handleStartPublish(c.id)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-emerald-300 text-emerald-600 hover:bg-emerald-50 dark:border-emerald-700 dark:text-emerald-400 dark:hover:bg-emerald-900/30"
+                      >
+                        <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                          <path d="M12 19V5M5 12l7-7 7 7" strokeLinecap="round" strokeLinejoin="round"/>
+                        </svg>
+                        {l.publish}
+                      </button>
+                    )}
 
-                    <button
-                      onClick={() => {
-                        if (c.donationCount > 0) {
-                          toast({ title: l.cannotDelete, variant: "destructive" });
-                        } else {
-                          setDeletingId(c.id);
-                        }
-                      }}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-red-300 text-red-600 hover:bg-red-50 dark:border-red-700 dark:text-red-400 dark:hover:bg-red-900/30"
-                    >
-                      <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                        <path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6h14" strokeLinecap="round" strokeLinejoin="round"/>
-                      </svg>
-                      {l.delete}
-                    </button>
+                    {c.paymentStatus !== "paid" && (
+                      <button
+                        onClick={() => setDeletingId(c.id)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-red-300 text-red-600 hover:bg-red-50 dark:border-red-700 dark:text-red-400 dark:hover:bg-red-900/30"
+                      >
+                        <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                          <path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6h14" strokeLinecap="round" strokeLinejoin="round"/>
+                        </svg>
+                        {l.delete}
+                      </button>
+                    )}
                   </div>
                 </>
               )}
@@ -563,62 +711,51 @@ export default function DonationCampaignManager({ accountType, stripeAccountId, 
               rows={3}
               className="w-full px-3 py-2 border border-border rounded-xl text-sm bg-background resize-none"
             />
-            <input
-              value={formGoal}
-              onChange={(e) => setFormGoal(e.target.value.replace(/[^0-9.]/g, ""))}
-              placeholder={l.goalOptional}
-              type="text"
-              inputMode="decimal"
-              className="w-full px-3 py-2 border border-border rounded-xl text-sm bg-background"
-            />
 
-            <div>
-              <p className="text-xs text-muted-foreground mb-2">{l.maxPhotos}</p>
-              {formPhotos.length > 0 && (
-                <div className="flex gap-2 mb-2 overflow-x-auto">
-                  {formPhotos.map((photo, i) => (
-                    <div key={i} className="relative flex-shrink-0 group">
-                      <img src={photoSrc(photo)} alt="" className="w-16 h-16 rounded-xl object-cover border border-border" />
-                      <button
-                        type="button"
-                        onClick={() => setFormPhotos((prev) => prev.filter((_, idx) => idx !== i))}
-                        className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center text-[10px] font-bold hover:bg-red-600 opacity-0 group-hover:opacity-100 transition-opacity"
-                      >
-                        ×
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-              {formPhotos.length < MAX_CAMPAIGN_PHOTOS && (
-                <>
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="image/*"
-                    multiple
-                    className="hidden"
-                    onChange={handleFormPhotoUpload}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    disabled={uploadingPhoto}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-emerald-300 text-emerald-600 hover:bg-emerald-50 dark:border-emerald-700 dark:text-emerald-400 dark:hover:bg-emerald-900/30 disabled:opacity-50"
-                  >
-                    <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                      <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/>
-                    </svg>
-                    {uploadingPhoto ? l.photoUploading : l.addPhotos}
-                  </button>
-                </>
-              )}
-            </div>
+            {formPhotos.length > 0 && (
+              <div className="flex gap-2 flex-wrap">
+                {formPhotos.map((p, i) => (
+                  <div key={i} className="relative w-16 h-16 rounded-lg overflow-hidden border border-border">
+                    <img src={p.startsWith("http") ? p : `/api/storage${p.startsWith("/") ? "" : "/"}${p}`} alt="" className="w-full h-full object-cover" />
+                    <button
+                      type="button"
+                      onClick={() => setFormPhotos((prev) => prev.filter((_, j) => j !== i))}
+                      className="absolute top-0.5 right-0.5 w-5 h-5 bg-black/60 rounded-full flex items-center justify-center text-white"
+                    >
+                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                        <path d="M18 6L6 18M6 6l12 12"/>
+                      </svg>
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
 
-            <div className="flex gap-2">
+            {formPhotos.length < MAX_CAMPAIGN_PHOTOS && (
+              <>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  className="hidden"
+                  onChange={handleFormPhotoUpload}
+                />
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={uploadingPhoto}
+                  className="px-3 py-1.5 text-xs font-medium border border-dashed border-border rounded-lg text-muted-foreground hover:bg-muted disabled:opacity-50"
+                >
+                  {uploadingPhoto ? l.photoUploading : `${l.addPhotos} (${formPhotos.length}/${MAX_CAMPAIGN_PHOTOS})`}
+                </button>
+              </>
+            )}
+
+            <div className="flex gap-2 pt-1">
               <button
                 type="button"
-                onClick={() => { setShowForm(false); setFormPhotos([]); }}
+                onClick={() => { setShowForm(false); setFormTitle(""); setFormDesc(""); setFormPhotos([]); }}
                 className="flex-1 py-2 border border-border rounded-xl text-sm font-medium text-foreground hover:bg-muted"
               >
                 {l.cancel}
@@ -635,7 +772,7 @@ export default function DonationCampaignManager({ accountType, stripeAccountId, 
         ) : (
           <button
             onClick={() => setShowForm(true)}
-            className="w-full px-5 py-4 text-sm font-medium text-primary hover:bg-muted transition-colors text-left"
+            className="w-full py-3 text-sm font-medium text-primary hover:bg-muted/50 transition-colors"
           >
             + {l.create}
           </button>

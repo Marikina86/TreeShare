@@ -41,6 +41,6 @@ router.use(inboxRouter);
 router.use(policiesRouter);
 router.use(consentsRouter);
 router.use(cookieConsentRouter);
-router.use(donationsRouter);
+router.use("/donations", donationsRouter);
 
 export default router;

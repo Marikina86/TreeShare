@@ -75,23 +75,20 @@ A plant/tree sharing social app. Community members document trees/plants they pl
 - **Smart feed refresh**: `useFeed` hook checks lightweight `GET /api/trees/feed-meta` before full feed fetch
 - **Badge counts**: Shown in nav, only update on app open or manual refresh
 
-### Donation System (Stripe Connect — Destination Charges)
-- **Campaign photos**: Max 3 photos per campaign; stored as JSON array of paths in `donation_campaigns.photos`; upload via existing `/api/storage/uploads/request-url` flow; photos shown on campaigns page, profile (DonateSection for visitors, ProfileCampaignSection for owner), and DonationCampaignManager
-- **Account types**: Users can be `"user"` (default) or `"organization"` — only orgs can create campaigns
-- **Stripe integration**: Uses Replit Stripe connector (NOT env vars); `getUncachableStripeClient()` called fresh each request
-- **Stripe Connect model**: Destination charges — 80% goes directly to org's Stripe Connect account, 20% kept by platform as `application_fee_amount`
-- **No manual payouts**: Funds route automatically via Stripe Connect; no `request-payout` endpoint, no payout fees, no `org_balances` updates
-- **Amounts**: All stored in cents (integer) — `goalAmount`, `amountTotal`, `amountOrg`, `amountPlatform`
-- **Ledger tracking**:
-  - `platform_revenue` table: `total_commissions` (cumulative 20% application fees), `transaction_count`
-  - `ledger_entries` table: Full audit trail — `donation_org_credit`, `donation_platform_fee`
-  - `org_balances`, `payouts` tables retained in schema for legacy data but no longer written to
-- **Webhook security**: Raw body via `express.raw()` mounted before `express.json()`; strict signature verification; rejects unsigned events
-- **Idempotency**: Webhook uses conditional UPDATE (`WHERE status != 'completed'`) — no double-crediting
-- **Webhook handler**: Exported as `webhookHandler` from donations.ts, mounted directly in app.ts at `/api/donations/webhook`
-- **Admin endpoints**: `GET /api/donations/platform-revenue` (platform earnings), `GET /api/donations/admin-finance` (full overview) — admin-only
-- **Frontend**: `DonationCampaignManager` in SettingsPage (org management); `DonateSection` on ProfilePage (visitor donation)
-- **Stripe Connect**: Express accounts for orgs; onboarding via account links
+### Campaign System (Paid Publication Model)
+- **Model**: Organizations pay the platform to publish campaigns for a selectable duration. No donations, no Stripe Connect destination charges.
+- **Campaign photos**: Max 3 photos per campaign; stored as JSON array in `donation_campaigns.photos`; upload via `/api/storage/uploads/request-url`
+- **Account types**: Users `"user"` (default) or `"organization"` — only orgs can create campaigns
+- **Stripe integration**: Uses Replit Stripe connector; `getUncachableStripeClient()` called fresh each request; simple PaymentIntents to platform (no Connect accounts)
+- **Pricing**: Admin-managed `campaign_pricing` table with duration/price tiers; orgs select a tier when publishing
+- **Campaign lifecycle**: draft → pending (payment created) → paid (active, `expiresAt` set) or failed
+- **Amounts**: All stored in cents (integer) — `pricePaidCents` on campaigns, `priceCents` on pricing tiers
+- **Revenue tracking**: `platform_revenue` table: `total_commissions` (cumulative campaign payments), `transaction_count`
+- **Webhook**: `payment_intent.succeeded` activates campaign + records revenue; `payment_intent.payment_failed` marks campaign failed; mounted at `/api/campaigns/webhook` and `/api/donations/webhook`
+- **Idempotency**: Webhook uses conditional UPDATE (`WHERE payment_status != 'paid'`) — no double-crediting
+- **Admin endpoints**: CRUD for campaign pricing (`POST/PATCH/DELETE /api/donations/admin/campaign-pricing`); `GET /api/donations/admin/finance` (revenue overview)
+- **Frontend**: `DonationCampaignManager` in SettingsPage (org create/edit/publish campaigns); `ProfileCampaignSection` on ProfilePage (display only); `CampaignsPage` lists active campaigns (display + share, no donate buttons)
+- **Removed**: DonateSection, MyDonationsSection, Stripe Connect onboarding, donations/orgBalances/payouts/ledgerEntries tables
 
 ### CO₂ Environmental Impact
 - Computed client-side from `trees.data` using `plantedAt` field
@@ -105,17 +102,17 @@ A plant/tree sharing social app. Community members document trees/plants they pl
 - Multilingual toast messages (6 languages)
 
 ### Public CampaignsPage
-- Route `/campaigns` — public (no auth required), lists active campaigns with sort filters (Recent/Popular/Most funded)
-- API: `GET /api/donations/campaigns/active` — public endpoint
+- Route `/campaigns` — public (no auth required), lists active paid campaigns
+- API: `GET /api/donations/campaigns/active` — public endpoint (only shows paid + not-expired)
 - Heart icon in both desktop and mobile headers links to campaigns page
 
 ### Organization Signup Email Verification
-- Org signup (`POST /api/register-ente`) uses `supabase.auth.signUp()` with ANON key — this actually sends the verification email (unlike `admin.createUser` + `generateLink` which doesn't)
+- Org signup (`POST /api/register-ente`) uses `admin.createUser()` + `admin.generateLink()` with service role key
 - DB writes (users, organizations, consents) wrapped in a Drizzle transaction; if DB fails, Supabase auth user is cleaned up via `admin.deleteUser()`
 - Frontend shows verify step with instructions (check email → click link → sign in) and resend capability
 - Resend uses `supabase.auth.resend()` client-side with fallback to `POST /api/register-ente/resend-verification` backend endpoint (also uses anon key `resend`)
 - **Login page resend**: When sign-in returns "Email not confirmed", shows a "Rinvia email di verifica" button; uses `supabase.auth.resend()` with backend fallback
 - Redirect URLs use server-side `APP_ORIGIN` / `REPLIT_DEV_DOMAIN` env vars for security
 
-### DB Schema (22 tables)
-`users`, `trees`, `treeUpdates`, `treeSuns`, `events`, `eventParticipants`, `alerts`, `tips`, `problemReports`, `userNotifications`, `organizations`, `reports`, `weeklyWinners`, `policies`, `userConsents`, `cookieConsents`, `donationCampaigns`, `donations`, `orgBalances`, `payouts`, `platformRevenue`, `ledgerEntries`
+### DB Schema (18 tables)
+`users`, `trees`, `treeUpdates`, `treeSuns`, `events`, `eventParticipants`, `alerts`, `tips`, `problemReports`, `userNotifications`, `organizations`, `reports`, `weeklyWinners`, `policies`, `userConsents`, `cookieConsents`, `donationCampaigns`, `campaignPricing`, `platformRevenue`

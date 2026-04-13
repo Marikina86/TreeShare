@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { usersTable, treesTable, reportsTable, treeUpdatesTable, treeSunsTable, eventsTable, eventParticipantsTable, problemReportsTable, userConsentsTable, cookieConsentsTable, userNotificationsTable, donationCampaignsTable, donationsTable, orgBalancesTable, ledgerEntriesTable, payoutsTable, weeklyWinnersTable, organizationsTable, alertsTable } from "@workspace/db";
+import { usersTable, treesTable, reportsTable, treeUpdatesTable, treeSunsTable, eventsTable, eventParticipantsTable, problemReportsTable, userConsentsTable, cookieConsentsTable, userNotificationsTable, donationCampaignsTable, weeklyWinnersTable, organizationsTable, alertsTable } from "@workspace/db";
 import { eq, desc, sql, count, ilike, or, inArray } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
 import { requireAdmin } from "../middlewares/requireAdmin";
@@ -239,22 +239,7 @@ router.delete(
         await tx.delete(eventParticipantsTable).where(eq(eventParticipantsTable.userId, clerkUserId));
         await tx.delete(eventsTable).where(eq(eventsTable.userId, clerkUserId));
 
-        const userCampaigns = await tx.select({ id: donationCampaignsTable.id }).from(donationCampaignsTable).where(eq(donationCampaignsTable.userId, clerkUserId));
-        const campaignIds = userCampaigns.map(c => c.id);
-        if (campaignIds.length > 0) {
-          const campaignDonations = await tx.select({ id: donationsTable.id }).from(donationsTable).where(inArray(donationsTable.campaignId, campaignIds));
-          const donationIds = campaignDonations.map(d => d.id);
-          if (donationIds.length > 0) {
-            await tx.delete(ledgerEntriesTable).where(inArray(ledgerEntriesTable.donationId, donationIds));
-          }
-          await tx.delete(donationsTable).where(inArray(donationsTable.campaignId, campaignIds));
-        }
-        await tx.delete(donationsTable).where(eq(donationsTable.donorUserId, clerkUserId));
         await tx.delete(donationCampaignsTable).where(eq(donationCampaignsTable.userId, clerkUserId));
-
-        await tx.delete(ledgerEntriesTable).where(eq(ledgerEntriesTable.orgUserId, clerkUserId));
-        await tx.delete(payoutsTable).where(eq(payoutsTable.userId, clerkUserId));
-        await tx.delete(orgBalancesTable).where(eq(orgBalancesTable.userId, clerkUserId));
 
         await tx.delete(weeklyWinnersTable).where(eq(weeklyWinnersTable.userId, clerkUserId));
         await tx.delete(problemReportsTable).where(eq(problemReportsTable.userId, clerkUserId));
