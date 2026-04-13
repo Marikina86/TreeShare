@@ -164,13 +164,49 @@ export default function LandingPage() {
       {showPlanters && <PlantersModal onClose={() => setShowPlanters(false)} lang={lang} />}
 
       {/* Header */}
-      <header className="px-6 py-4 flex items-center justify-between border-b border-border bg-card">
-        <div className="flex items-center gap-2 text-primary font-bold text-xl">
-          <img src="/icon-192.png" alt="TreeShare" width="28" height="28" style={{ borderRadius: "6px", objectFit: "cover" }} />
-          TreeShare
+      <header className="border-b border-border bg-card">
+        <div className="px-6 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-2 text-primary font-bold text-xl flex-shrink-0">
+            <img src="/icon-192.png" alt="TreeShare" width="28" height="28" style={{ borderRadius: "6px", objectFit: "cover" }} />
+            TreeShare
+          </div>
+          <div className="flex items-center gap-3">
+            <div className="hidden md:flex items-center rounded-lg border border-border overflow-hidden">
+              {LANG_OPTIONS.map((opt) => (
+                <button
+                  key={opt.value}
+                  onClick={() => setLang(opt.value)}
+                  className={`px-2.5 py-1.5 text-xs font-semibold transition-colors flex items-center gap-1 ${
+                    lang === opt.value
+                      ? "bg-primary text-primary-foreground"
+                      : "text-muted-foreground hover:bg-muted"
+                  }`}
+                >
+                  <span>{opt.flag}</span>
+                  <span>{opt.short}</span>
+                </button>
+              ))}
+            </div>
+            <Link href="/campaigns" className="p-2 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors" title={donateLabel} aria-label={donateLabel}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 22V14"/>
+                <path d="M12 14C12 14 7 13 5 9C3 5 6 2 9 3C10.5 3.5 11.5 5 12 7C12.5 5 13.5 3.5 15 3C18 2 21 5 19 9C17 13 12 14 12 14Z" fill="currentColor" opacity="0.15"/>
+                <path d="M12 14C12 14 7 13 5 9C3 5 6 2 9 3C10.5 3.5 11.5 5 12 7C12.5 5 13.5 3.5 15 3C18 2 21 5 19 9C17 13 12 14 12 14Z"/>
+              </svg>
+            </Link>
+            <Link href="/sign-in" data-testid="link-signin" className="text-sm font-medium text-foreground hover:text-primary transition-colors">
+              {t.auth.signIn}
+            </Link>
+            <Link
+              href="/register"
+              data-testid="link-signup"
+              className="text-sm font-medium bg-primary text-primary-foreground px-4 py-2 rounded-lg hover:opacity-90 transition-opacity"
+            >
+              {t.auth.joinTreeShare}
+            </Link>
+          </div>
         </div>
-        <div className="flex items-center gap-3">
-          {/* Language switcher */}
+        <div className="md:hidden px-6 pb-3 flex justify-center">
           <div className="flex items-center rounded-lg border border-border overflow-hidden">
             {LANG_OPTIONS.map((opt) => (
               <button
@@ -187,23 +223,6 @@ export default function LandingPage() {
               </button>
             ))}
           </div>
-          <Link href="/campaigns" className="p-2 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors" title={donateLabel} aria-label={donateLabel}>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12 22V14"/>
-              <path d="M12 14C12 14 7 13 5 9C3 5 6 2 9 3C10.5 3.5 11.5 5 12 7C12.5 5 13.5 3.5 15 3C18 2 21 5 19 9C17 13 12 14 12 14Z" fill="currentColor" opacity="0.15"/>
-              <path d="M12 14C12 14 7 13 5 9C3 5 6 2 9 3C10.5 3.5 11.5 5 12 7C12.5 5 13.5 3.5 15 3C18 2 21 5 19 9C17 13 12 14 12 14Z"/>
-            </svg>
-          </Link>
-          <Link href="/sign-in" data-testid="link-signin" className="text-sm font-medium text-foreground hover:text-primary transition-colors">
-            {t.auth.signIn}
-          </Link>
-          <Link
-            href="/register"
-            data-testid="link-signup"
-            className="text-sm font-medium bg-primary text-primary-foreground px-4 py-2 rounded-lg hover:opacity-90 transition-opacity"
-          >
-            {t.auth.joinTreeShare}
-          </Link>
         </div>
       </header>
 
