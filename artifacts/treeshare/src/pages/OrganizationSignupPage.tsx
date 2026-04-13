@@ -4,6 +4,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Link, useLocation } from "wouter";
+import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -28,6 +29,7 @@ import {
   Eye,
   EyeOff,
   AlertCircle,
+  Leaf,
 } from "lucide-react";
 
 function checkPartitaIVA(piva: string): boolean {
@@ -163,8 +165,8 @@ function SectionHeader({ icon: Icon, title }: { icon: React.ElementType; title: 
 
 export default function OrganizationSignupPage() {
   const [, setLocation] = useLocation();
+  const [step, setStep] = useState<"form" | "verify">("form");
   const [submitting, setSubmitting] = useState(false);
-  const [success, setSuccess] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -173,6 +175,10 @@ export default function OrganizationSignupPage() {
   const [consentErrors, setConsentErrors] = useState<{ privacy?: string; terms?: string }>({});
   const [hpWebsite, setHpWebsite] = useState("");
   const [hpSegnoZodiacale, setHpSegnoZodiacale] = useState("");
+  const [verifiedEmail, setVerifiedEmail] = useState("");
+  const [resending, setResending] = useState(false);
+  const [resendMsg, setResendMsg] = useState<string | null>(null);
+  const [verifyError, setVerifyError] = useState<string | null>(null);
 
   const {
     register,
@@ -191,7 +197,8 @@ export default function OrganizationSignupPage() {
 
   const onSubmit = async (data: FormValues) => {
     if (hpWebsite || hpSegnoZodiacale) {
-      setSuccess(true);
+      setVerifiedEmail(data.emailUfficiale);
+      setStep("verify");
       return;
     }
     const ce: { privacy?: string; terms?: string } = {};
@@ -237,7 +244,8 @@ export default function OrganizationSignupPage() {
         return;
       }
 
-      setSuccess(true);
+      setVerifiedEmail(data.emailUfficiale);
+      setStep("verify");
     } catch {
       setServerError("Impossibile contattare il server. Riprova più tardi.");
     } finally {
@@ -245,24 +253,113 @@ export default function OrganizationSignupPage() {
     }
   };
 
-  if (success) {
+  async function handleResendEmail() {
+    setResending(true);
+    setResendMsg(null);
+    setVerifyError(null);
+    try {
+      const { error } = await supabase.auth.resend({
+        type: "signup",
+        email: verifiedEmail.trim(),
+        options: { emailRedirectTo: `${window.location.origin}/feed` },
+      });
+      if (error) {
+        const res = await fetch("/api/register-ente/resend-verification", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: verifiedEmail.trim() }),
+        });
+        if (!res.ok) {
+          const json = await res.json().catch(() => ({}));
+          setVerifyError((json as { error?: string }).error || "Errore nell'invio dell'email.");
+          return;
+        }
+      }
+      setResendMsg("Email rinviata! Controlla la tua casella di posta (anche lo spam).");
+    } catch {
+      setVerifyError("Errore nell'invio dell'email. Riprova.");
+    } finally {
+      setResending(false);
+    }
+  }
+
+  if (step === "verify") {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background p-4">
-        <Card className="w-full max-w-md text-center">
-          <CardContent className="pt-8 pb-8 space-y-4">
-            <div className="flex justify-center">
-              <CheckCircle2 className="h-16 w-16 text-green-500" />
+      <div className="min-h-screen bg-gradient-to-b from-green-50 to-background flex items-center justify-center p-4">
+        <div className="w-full max-w-sm">
+          <div className="text-center mb-8">
+            <div className="flex justify-center mb-4">
+              <div className="w-14 h-14 rounded-2xl bg-primary text-primary-foreground flex items-center justify-center shadow-lg">
+                <Leaf className="h-7 w-7" />
+              </div>
             </div>
-            <h2 className="text-2xl font-bold">Registrazione completata!</h2>
-            <p className="text-muted-foreground">
-              Il tuo ente è stato registrato con successo su TreeShare.
-              Il team verificherà i dati e ti contatterà all'email fornita.
+            <h1 className="text-2xl font-bold mb-1">Controlla la tua email</h1>
+            <p className="text-sm text-muted-foreground mt-2">
+              Abbiamo inviato un link di verifica a <strong className="text-foreground">{verifiedEmail}</strong>
             </p>
-            <Button className="w-full mt-4" onClick={() => setLocation("/")}>
-              Torna alla home
-            </Button>
-          </CardContent>
-        </Card>
+          </div>
+
+          <div className="space-y-4">
+            {verifyError && (
+              <div className="bg-destructive/10 border border-destructive/20 rounded-lg px-4 py-3 text-sm text-destructive flex items-center gap-2">
+                <AlertCircle className="h-4 w-4 flex-shrink-0" />
+                {verifyError}
+              </div>
+            )}
+            {resendMsg && (
+              <div className="bg-green-50 border border-green-200 rounded-lg px-4 py-3 text-sm text-green-700 flex items-center gap-2">
+                <CheckCircle2 className="h-4 w-4 flex-shrink-0" />
+                {resendMsg}
+              </div>
+            )}
+
+            <div className="bg-muted/50 border border-border rounded-xl p-5 space-y-3">
+              <div className="flex items-start gap-3">
+                <div className="flex items-center justify-center w-7 h-7 rounded-full bg-primary/10 text-primary text-sm font-bold shrink-0 mt-0.5">1</div>
+                <p className="text-sm text-foreground">Apri l'email che ti abbiamo appena inviato</p>
+              </div>
+              <div className="flex items-start gap-3">
+                <div className="flex items-center justify-center w-7 h-7 rounded-full bg-primary/10 text-primary text-sm font-bold shrink-0 mt-0.5">2</div>
+                <p className="text-sm text-foreground">Clicca sul link di conferma nell'email</p>
+              </div>
+              <div className="flex items-start gap-3">
+                <div className="flex items-center justify-center w-7 h-7 rounded-full bg-primary/10 text-primary text-sm font-bold shrink-0 mt-0.5">3</div>
+                <p className="text-sm text-foreground">Torna qui e accedi con le tue credenziali</p>
+              </div>
+            </div>
+
+            <p className="text-xs text-muted-foreground text-center">
+              Non trovi l'email? Controlla la cartella spam o posta indesiderata.
+            </p>
+
+            <button
+              onClick={() => setLocation("/sign-in")}
+              className="w-full py-2.5 bg-primary text-primary-foreground rounded-xl font-semibold hover:opacity-90 flex items-center justify-center gap-2 transition-opacity"
+            >
+              Vai all'accesso
+            </button>
+
+            <button
+              type="button"
+              onClick={handleResendEmail}
+              disabled={resending}
+              className="w-full py-2 text-sm font-medium text-primary hover:text-primary/80 disabled:opacity-50 flex items-center justify-center gap-2 transition-colors"
+            >
+              {resending && (
+                <div className="w-3 h-3 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+              )}
+              Rinvia email di verifica
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setStep("form")}
+              className="w-full text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
+              ← Indietro
+            </button>
+          </div>
+        </div>
       </div>
     );
   }

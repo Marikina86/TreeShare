@@ -94,7 +94,7 @@ router.post("/register-ente", async (req, res) => {
     const { data: authData, error: authError } = await supabase.auth.admin.createUser({
       email: data.emailUfficiale,
       password: data.password,
-      email_confirm: true,
+      email_confirm: false,
       user_metadata: {
         username: data.username,
         full_name: `${data.referenteNome} ${data.referenteCognome}`,
@@ -173,16 +173,77 @@ router.post("/register-ente", async (req, res) => {
       await db.insert(userConsentsTable).values(consentRecords);
     }
 
+    const allowedOrigin = process.env.APP_ORIGIN || (process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : "");
+    try {
+      await supabase.auth.admin.generateLink({
+        type: "signup",
+        email: data.emailUfficiale,
+        options: { redirectTo: `${allowedOrigin}/feed` },
+      });
+    } catch (linkErr) {
+      req.log?.warn?.({ err: linkErr }, "Could not generate signup verification link");
+    }
+
     res.status(201).json({
       id: org!.id,
       ragioneSociale: org!.ragioneSociale,
       username: org!.username,
       emailUfficiale: org!.emailUfficiale,
       createdAt: org!.createdAt.toISOString(),
+      emailVerificationRequired: true,
     });
   } catch (err) {
     req.log?.error?.({ err }, "Error registering organization");
     res.status(500).json({ error: "Errore interno del server" });
+  }
+});
+
+router.post("/register-ente/resend-verification", async (req, res) => {
+  const { email } = req.body || {};
+  if (!email || typeof email !== "string") {
+    res.status(400).json({ error: "Email obbligatoria" });
+    return;
+  }
+
+  const trimmed = email.trim().toLowerCase();
+
+  const existingOrg = await db
+    .select({ id: organizationsTable.id })
+    .from(organizationsTable)
+    .where(eq(organizationsTable.emailUfficiale, trimmed))
+    .limit(1);
+
+  if (existingOrg.length === 0) {
+    res.json({ ok: true });
+    return;
+  }
+
+  const supabase = getSupabaseAdmin();
+  if (!supabase) {
+    res.status(500).json({ error: "Servizio non disponibile" });
+    return;
+  }
+
+  try {
+    const allowedOrigin = process.env.APP_ORIGIN || (process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : "");
+    const { error } = await supabase.auth.admin.generateLink({
+      type: "signup",
+      email: trimmed,
+      options: { redirectTo: `${allowedOrigin}/feed` },
+    });
+
+    if (error) {
+      if (error.message?.includes("rate") || error.message?.includes("limit")) {
+        res.status(429).json({ error: "Troppe richieste. Attendi qualche minuto." });
+        return;
+      }
+      req.log?.warn?.({ err: error }, "Resend verification link error");
+    }
+
+    res.json({ ok: true });
+  } catch (err) {
+    req.log?.error?.({ err }, "Resend verification error");
+    res.status(500).json({ error: "Errore interno" });
   }
 });
 

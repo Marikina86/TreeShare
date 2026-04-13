@@ -109,5 +109,13 @@ A plant/tree sharing social app. Community members document trees/plants they pl
 - API: `GET /api/donations/campaigns/active` — public endpoint
 - Heart icon in both desktop and mobile headers links to campaigns page
 
+### Organization Signup Email Verification
+- Org signup (`POST /api/register-ente`) creates Supabase auth user with `email_confirm: false` — email must be verified before login
+- After registration, `admin.generateLink({ type: "signup" })` triggers verification email via Supabase
+- Frontend shows verify step with instructions (check email → click link → sign in) and resend capability
+- Resend uses `supabase.auth.resend()` client-side with fallback to `POST /api/register-ente/resend-verification` backend endpoint
+- Resend endpoint validates email exists in `organizationsTable` before generating link (prevents enumeration)
+- Redirect URLs use server-side `APP_ORIGIN` / `REPLIT_DEV_DOMAIN` env vars (not request headers) for security
+
 ### DB Schema (22 tables)
 `users`, `trees`, `treeUpdates`, `treeSuns`, `events`, `eventParticipants`, `alerts`, `tips`, `problemReports`, `userNotifications`, `organizations`, `reports`, `weeklyWinners`, `policies`, `userConsents`, `cookieConsents`, `donationCampaigns`, `donations`, `orgBalances`, `payouts`, `platformRevenue`, `ledgerEntries`
