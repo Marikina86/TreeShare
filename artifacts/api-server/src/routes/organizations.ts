@@ -17,8 +17,8 @@ function getSupabaseAdmin() {
 }
 
 router.post("/register-ente", async (req, res) => {
-  const { website, company_name } = req.body || {};
-  if (website || company_name) {
+  const { website, segno_zodiacale } = req.body || {};
+  if (website || segno_zodiacale) {
     res.status(201).json({
       id: 0,
       ragioneSociale: req.body?.ragioneSociale || "",

@@ -167,7 +167,7 @@ export default function OrganizationSignupPage() {
   const [acceptTerms, setAcceptTerms] = useState(false);
   const [consentErrors, setConsentErrors] = useState<{ privacy?: string; terms?: string }>({});
   const [hpWebsite, setHpWebsite] = useState("");
-  const [hpCompanyName, setHpCompanyName] = useState("");
+  const [hpSegnoZodiacale, setHpSegnoZodiacale] = useState("");
 
   const {
     register,
@@ -185,7 +185,7 @@ export default function OrganizationSignupPage() {
   const strength = useMemo(() => getPasswordStrength(passwordValue), [passwordValue]);
 
   const onSubmit = async (data: FormValues) => {
-    if (hpWebsite || hpCompanyName) {
+    if (hpWebsite || hpSegnoZodiacale) {
       setSuccess(true);
       return;
     }
@@ -210,7 +210,7 @@ export default function OrganizationSignupPage() {
           acceptPrivacy: true,
           acceptTerms: true,
           website: hpWebsite,
-          company_name: hpCompanyName,
+          segno_zodiacale: hpSegnoZodiacale,
         }),
       });
 
@@ -305,9 +305,9 @@ export default function OrganizationSignupPage() {
             />
             <input
               type="text"
-              name="company_name"
-              value={hpCompanyName}
-              onChange={(e) => setHpCompanyName(e.target.value)}
+              name="segno_zodiacale"
+              value={hpSegnoZodiacale}
+              onChange={(e) => setHpSegnoZodiacale(e.target.value)}
               tabIndex={-1}
               autoComplete="off"
             />

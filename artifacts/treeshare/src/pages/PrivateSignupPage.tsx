@@ -60,7 +60,7 @@ export default function PrivateSignupPage() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const errorRef = useRef<HTMLDivElement>(null);
   const [hpWebsite, setHpWebsite] = useState("");
-  const [hpCompanyName, setHpCompanyName] = useState("");
+  const [hpSegnoZodiacale, setHpSegnoZodiacale] = useState("");
 
   useEffect(() => {
     if (serverError && errorRef.current) {
@@ -93,7 +93,7 @@ export default function PrivateSignupPage() {
 
   async function handleSubmit(ev: React.FormEvent) {
     ev.preventDefault();
-    if (hpWebsite || hpCompanyName) {
+    if (hpWebsite || hpSegnoZodiacale) {
       setStep("done");
       return;
     }
@@ -417,9 +417,9 @@ export default function PrivateSignupPage() {
             />
             <input
               type="text"
-              name="company_name"
-              value={hpCompanyName}
-              onChange={(e) => setHpCompanyName(e.target.value)}
+              name="segno_zodiacale"
+              value={hpSegnoZodiacale}
+              onChange={(e) => setHpSegnoZodiacale(e.target.value)}
               tabIndex={-1}
               autoComplete="off"
             />
