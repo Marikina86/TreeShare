@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useAuth } from "@/lib/auth";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { useLang } from "@/lib/i18n";
 import { useToast } from "@/hooks/use-toast";
@@ -189,10 +189,16 @@ export default function AdminPage() {
   const [alertSubmitting, setAlertSubmitting] = useState(false);
   const [alertForm, setAlertForm] = useState({ title: "", message: "", priority: "normal" });
 
+  interface PricingTier { id: number; durationDays: number; priceCents: number; label: string; isActive: boolean; createdAt: string }
   interface FinanceData {
     platformRevenue: { totalCommissions: number; transactionCount: number };
     recentPaidCampaigns: { id: number; title: string; userId: string; paymentStatus: string; pricePaidCents: number | null; durationDays: number | null; expiresAt: string | null; createdAt: string; orgUsername: string | null }[];
+    pricingTiers: PricingTier[];
   }
+  const [pricingForm, setPricingForm] = useState({ label: "", durationDays: "", priceCents: "" });
+  const [editingPricing, setEditingPricing] = useState<PricingTier | null>(null);
+  const [pricingSubmitting, setPricingSubmitting] = useState(false);
+  const queryClient = useQueryClient();
   const { data: financeData, isLoading: financeLoading } = useQuery<FinanceData>({
     queryKey: ["admin-finance"],
     queryFn: async () => {
@@ -1903,6 +1909,207 @@ export default function AdminPage() {
                       ? "Le organizzazioni pagano per pubblicare le campagne per una durata selezionabile. Il pagamento va interamente alla piattaforma."
                       : "Organizations pay to publish campaigns for a selectable duration. Payment goes entirely to the platform."}
                   </p>
+                </div>
+
+                <div className="bg-card border border-border rounded-2xl p-5">
+                  <h2 className="font-semibold text-foreground mb-4 flex items-center gap-2">
+                    <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path d="M12 8v4l3 3M21 12a9 9 0 11-18 0 9 9 0 0118 0z" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                    {lang === "it" ? "Piani tariffari campagne" : "Campaign pricing tiers"}
+                  </h2>
+                  <p className="text-xs text-muted-foreground mb-4">
+                    {lang === "it"
+                      ? "Gestisci durata e prezzo dei piani. Le campagne scadute vengono eliminate automaticamente."
+                      : "Manage duration and pricing of plans. Expired campaigns are automatically deleted."}
+                  </p>
+
+                  {(financeData.pricingTiers || []).length > 0 && (
+                    <div className="space-y-2 mb-4">
+                      {financeData.pricingTiers.map((tier) => (
+                        <div key={tier.id} className={`flex items-center justify-between px-4 py-3 rounded-xl border text-sm ${tier.isActive ? "border-emerald-300 dark:border-emerald-700 bg-emerald-50/50 dark:bg-emerald-950/20" : "border-border bg-muted/30 opacity-60"}`}>
+                          {editingPricing?.id === tier.id ? (
+                            <div className="flex-1 flex flex-col sm:flex-row gap-2">
+                              <input
+                                value={pricingForm.label}
+                                onChange={(e) => setPricingForm(f => ({ ...f, label: e.target.value }))}
+                                placeholder={lang === "it" ? "Etichetta" : "Label"}
+                                className="flex-1 px-2 py-1.5 border border-border rounded-lg text-sm bg-background"
+                              />
+                              <input
+                                type="number"
+                                value={pricingForm.durationDays}
+                                onChange={(e) => setPricingForm(f => ({ ...f, durationDays: e.target.value }))}
+                                placeholder={lang === "it" ? "Giorni" : "Days"}
+                                className="w-20 px-2 py-1.5 border border-border rounded-lg text-sm bg-background"
+                              />
+                              <input
+                                type="number"
+                                value={pricingForm.priceCents}
+                                onChange={(e) => setPricingForm(f => ({ ...f, priceCents: e.target.value }))}
+                                placeholder="€ (cents)"
+                                className="w-24 px-2 py-1.5 border border-border rounded-lg text-sm bg-background"
+                              />
+                              <div className="flex gap-1">
+                                <button
+                                  onClick={async () => {
+                                    setPricingSubmitting(true);
+                                    try {
+                                      const res = await authFetch(`/api/donations/admin/campaign-pricing/${tier.id}`, {
+                                        method: "PATCH",
+                                        headers: { "Content-Type": "application/json" },
+                                        body: JSON.stringify({
+                                          label: pricingForm.label,
+                                          durationDays: Number(pricingForm.durationDays),
+                                          priceCents: Number(pricingForm.priceCents),
+                                        }),
+                                      });
+                                      if (res.ok) {
+                                        toast({ title: lang === "it" ? "Piano aggiornato" : "Plan updated" });
+                                        setEditingPricing(null);
+                                        queryClient.invalidateQueries({ queryKey: ["admin-finance"] });
+                                      }
+                                    } finally { setPricingSubmitting(false); }
+                                  }}
+                                  disabled={pricingSubmitting || !pricingForm.label || !pricingForm.durationDays || !pricingForm.priceCents}
+                                  className="px-3 py-1.5 bg-primary text-primary-foreground rounded-lg text-xs font-medium disabled:opacity-50"
+                                >
+                                  {pricingSubmitting ? "..." : (lang === "it" ? "Salva" : "Save")}
+                                </button>
+                                <button
+                                  onClick={() => setEditingPricing(null)}
+                                  className="px-3 py-1.5 border border-border rounded-lg text-xs font-medium hover:bg-muted"
+                                >
+                                  {lang === "it" ? "Annulla" : "Cancel"}
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <>
+                              <div className="flex items-center gap-3">
+                                <span className="font-medium text-foreground">{tier.label}</span>
+                                <span className="text-muted-foreground">{tier.durationDays} {lang === "it" ? "gg" : "d"}</span>
+                                <span className="font-bold text-emerald-600">€{(tier.priceCents / 100).toFixed(2)}</span>
+                                {!tier.isActive && (
+                                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400">
+                                    {lang === "it" ? "Disattivato" : "Disabled"}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <button
+                                  onClick={() => {
+                                    setEditingPricing(tier);
+                                    setPricingForm({ label: tier.label, durationDays: String(tier.durationDays), priceCents: String(tier.priceCents) });
+                                  }}
+                                  className="p-1.5 rounded-lg text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30"
+                                  title={lang === "it" ? "Modifica" : "Edit"}
+                                >
+                                  <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                                </button>
+                                <button
+                                  onClick={async () => {
+                                    setPricingSubmitting(true);
+                                    try {
+                                      const res = await authFetch(`/api/donations/admin/campaign-pricing/${tier.id}`, {
+                                        method: "PATCH",
+                                        headers: { "Content-Type": "application/json" },
+                                        body: JSON.stringify({ isActive: !tier.isActive }),
+                                      });
+                                      if (res.ok) {
+                                        toast({ title: tier.isActive ? (lang === "it" ? "Disattivato" : "Disabled") : (lang === "it" ? "Attivato" : "Enabled") });
+                                        queryClient.invalidateQueries({ queryKey: ["admin-finance"] });
+                                      }
+                                    } finally { setPricingSubmitting(false); }
+                                  }}
+                                  className={`p-1.5 rounded-lg ${tier.isActive ? "text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/30" : "text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/30"}`}
+                                  title={tier.isActive ? (lang === "it" ? "Disattiva" : "Disable") : (lang === "it" ? "Attiva" : "Enable")}
+                                >
+                                  {tier.isActive ? (
+                                    <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path d="M18.36 6.64A9 9 0 015.64 18.36M19.78 10.22A9 9 0 0012 3m0 18a9 9 0 01-7.78-4.22" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                                  ) : (
+                                    <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path d="M5 13l4 4L19 7" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                                  )}
+                                </button>
+                                <button
+                                  onClick={async () => {
+                                    if (!confirm(lang === "it" ? "Eliminare questo piano?" : "Delete this plan?")) return;
+                                    setPricingSubmitting(true);
+                                    try {
+                                      const res = await authFetch(`/api/donations/admin/campaign-pricing/${tier.id}`, { method: "DELETE" });
+                                      if (res.ok) {
+                                        toast({ title: lang === "it" ? "Piano eliminato" : "Plan deleted" });
+                                        queryClient.invalidateQueries({ queryKey: ["admin-finance"] });
+                                      }
+                                    } finally { setPricingSubmitting(false); }
+                                  }}
+                                  className="p-1.5 rounded-lg text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30"
+                                  title={lang === "it" ? "Elimina" : "Delete"}
+                                >
+                                  <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6h14" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                                </button>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="border-t border-border pt-4">
+                    <h3 className="text-xs font-semibold text-muted-foreground uppercase mb-3">
+                      {lang === "it" ? "Aggiungi piano" : "Add plan"}
+                    </h3>
+                    <div className="flex flex-col sm:flex-row gap-2">
+                      <input
+                        value={editingPricing ? "" : pricingForm.label}
+                        onChange={(e) => !editingPricing && setPricingForm(f => ({ ...f, label: e.target.value }))}
+                        placeholder={lang === "it" ? "Etichetta (es. Base, Pro)" : "Label (e.g. Basic, Pro)"}
+                        disabled={!!editingPricing}
+                        className="flex-1 px-3 py-2 border border-border rounded-xl text-sm bg-background disabled:opacity-50"
+                      />
+                      <input
+                        type="number"
+                        value={editingPricing ? "" : pricingForm.durationDays}
+                        onChange={(e) => !editingPricing && setPricingForm(f => ({ ...f, durationDays: e.target.value }))}
+                        placeholder={lang === "it" ? "Giorni" : "Days"}
+                        disabled={!!editingPricing}
+                        className="w-24 px-3 py-2 border border-border rounded-xl text-sm bg-background disabled:opacity-50"
+                      />
+                      <input
+                        type="number"
+                        value={editingPricing ? "" : pricingForm.priceCents}
+                        onChange={(e) => !editingPricing && setPricingForm(f => ({ ...f, priceCents: e.target.value }))}
+                        placeholder={lang === "it" ? "Prezzo (centesimi)" : "Price (cents)"}
+                        disabled={!!editingPricing}
+                        className="w-32 px-3 py-2 border border-border rounded-xl text-sm bg-background disabled:opacity-50"
+                      />
+                      <button
+                        onClick={async () => {
+                          if (editingPricing || !pricingForm.label || !pricingForm.durationDays || !pricingForm.priceCents) return;
+                          setPricingSubmitting(true);
+                          try {
+                            const res = await authFetch("/api/donations/admin/campaign-pricing", {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({
+                                label: pricingForm.label,
+                                durationDays: Number(pricingForm.durationDays),
+                                priceCents: Number(pricingForm.priceCents),
+                              }),
+                            });
+                            if (res.ok) {
+                              toast({ title: lang === "it" ? "Piano creato" : "Plan created" });
+                              setPricingForm({ label: "", durationDays: "", priceCents: "" });
+                              queryClient.invalidateQueries({ queryKey: ["admin-finance"] });
+                            }
+                          } finally { setPricingSubmitting(false); }
+                        }}
+                        disabled={pricingSubmitting || !!editingPricing || !pricingForm.label || !pricingForm.durationDays || !pricingForm.priceCents}
+                        className="px-4 py-2 bg-emerald-600 text-white rounded-xl text-sm font-medium hover:bg-emerald-700 disabled:opacity-50"
+                      >
+                        {pricingSubmitting ? "..." : "+"}
+                      </button>
+                    </div>
+                  </div>
                 </div>
 
                 <div className="bg-card border border-border rounded-2xl p-5">

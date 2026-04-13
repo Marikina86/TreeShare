@@ -81,13 +81,15 @@ A plant/tree sharing social app. Community members document trees/plants they pl
 - **Account types**: Users `"user"` (default) or `"organization"` — only orgs can create campaigns
 - **Stripe integration**: Uses Replit Stripe connector; `getUncachableStripeClient()` called fresh each request; simple PaymentIntents to platform (no Connect accounts)
 - **Pricing**: Admin-managed `campaign_pricing` table with duration/price tiers; orgs select a tier when publishing
-- **Campaign lifecycle**: draft → pending (payment created) → paid (active, `expiresAt` set) or failed
+- **Campaign lifecycle**: form → initiate-payment (pending row in DB, invisible to user) → Stripe payment → confirm-payment (activates campaign, sets `expiresAt`) or failed
+- **Auto-deletion**: Expired campaigns (`expiresAt < now`) are automatically deleted every 60s by `eventCleaner.ts` scheduler
 - **Amounts**: All stored in cents (integer) — `pricePaidCents` on campaigns, `priceCents` on pricing tiers
 - **Revenue tracking**: `platform_revenue` table: `total_commissions` (cumulative campaign payments), `transaction_count`
 - **Webhook**: `payment_intent.succeeded` activates campaign + records revenue; `payment_intent.payment_failed` marks campaign failed; mounted at `/api/campaigns/webhook` and `/api/donations/webhook`
-- **Idempotency**: Webhook uses conditional UPDATE (`WHERE payment_status != 'paid'`) — no double-crediting
-- **Admin endpoints**: CRUD for campaign pricing (`POST/PATCH/DELETE /api/donations/admin/campaign-pricing`); `GET /api/donations/admin/finance` (revenue overview)
-- **Frontend**: `DonationCampaignManager` in SettingsPage (org create/edit/publish campaigns); `ProfileCampaignSection` on ProfilePage (display only); `CampaignsPage` lists active campaigns (display + share, no donate buttons)
+- **Idempotency**: Unique index on `stripePaymentIntentId`; `activateCampaign()` shared helper checks `paymentStatus !== 'paid'` — no double-crediting
+- **Admin endpoints**: CRUD for campaign pricing (`POST/PATCH/DELETE /api/donations/admin/campaign-pricing`); `GET /api/donations/admin/finance` (revenue overview + pricing tiers)
+- **Admin pricing management**: Full CRUD in finance tab — create, edit, enable/disable, delete pricing tiers; each tier has label, durationDays, priceCents, isActive
+- **Frontend**: `DonationCampaignManager` in SettingsPage — 3-step flow (details → plan → payment); only paid campaigns shown in "my campaigns" list; `ProfileCampaignSection` on ProfilePage (display only); `CampaignsPage` lists active campaigns (display + share)
 - **Removed**: DonateSection, MyDonationsSection, Stripe Connect onboarding, donations/orgBalances/payouts/ledgerEntries tables
 
 ### CO₂ Environmental Impact

@@ -1,6 +1,6 @@
 import { db } from "@workspace/db";
-import { eventsTable } from "@workspace/db";
-import { sql } from "drizzle-orm";
+import { eventsTable, donationCampaignsTable } from "@workspace/db";
+import { sql, and, eq, lt } from "drizzle-orm";
 import { logger } from "./logger";
 
 /**
@@ -49,10 +49,36 @@ export async function deleteExpiredEvents(): Promise<void> {
   }
 }
 
-const INTERVAL_MS = 60 * 1000; // every 60 seconds
+export async function deleteExpiredCampaigns(): Promise<void> {
+  try {
+    const now = new Date();
+    const result = await db
+      .delete(donationCampaignsTable)
+      .where(
+        and(
+          eq(donationCampaignsTable.paymentStatus, "paid"),
+          lt(donationCampaignsTable.expiresAt, now),
+        ),
+      )
+      .returning({ id: donationCampaignsTable.id, title: donationCampaignsTable.title });
+
+    if (result.length > 0) {
+      logger.info(
+        { count: result.length, ids: result.map((r) => r.id) },
+        "[campaignCleaner] Deleted expired campaigns"
+      );
+    }
+  } catch (err) {
+    logger.error({ err }, "[campaignCleaner] Error deleting expired campaigns");
+  }
+}
+
+const INTERVAL_MS = 60 * 1000;
 
 export function startEventCleaner(): void {
   deleteExpiredEvents();
+  deleteExpiredCampaigns();
   setInterval(deleteExpiredEvents, INTERVAL_MS);
-  logger.info("[eventCleaner] Event auto-cleanup scheduler started (interval: 60s)");
+  setInterval(deleteExpiredCampaigns, INTERVAL_MS);
+  logger.info("[eventCleaner] Event & campaign auto-cleanup scheduler started (interval: 60s)");
 }

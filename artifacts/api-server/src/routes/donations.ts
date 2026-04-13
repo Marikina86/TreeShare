@@ -484,9 +484,15 @@ router.get("/admin/finance", requireAuth, requireAdmin, async (_req, res) => {
       .orderBy(desc(donationCampaignsTable.createdAt))
       .limit(20);
 
+    const pricingTiers = await db
+      .select()
+      .from(campaignPricingTable)
+      .orderBy(campaignPricingTable.durationDays);
+
     res.json({
       platformRevenue: revenue || { totalCommissions: 0, transactionCount: 0 },
       recentPaidCampaigns: recentCampaigns,
+      pricingTiers,
     });
   } catch (err) {
     console.error("[campaigns] admin-finance error:", err);
