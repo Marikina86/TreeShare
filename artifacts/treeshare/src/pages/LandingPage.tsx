@@ -115,6 +115,8 @@ export default function LandingPage() {
   const { lang, setLang, t } = useLang();
   const [showPlanters, setShowPlanters] = useState(false);
 
+  const donateLabel = ({ it: "Dona", en: "Donate", fr: "Faire un don", pt: "Doar", es: "Donar", ja: "寄付" } as Record<string, string>)[lang] ?? "Donate";
+
   const statsLabels = ({
     it: { trees: "Alberi piantati", planters: "Piantatori", countries: "Paesi", active: "Attivi questo mese" },
     en: { trees: "Trees planted", planters: "Planters", countries: "Countries", active: "Active this month" },
@@ -185,6 +187,13 @@ export default function LandingPage() {
               </button>
             ))}
           </div>
+          <Link href="/campaigns" className="p-2 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors" title={donateLabel} aria-label={donateLabel}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 22V14"/>
+              <path d="M12 14C12 14 7 13 5 9C3 5 6 2 9 3C10.5 3.5 11.5 5 12 7C12.5 5 13.5 3.5 15 3C18 2 21 5 19 9C17 13 12 14 12 14Z" fill="currentColor" opacity="0.15"/>
+              <path d="M12 14C12 14 7 13 5 9C3 5 6 2 9 3C10.5 3.5 11.5 5 12 7C12.5 5 13.5 3.5 15 3C18 2 21 5 19 9C17 13 12 14 12 14Z"/>
+            </svg>
+          </Link>
           <Link href="/sign-in" data-testid="link-signin" className="text-sm font-medium text-foreground hover:text-primary transition-colors">
             {t.auth.signIn}
           </Link>
@@ -218,6 +227,17 @@ export default function LandingPage() {
             className="bg-primary text-primary-foreground px-8 py-3 rounded-xl font-semibold text-base hover:opacity-90 transition-opacity shadow-md"
           >
             {t.landing.startPlanting}
+          </Link>
+          <Link
+            href="/campaigns"
+            data-testid="link-hero-donate"
+            className="bg-emerald-600 text-white px-8 py-3 rounded-xl font-semibold text-base hover:bg-emerald-700 transition-colors shadow-md flex items-center justify-center gap-2"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 22V14"/>
+              <path d="M12 14C12 14 7 13 5 9C3 5 6 2 9 3C10.5 3.5 11.5 5 12 7C12.5 5 13.5 3.5 15 3C18 2 21 5 19 9C17 13 12 14 12 14Z"/>
+            </svg>
+            {donateLabel}
           </Link>
           <Link
             href="/sign-in"
