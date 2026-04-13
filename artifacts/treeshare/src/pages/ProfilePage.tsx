@@ -13,7 +13,6 @@ import TreeCard from "@/components/TreeCard";
 import { useToast } from "@/hooks/use-toast";
 import { useLang, type Lang } from "@/lib/i18n";
 import ReportProblemButton from "@/components/ReportProblemButton";
-import DonateSection from "@/components/DonateSection";
 import ProfileCampaignSection from "@/components/ProfileCampaignSection";
 
 const BADGES = [
@@ -577,17 +576,10 @@ export default function ProfilePage() {
         </div>
 
         {(profile as any)?.accountType === "organization" && (
-          isOwnProfile ? (
-            <ProfileCampaignSection
-              profileUserId={profile!.clerkUserId}
-              isOwnProfile={true}
-            />
-          ) : (
-            <DonateSection
-              profileUserId={profile!.clerkUserId}
-              profileUsername={profile!.username}
-            />
-          )
+          <ProfileCampaignSection
+            profileUserId={profile!.clerkUserId}
+            isOwnProfile={isOwnProfile}
+          />
         )}
 
         {co2Data.treeCount > 0 && (
