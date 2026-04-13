@@ -1,11 +1,78 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { usersTable, treesTable, reportsTable, treeUpdatesTable, treeSunsTable, eventsTable, eventParticipantsTable, problemReportsTable, userConsentsTable, cookieConsentsTable, userNotificationsTable, donationCampaignsTable, donationsTable, orgBalancesTable, ledgerEntriesTable, payoutsTable, weeklyWinnersTable, organizationsTable } from "@workspace/db";
-import { eq, desc, sql, count, ilike, or } from "drizzle-orm";
+import { usersTable, treesTable, reportsTable, treeUpdatesTable, treeSunsTable, eventsTable, eventParticipantsTable, problemReportsTable, userConsentsTable, cookieConsentsTable, userNotificationsTable, donationCampaignsTable, donationsTable, orgBalancesTable, ledgerEntriesTable, payoutsTable, weeklyWinnersTable, organizationsTable, alertsTable } from "@workspace/db";
+import { eq, desc, sql, count, ilike, or, inArray } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
 import { requireAdmin } from "../middlewares/requireAdmin";
+import { createClient } from "@supabase/supabase-js";
+import { v2 as cloudinary } from "cloudinary";
+import { existsSync, unlinkSync } from "fs";
+import { join } from "path";
 
 const router = Router();
+
+function getSupabaseAdmin() {
+  const url = process.env.SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) return null;
+  return createClient(url, key, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
+}
+
+function isCloudinaryConfigured(): boolean {
+  return !!(
+    process.env.CLOUDINARY_CLOUD_NAME &&
+    process.env.CLOUDINARY_API_KEY &&
+    process.env.CLOUDINARY_API_SECRET
+  );
+}
+
+async function deletePhotoFromStorage(photoUrl: string): Promise<void> {
+  if (!photoUrl) return;
+  try {
+    if (photoUrl.startsWith("http") && photoUrl.includes("cloudinary")) {
+      if (isCloudinaryConfigured()) {
+        const match = photoUrl.match(/\/treeshare\/([^/.]+)/);
+        if (match) {
+          await cloudinary.uploader.destroy(`treeshare/${match[1]}`);
+        }
+      }
+    } else if (photoUrl.startsWith("/objects/uploads/")) {
+      const filename = photoUrl.replace("/objects/uploads/", "");
+      const filePath = join(process.cwd(), "uploads", filename);
+      if (existsSync(filePath)) unlinkSync(filePath);
+    }
+  } catch {}
+}
+
+async function collectAndDeleteUserPhotos(clerkUserId: string): Promise<void> {
+  const photoUrls: string[] = [];
+
+  const [userRow] = await db.select({ photoUrl: usersTable.photoUrl }).from(usersTable).where(eq(usersTable.clerkUserId, clerkUserId));
+  if (userRow?.photoUrl) photoUrls.push(userRow.photoUrl);
+
+  const trees = await db.select({ photoUrl: treesTable.photoUrl, photoThumbnailUrl: treesTable.photoThumbnailUrl }).from(treesTable).where(eq(treesTable.userId, clerkUserId));
+  for (const t of trees) {
+    if (t.photoUrl) photoUrls.push(t.photoUrl);
+    if (t.photoThumbnailUrl) photoUrls.push(t.photoThumbnailUrl);
+  }
+
+  const updates = await db.select({ photoUrl: treeUpdatesTable.photoUrl }).from(treeUpdatesTable).where(eq(treeUpdatesTable.userId, clerkUserId));
+  for (const u of updates) {
+    if (u.photoUrl) photoUrls.push(u.photoUrl);
+  }
+
+  const campaigns = await db.select({ photos: donationCampaignsTable.photos }).from(donationCampaignsTable).where(eq(donationCampaignsTable.userId, clerkUserId));
+  for (const c of campaigns) {
+    const arr = Array.isArray(c.photos) ? c.photos : [];
+    for (const p of arr) {
+      if (typeof p === "string" && p) photoUrls.push(p);
+    }
+  }
+
+  await Promise.allSettled(photoUrls.map((url) => deletePhotoFromStorage(url)));
+}
 
 // GET /admin/stats — summary numbers
 router.get("/admin/stats", requireAuth, requireAdmin, async (req, res) => {
@@ -123,7 +190,7 @@ router.patch(
   },
 );
 
-// DELETE /admin/users/:clerkUserId — hard delete user
+// DELETE /admin/users/:clerkUserId — hard delete user + all related data + photos + auth
 router.delete(
   "/admin/users/:clerkUserId",
   requireAuth,
@@ -135,56 +202,95 @@ router.delete(
       res.status(400).json({ error: "Cannot delete yourself" });
       return;
     }
+
+    const [targetUser] = await db.select({ id: usersTable.id, accountType: usersTable.accountType, username: usersTable.username })
+      .from(usersTable).where(eq(usersTable.clerkUserId, clerkUserId));
+    if (!targetUser) {
+      res.status(404).json({ error: "User not found" });
+      return;
+    }
+
     try {
-      const userTreeIds = await db.select({ id: treesTable.id }).from(treesTable).where(eq(treesTable.userId, clerkUserId));
-      const treeIds = userTreeIds.map(t => t.id);
+      await collectAndDeleteUserPhotos(clerkUserId);
+      req.log.info({ clerkUserId }, "Photos deleted for user");
+    } catch (err) {
+      req.log.warn({ err, clerkUserId }, "Photo deletion partial failure (proceeding with DB cleanup)");
+    }
 
-      if (treeIds.length > 0) {
-        for (const treeId of treeIds) {
-          await db.delete(treeSunsTable).where(eq(treeSunsTable.treeId, treeId));
-          await db.delete(treeUpdatesTable).where(eq(treeUpdatesTable.treeId, treeId));
+    try {
+      await db.transaction(async (tx) => {
+        const userTreeIds = await tx.select({ id: treesTable.id }).from(treesTable).where(eq(treesTable.userId, clerkUserId));
+        const treeIds = userTreeIds.map(t => t.id);
+
+        if (treeIds.length > 0) {
+          await tx.delete(treeSunsTable).where(inArray(treeSunsTable.treeId, treeIds));
+          await tx.delete(treeUpdatesTable).where(inArray(treeUpdatesTable.treeId, treeIds));
+        }
+
+        await tx.delete(treeSunsTable).where(eq(treeSunsTable.userId, clerkUserId));
+        await tx.delete(treeUpdatesTable).where(eq(treeUpdatesTable.userId, clerkUserId));
+        await tx.delete(treesTable).where(eq(treesTable.userId, clerkUserId));
+
+        const userEvents = await tx.select({ id: eventsTable.id }).from(eventsTable).where(eq(eventsTable.userId, clerkUserId));
+        const eventIds = userEvents.map(e => e.id);
+        if (eventIds.length > 0) {
+          await tx.delete(eventParticipantsTable).where(inArray(eventParticipantsTable.eventId, eventIds));
+        }
+        await tx.delete(eventParticipantsTable).where(eq(eventParticipantsTable.userId, clerkUserId));
+        await tx.delete(eventsTable).where(eq(eventsTable.userId, clerkUserId));
+
+        const userCampaigns = await tx.select({ id: donationCampaignsTable.id }).from(donationCampaignsTable).where(eq(donationCampaignsTable.userId, clerkUserId));
+        const campaignIds = userCampaigns.map(c => c.id);
+        if (campaignIds.length > 0) {
+          const campaignDonations = await tx.select({ id: donationsTable.id }).from(donationsTable).where(inArray(donationsTable.campaignId, campaignIds));
+          const donationIds = campaignDonations.map(d => d.id);
+          if (donationIds.length > 0) {
+            await tx.delete(ledgerEntriesTable).where(inArray(ledgerEntriesTable.donationId, donationIds));
+          }
+          await tx.delete(donationsTable).where(inArray(donationsTable.campaignId, campaignIds));
+        }
+        await tx.delete(donationsTable).where(eq(donationsTable.donorUserId, clerkUserId));
+        await tx.delete(donationCampaignsTable).where(eq(donationCampaignsTable.userId, clerkUserId));
+
+        await tx.delete(ledgerEntriesTable).where(eq(ledgerEntriesTable.orgUserId, clerkUserId));
+        await tx.delete(payoutsTable).where(eq(payoutsTable.userId, clerkUserId));
+        await tx.delete(orgBalancesTable).where(eq(orgBalancesTable.userId, clerkUserId));
+
+        await tx.delete(weeklyWinnersTable).where(eq(weeklyWinnersTable.userId, clerkUserId));
+        await tx.delete(problemReportsTable).where(eq(problemReportsTable.userId, clerkUserId));
+        await tx.delete(userNotificationsTable).where(eq(userNotificationsTable.userId, clerkUserId));
+        await tx.delete(userConsentsTable).where(eq(userConsentsTable.userId, clerkUserId));
+        await tx.delete(cookieConsentsTable).where(eq(cookieConsentsTable.userId, clerkUserId));
+        await tx.delete(reportsTable).where(eq(reportsTable.reporterUserId, clerkUserId));
+        await tx.delete(reportsTable).where(eq(reportsTable.reportedUserId, clerkUserId));
+        await tx.delete(alertsTable).where(eq(alertsTable.createdBy, clerkUserId));
+
+        if (targetUser.accountType === "organization" && targetUser.username) {
+          const orgs = await tx.select({ id: organizationsTable.id }).from(organizationsTable)
+            .where(eq(organizationsTable.username, targetUser.username));
+          for (const org of orgs) {
+            await tx.delete(userConsentsTable).where(eq(userConsentsTable.userId, `org:${org.id}`));
+          }
+          await tx.delete(organizationsTable).where(eq(organizationsTable.username, targetUser.username));
+        }
+
+        await tx.delete(usersTable).where(eq(usersTable.clerkUserId, clerkUserId));
+      });
+
+      const supabase = getSupabaseAdmin();
+      if (supabase) {
+        try {
+          await supabase.auth.admin.deleteUser(clerkUserId);
+          req.log.info({ clerkUserId }, "Supabase auth user deleted");
+        } catch (err) {
+          req.log.warn({ err, clerkUserId }, "Failed to delete Supabase auth user (DB already cleaned)");
         }
       }
 
-      await db.delete(treeSunsTable).where(eq(treeSunsTable.userId, clerkUserId));
-      await db.delete(treeUpdatesTable).where(eq(treeUpdatesTable.userId, clerkUserId));
-      await db.delete(treesTable).where(eq(treesTable.userId, clerkUserId));
-
-      const userEvents = await db.select({ id: eventsTable.id }).from(eventsTable).where(eq(eventsTable.userId, clerkUserId));
-      for (const ev of userEvents) {
-        await db.delete(eventParticipantsTable).where(eq(eventParticipantsTable.eventId, ev.id));
-      }
-      await db.delete(eventParticipantsTable).where(eq(eventParticipantsTable.userId, clerkUserId));
-      await db.delete(eventsTable).where(eq(eventsTable.userId, clerkUserId));
-
-      await db.delete(donationsTable).where(eq(donationsTable.donorUserId, clerkUserId));
-      await db.delete(donationCampaignsTable).where(eq(donationCampaignsTable.userId, clerkUserId));
-
-      await db.delete(ledgerEntriesTable).where(eq(ledgerEntriesTable.orgUserId, clerkUserId));
-      await db.delete(payoutsTable).where(eq(payoutsTable.userId, clerkUserId));
-      await db.delete(orgBalancesTable).where(eq(orgBalancesTable.userId, clerkUserId));
-
-      await db.delete(weeklyWinnersTable).where(eq(weeklyWinnersTable.userId, clerkUserId));
-      await db.delete(problemReportsTable).where(eq(problemReportsTable.userId, clerkUserId));
-      await db.delete(userNotificationsTable).where(eq(userNotificationsTable.userId, clerkUserId));
-      await db.delete(userConsentsTable).where(eq(userConsentsTable.userId, clerkUserId));
-      await db.delete(cookieConsentsTable).where(eq(cookieConsentsTable.userId, clerkUserId));
-      await db.delete(reportsTable).where(eq(reportsTable.reporterUserId, clerkUserId));
-
-      const [user] = await db.select({ accountType: usersTable.accountType }).from(usersTable).where(eq(usersTable.clerkUserId, clerkUserId));
-      if (user?.accountType === "organization") {
-        const orgs = await db.select({ id: organizationsTable.id }).from(organizationsTable)
-          .where(eq(organizationsTable.emailUfficiale, clerkUserId));
-        for (const org of orgs) {
-          await db.delete(userConsentsTable).where(eq(userConsentsTable.userId, `org:${org.id}`));
-          await db.delete(organizationsTable).where(eq(organizationsTable.id, org.id));
-        }
-      }
-
-      await db.delete(usersTable).where(eq(usersTable.clerkUserId, clerkUserId));
+      req.log.info({ clerkUserId, username: targetUser.username }, "User hard-deleted successfully");
       res.status(204).send();
     } catch (err) {
-      req.log.error({ err }, "Error deleting user (admin)");
+      req.log.error({ err, clerkUserId }, "Error deleting user (admin) — transaction rolled back");
       res.status(500).json({ error: "Internal server error" });
     }
   },
