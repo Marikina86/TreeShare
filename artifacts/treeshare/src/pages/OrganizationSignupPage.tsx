@@ -166,6 +166,8 @@ export default function OrganizationSignupPage() {
   const [acceptPrivacy, setAcceptPrivacy] = useState(false);
   const [acceptTerms, setAcceptTerms] = useState(false);
   const [consentErrors, setConsentErrors] = useState<{ privacy?: string; terms?: string }>({});
+  const [hpWebsite, setHpWebsite] = useState("");
+  const [hpCompanyName, setHpCompanyName] = useState("");
 
   const {
     register,
@@ -183,6 +185,10 @@ export default function OrganizationSignupPage() {
   const strength = useMemo(() => getPasswordStrength(passwordValue), [passwordValue]);
 
   const onSubmit = async (data: FormValues) => {
+    if (hpWebsite || hpCompanyName) {
+      setSuccess(true);
+      return;
+    }
     const ce: { privacy?: string; terms?: string } = {};
     if (!acceptPrivacy) ce.privacy = "Devi accettare l'informativa sulla privacy";
     if (!acceptTerms) ce.terms = "Devi accettare i termini e condizioni";
@@ -203,6 +209,8 @@ export default function OrganizationSignupPage() {
           numeroLicenze: Number(data.numeroLicenze),
           acceptPrivacy: true,
           acceptTerms: true,
+          website: hpWebsite,
+          company_name: hpCompanyName,
         }),
       });
 
@@ -286,6 +294,24 @@ export default function OrganizationSignupPage() {
         )}
 
         <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-6">
+          <div className="honeypot-field" aria-hidden="true">
+            <input
+              type="text"
+              name="website"
+              value={hpWebsite}
+              onChange={(e) => setHpWebsite(e.target.value)}
+              tabIndex={-1}
+              autoComplete="off"
+            />
+            <input
+              type="text"
+              name="company_name"
+              value={hpCompanyName}
+              onChange={(e) => setHpCompanyName(e.target.value)}
+              tabIndex={-1}
+              autoComplete="off"
+            />
+          </div>
           {/* SEZIONE 1: Dati identificativi */}
           <Card>
             <CardHeader className="pb-2">

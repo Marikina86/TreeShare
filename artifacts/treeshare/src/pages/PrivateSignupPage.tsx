@@ -59,6 +59,8 @@ export default function PrivateSignupPage() {
   const [acceptTerms, setAcceptTerms] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const errorRef = useRef<HTMLDivElement>(null);
+  const [hpWebsite, setHpWebsite] = useState("");
+  const [hpCompanyName, setHpCompanyName] = useState("");
 
   useEffect(() => {
     if (serverError && errorRef.current) {
@@ -91,6 +93,10 @@ export default function PrivateSignupPage() {
 
   async function handleSubmit(ev: React.FormEvent) {
     ev.preventDefault();
+    if (hpWebsite || hpCompanyName) {
+      setStep("done");
+      return;
+    }
     if (!validate()) return;
 
     setSubmitting(true);
@@ -400,6 +406,24 @@ export default function PrivateSignupPage() {
         </div>
 
         <form onSubmit={handleSubmit} noValidate className="space-y-4">
+          <div className="honeypot-field" aria-hidden="true">
+            <input
+              type="text"
+              name="website"
+              value={hpWebsite}
+              onChange={(e) => setHpWebsite(e.target.value)}
+              tabIndex={-1}
+              autoComplete="off"
+            />
+            <input
+              type="text"
+              name="company_name"
+              value={hpCompanyName}
+              onChange={(e) => setHpCompanyName(e.target.value)}
+              tabIndex={-1}
+              autoComplete="off"
+            />
+          </div>
           {serverError && (
             <div ref={errorRef} className="bg-destructive/10 border border-destructive/20 rounded-lg px-4 py-3 text-sm text-destructive flex items-center gap-2">
               <AlertCircle className="h-4 w-4 flex-shrink-0" />

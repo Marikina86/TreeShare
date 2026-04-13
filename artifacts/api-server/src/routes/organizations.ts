@@ -17,6 +17,18 @@ function getSupabaseAdmin() {
 }
 
 router.post("/register-ente", async (req, res) => {
+  const { website, company_name } = req.body || {};
+  if (website || company_name) {
+    res.status(201).json({
+      id: 0,
+      ragioneSociale: req.body?.ragioneSociale || "",
+      username: req.body?.username || "",
+      emailUfficiale: req.body?.emailUfficiale || "",
+      createdAt: new Date().toISOString(),
+    });
+    return;
+  }
+
   const parsed = registerEnteSchema.safeParse(req.body);
   if (!parsed.success) {
     const fieldErrors: Record<string, string> = {};
