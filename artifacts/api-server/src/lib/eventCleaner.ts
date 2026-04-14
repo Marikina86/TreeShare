@@ -73,12 +73,13 @@ export async function deleteExpiredCampaigns(): Promise<void> {
   }
 }
 
-const INTERVAL_MS = 60 * 1000;
+const EVENT_CLEANUP_INTERVAL_MS = 60 * 1000;
+const CAMPAIGN_CLEANUP_INTERVAL_MS = 24 * 60 * 60 * 1000;
 
 export function startEventCleaner(): void {
   deleteExpiredEvents();
   deleteExpiredCampaigns();
-  setInterval(deleteExpiredEvents, INTERVAL_MS);
-  setInterval(deleteExpiredCampaigns, INTERVAL_MS);
-  logger.info("[eventCleaner] Event & campaign auto-cleanup scheduler started (interval: 60s)");
+  setInterval(deleteExpiredEvents, EVENT_CLEANUP_INTERVAL_MS);
+  setInterval(deleteExpiredCampaigns, CAMPAIGN_CLEANUP_INTERVAL_MS);
+  logger.info("[eventCleaner] Auto-cleanup scheduler started (events: 60s, campaigns: 24h)");
 }
