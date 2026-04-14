@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { EventModerationStatus } from "./eventModerationStatus";
 
 export interface Event {
   id: number;
@@ -21,6 +22,8 @@ export interface Event {
   eventTime: string;
   endDate?: string | null;
   endTime?: string | null;
+  moderationStatus: EventModerationStatus;
+  moderationMessage?: string | null;
   participantCount: number;
   isParticipating: boolean;
   createdAt: string;

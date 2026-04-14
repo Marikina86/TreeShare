@@ -113,6 +113,15 @@ export interface TopPlanter {
   treeCount: number;
 }
 
+export type EventModerationStatus =
+  (typeof EventModerationStatus)[keyof typeof EventModerationStatus];
+
+export const EventModerationStatus = {
+  pending: "pending",
+  approved: "approved",
+  rejected: "rejected",
+} as const;
+
 export interface Event {
   id: number;
   userId: string;
@@ -128,6 +137,8 @@ export interface Event {
   eventTime: string;
   endDate?: string | null;
   endTime?: string | null;
+  moderationStatus: EventModerationStatus;
+  moderationMessage?: string | null;
   participantCount: number;
   isParticipating: boolean;
   createdAt: string;

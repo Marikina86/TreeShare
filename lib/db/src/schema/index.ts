@@ -76,8 +76,15 @@ export const eventsTable = pgTable("events", {
   eventTime: text("event_time").notNull(),
   endDate: text("end_date"),
   endTime: text("end_time"),
+  moderationStatus: text("moderation_status").notNull().default("approved"),
+  moderationMessage: text("moderation_message"),
+  reviewedBy: text("reviewed_by"),
+  reviewedAt: timestamp("reviewed_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
-});
+}, (table) => [
+  index("events_moderation_status_idx").on(table.moderationStatus),
+  index("events_user_id_idx").on(table.userId),
+]);
 
 export const eventParticipantsTable = pgTable("event_participants", {
   id: serial("id").primaryKey(),

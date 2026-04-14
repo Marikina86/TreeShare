@@ -92,6 +92,25 @@ interface PendingTreeUpdate {
   species: string | null;
 }
 
+interface PendingEvent {
+  id: number;
+  userId: string;
+  username: string | null;
+  userPhotoUrl: string | null;
+  title: string;
+  description: string | null;
+  location: string;
+  address: string | null;
+  city: string | null;
+  province: string | null;
+  eventDate: string;
+  eventTime: string;
+  endDate: string | null;
+  endTime: string | null;
+  moderationStatus: string;
+  createdAt: string;
+}
+
 interface AdminAlertItem {
   id: number;
   title: string;
@@ -101,7 +120,7 @@ interface AdminAlertItem {
   updatedAt: string;
 }
 
-type Tab = "users" | "reports" | "trees" | "problems" | "pending_photos" | "pending_updates" | "alerts" | "tips" | "finance";
+type Tab = "users" | "reports" | "trees" | "problems" | "pending_events" | "pending_photos" | "pending_updates" | "alerts" | "tips" | "finance";
 type UserFilter = "all" | "active" | "blocked";
 type ReportFilter = "all" | "pending" | "reviewed" | "dismissed";
 
@@ -169,9 +188,15 @@ export default function AdminPage() {
   const [pendingUpdatesLoading, setPendingUpdatesLoading] = useState(false);
   const [pendingUpdatesHasMore, setPendingUpdatesHasMore] = useState(false);
   const [pendingUpdatesPage, setPendingUpdatesPage] = useState(1);
-  const [pendingCounts, setPendingCounts] = useState<{ pendingTrees: number; pendingUpdates: number }>({ pendingTrees: 0, pendingUpdates: 0 });
+  const [pendingEvents, setPendingEvents] = useState<PendingEvent[]>([]);
+  const [pendingEventsLoading, setPendingEventsLoading] = useState(false);
+  const [pendingEventsHasMore, setPendingEventsHasMore] = useState(false);
+  const [pendingEventsPage, setPendingEventsPage] = useState(1);
+  const [eventReviewMessages, setEventReviewMessages] = useState<Record<number, string>>({});
+  const [pendingCounts, setPendingCounts] = useState<{ pendingTrees: number; pendingUpdates: number; pendingEvents: number }>({ pendingTrees: 0, pendingUpdates: 0, pendingEvents: 0 });
   const pendingTreesSentinel = useRef<HTMLDivElement>(null);
   const pendingUpdatesSentinel = useRef<HTMLDivElement>(null);
+  const pendingEventsSentinel = useRef<HTMLDivElement>(null);
 
   // ── Stato consigli admin ──────────────────────────────────────────────────
   interface AdminTipItem { id: number; title: string; description: string; category: string; createdAt: string; updatedAt: string; }
@@ -458,6 +483,55 @@ export default function AdminPage() {
     finally { setActionLoading(null); }
   }
 
+  async function loadPendingEvents(page = 1) {
+    if (pendingEventsLoading) return;
+    setPendingEventsLoading(true);
+    try {
+      const res = await authFetch(`/api/admin/events/pending?page=${page}&limit=10`);
+      if (res.ok) {
+        const data = await res.json();
+        if (page === 1) {
+          setPendingEvents(data.items);
+        } else {
+          setPendingEvents((prev) => [...prev, ...data.items]);
+        }
+        setPendingEventsHasMore(data.hasMore);
+        setPendingEventsPage(page);
+        setPendingCounts((c) => ({ ...c, pendingEvents: data.total }));
+      }
+    } catch { toast({ title: T.errors.load, variant: "destructive" }); }
+    finally { setPendingEventsLoading(false); }
+  }
+
+  async function handleReviewPendingEvent(event: PendingEvent, action: "approve" | "reject") {
+    setActionLoading(`event:${event.id}:${action}`);
+    try {
+      const message = eventReviewMessages[event.id]?.trim() ?? "";
+      const res = await authFetch(`/api/admin/events/${event.id}/${action}`, {
+        method: "PATCH",
+        body: JSON.stringify({ message }),
+      });
+      if (!res.ok) throw new Error();
+      setPendingEvents((p) => p.filter((e) => e.id !== event.id));
+      setEventReviewMessages((prev) => {
+        const next = { ...prev };
+        delete next[event.id];
+        return next;
+      });
+      setPendingCounts((c) => ({ ...c, pendingEvents: Math.max(0, c.pendingEvents - 1) }));
+      toast({
+        title: action === "approve"
+          ? (lang === "it" ? "✅ Evento approvato" : "✅ Event approved")
+          : (lang === "it" ? "Evento rifiutato" : "Event rejected"),
+        description: lang === "it" ? "Il creatore ha ricevuto un avviso personale." : "The creator received a personal notification.",
+      });
+    } catch {
+      toast({ title: lang === "it" ? "Errore revisione evento" : "Event review error", variant: "destructive" });
+    } finally {
+      setActionLoading(null);
+    }
+  }
+
   async function loadProblemReports() {
     setProblemsLoading(true);
     try {
@@ -599,6 +673,7 @@ export default function AdminPage() {
   useEffect(() => { if (activeTab === "trees") loadTrees(1, treeSearch); }, [activeTab]);
   useEffect(() => { if (activeTab === "trees") loadTrees(treePage, treeSearch); }, [treePage]);
   useEffect(() => { if (activeTab === "problems") loadProblemReports(); }, [activeTab]);
+  useEffect(() => { if (activeTab === "pending_events") loadPendingEvents(1); }, [activeTab]);
   useEffect(() => { if (activeTab === "pending_photos") loadPendingTrees(1); }, [activeTab]);
   useEffect(() => { if (activeTab === "pending_updates") loadPendingUpdates(1); }, [activeTab]);
   useEffect(() => { if (activeTab === "alerts") loadAdminAlerts(); }, [activeTab]);
@@ -631,6 +706,19 @@ export default function AdminPage() {
     obs.observe(el);
     return () => obs.disconnect();
   }, [activeTab, pendingUpdatesHasMore, pendingUpdatesLoading, pendingUpdatesPage]);
+
+  useEffect(() => {
+    if (activeTab !== "pending_events" || !pendingEventsHasMore || pendingEventsLoading) return;
+    const el = pendingEventsSentinel.current;
+    if (!el) return;
+    const obs = new IntersectionObserver(([entry]) => {
+      if (entry.isIntersecting && pendingEventsHasMore && !pendingEventsLoading) {
+        loadPendingEvents(pendingEventsPage + 1);
+      }
+    }, { rootMargin: "200px" });
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [activeTab, pendingEventsHasMore, pendingEventsLoading, pendingEventsPage]);
 
   async function handleBlock(user: AdminUser) {
     setActionLoading(user.clerkUserId + ":block");
@@ -782,6 +870,18 @@ export default function AdminPage() {
             {pendingCounts.pendingTrees > 0 && (
               <span className="bg-amber-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full leading-none animate-pulse">
                 {pendingCounts.pendingTrees}
+              </span>
+            )}
+          </button>
+          <button
+            onClick={() => setActiveTab("pending_events")}
+            className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors ${activeTab === "pending_events" ? "bg-amber-500 text-white" : "text-muted-foreground hover:bg-muted"}`}
+          >
+            <svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+            {lang === "it" ? "Eventi in attesa" : "Pending Events"}
+            {pendingCounts.pendingEvents > 0 && (
+              <span className="bg-amber-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full leading-none animate-pulse">
+                {pendingCounts.pendingEvents}
               </span>
             )}
           </button>
@@ -1381,6 +1481,131 @@ export default function AdminPage() {
                 {pendingUpdatesHasMore && (
                   <div ref={pendingUpdatesSentinel} className="flex items-center justify-center py-6">
                     {pendingUpdatesLoading && (
+                      <div className="w-6 h-6 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
+                    )}
+                  </div>
+                )}
+              </>
+            )}
+          </>
+        )}
+
+        {/* ── PENDING EVENTS TAB ── */}
+        {activeTab === "pending_events" && (
+          <>
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="font-bold text-foreground text-lg">
+                  {lang === "it" ? "Eventi in attesa di approvazione" : "Events Pending Approval"}
+                  <span className="ml-2 text-sm font-normal text-muted-foreground">({pendingCounts.pendingEvents})</span>
+                </h2>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {lang === "it"
+                    ? "Approva o rifiuta gli eventi prima della pubblicazione. Il messaggio verrà inviato al creatore nella sezione Avvisi."
+                    : "Approve or reject events before publication. The message will be sent to the creator in Alerts."}
+                </p>
+              </div>
+              <button onClick={() => loadPendingEvents(1)} className="text-xs text-primary hover:underline">
+                {lang === "it" ? "Aggiorna" : "Refresh"}
+              </button>
+            </div>
+
+            {pendingEventsLoading && pendingEvents.length === 0 ? (
+              <div className="flex items-center justify-center py-20">
+                <div className="w-8 h-8 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
+              </div>
+            ) : pendingEvents.length === 0 ? (
+              <div className="py-20 text-center bg-card border border-border rounded-2xl">
+                <div className="w-14 h-14 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center mx-auto mb-4">
+                  <svg width="28" height="28" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" className="text-green-600">
+                    <path d="M5 13l4 4L19 7" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                </div>
+                <p className="font-semibold text-foreground">{lang === "it" ? "Nessun evento in attesa" : "No events pending"}</p>
+                <p className="text-sm text-muted-foreground mt-1">{lang === "it" ? "Tutti gli eventi sono stati revisionati" : "All events have been reviewed"}</p>
+              </div>
+            ) : (
+              <>
+                <div className="space-y-4">
+                  {pendingEvents.map((event) => {
+                    const isActing = actionLoading?.startsWith(`event:${event.id}:`);
+                    const message = eventReviewMessages[event.id] ?? "";
+                    return (
+                      <div key={event.id} className="bg-card border border-amber-200 dark:border-amber-800/50 rounded-2xl p-4 shadow-sm space-y-3">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="bg-amber-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">
+                                {lang === "it" ? "In attesa" : "Pending"}
+                              </span>
+                              <h3 className="font-semibold text-foreground">{event.title}</h3>
+                              <span className="text-xs text-muted-foreground">#{event.id}</span>
+                            </div>
+                            <p className="text-xs text-muted-foreground mt-1">
+                              @{event.username ?? "?"} · {event.eventDate} {event.eventTime?.slice(0, 5)} · {[event.city, event.province, event.location].filter(Boolean).join(" · ")}
+                            </p>
+                          </div>
+                          <span className="text-xs text-muted-foreground whitespace-nowrap">
+                            {new Date(event.createdAt).toLocaleDateString(lang === "it" ? "it-IT" : "en-GB", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}
+                          </span>
+                        </div>
+                        {event.description && (
+                          <p className="text-sm text-muted-foreground whitespace-pre-wrap">{event.description}</p>
+                        )}
+                        {event.address && (
+                          <p className="text-xs text-muted-foreground">
+                            <span className="font-medium">{lang === "it" ? "Indirizzo:" : "Address:"}</span> {event.address}
+                          </p>
+                        )}
+                        <div className="space-y-2">
+                          <label className="text-xs font-semibold text-muted-foreground">
+                            {lang === "it" ? "Messaggio per il creatore" : "Message for creator"}
+                          </label>
+                          <textarea
+                            value={message}
+                            onChange={(e) => setEventReviewMessages((prev) => ({ ...prev, [event.id]: e.target.value }))}
+                            rows={3}
+                            maxLength={2000}
+                            placeholder={lang === "it" ? "Scrivi un messaggio facoltativo: motivazione, modifiche richieste o conferma..." : "Optional message: reason, requested edits, or confirmation..."}
+                            className="w-full px-3 py-2 text-sm border border-border rounded-xl bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-amber-400/40 resize-none"
+                          />
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-[11px] text-muted-foreground">{message.length}/2000</span>
+                            <div className="flex gap-2">
+                              <button
+                                onClick={() => handleReviewPendingEvent(event, "reject")}
+                                disabled={!!isActing}
+                                className="px-3 py-2 text-xs font-semibold bg-destructive/10 text-destructive rounded-xl hover:bg-destructive/20 transition-colors disabled:opacity-50 flex items-center gap-1.5"
+                              >
+                                {isActing && actionLoading === `event:${event.id}:reject` ? (
+                                  <span className="w-3 h-3 border-2 border-destructive border-t-transparent rounded-full animate-spin" />
+                                ) : (
+                                  <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path d="M6 18L18 6M6 6l12 12" strokeLinecap="round"/></svg>
+                                )}
+                                {lang === "it" ? "Rifiuta" : "Reject"}
+                              </button>
+                              <button
+                                onClick={() => handleReviewPendingEvent(event, "approve")}
+                                disabled={!!isActing}
+                                className="px-3 py-2 text-xs font-semibold bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 rounded-xl hover:bg-green-200 transition-colors disabled:opacity-50 flex items-center gap-1.5"
+                              >
+                                {isActing && actionLoading === `event:${event.id}:approve` ? (
+                                  <span className="w-3 h-3 border-2 border-green-500 border-t-transparent rounded-full animate-spin" />
+                                ) : (
+                                  <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path d="M5 13l4 4L19 7" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                                )}
+                                {lang === "it" ? "Approva" : "Approve"}
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                {pendingEventsHasMore && (
+                  <div ref={pendingEventsSentinel} className="flex items-center justify-center py-6">
+                    {pendingEventsLoading && (
                       <div className="w-6 h-6 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
                     )}
                   </div>

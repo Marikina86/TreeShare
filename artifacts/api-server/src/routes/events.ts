@@ -1,8 +1,9 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { eventsTable, eventParticipantsTable, usersTable } from "@workspace/db";
-import { eq, desc, count, and, lt, lte, or, isNull, isNotNull } from "drizzle-orm";
+import { eventsTable, eventParticipantsTable, usersTable, userNotificationsTable } from "@workspace/db";
+import { eq, desc, count, and, lt, or, isNull, isNotNull } from "drizzle-orm";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth";
+import { requireAdmin } from "../middlewares/requireAdmin";
 import {
   CreateEventBody,
   DeleteEventParams,
@@ -53,6 +54,8 @@ async function formatEvent(
     eventTime: event.eventTime,
     endDate: event.endDate ?? null,
     endTime: event.endTime ?? null,
+    moderationStatus: event.moderationStatus,
+    moderationMessage: event.moderationMessage ?? null,
     participantCount: participantResult?.count ?? 0,
     isParticipating: !!myParticipation,
     createdAt: event.createdAt.toISOString(),
@@ -82,9 +85,11 @@ router.get("/events", requireAuth, async (req: AuthenticatedRequest, res) => {
     const province = typeof req.query.province === "string" ? req.query.province.trim() : undefined;
     const city = typeof req.query.city === "string" ? req.query.city.trim() : undefined;
 
-    let query = db.select().from(eventsTable).orderBy(desc(eventsTable.eventDate));
-
-    const events = await query;
+    const events = await db
+      .select()
+      .from(eventsTable)
+      .where(eq(eventsTable.moderationStatus, "approved"))
+      .orderBy(desc(eventsTable.eventDate));
 
     let filtered = events;
     if (province) {
@@ -130,6 +135,10 @@ router.post("/events", requireAuth, async (req: AuthenticatedRequest, res) => {
         eventTime,
         endDate: endDate ?? null,
         endTime: endTime ?? null,
+        moderationStatus: "pending",
+        moderationMessage: null,
+        reviewedBy: null,
+        reviewedAt: null,
       })
       .returning();
 
@@ -179,6 +188,10 @@ router.patch("/events/:eventId", requireAuth, async (req: AuthenticatedRequest, 
     if (body.eventTime !== undefined) updates.eventTime = body.eventTime;
     if (body.endDate !== undefined) updates.endDate = body.endDate ?? null;
     if (body.endTime !== undefined) updates.endTime = body.endTime ?? null;
+    updates.moderationStatus = "pending";
+    updates.moderationMessage = null;
+    updates.reviewedBy = null;
+    updates.reviewedAt = null;
 
     const [updated] = await db
       .update(eventsTable)
@@ -237,6 +250,10 @@ router.post("/events/:eventId/join", requireAuth, async (req: AuthenticatedReque
       res.status(404).json({ error: "Event not found" });
       return;
     }
+    if (event.moderationStatus !== "approved") {
+      res.status(403).json({ error: "Event not available" });
+      return;
+    }
 
     const [existing] = await db
       .select()
@@ -293,6 +310,110 @@ router.post("/events/:eventId/leave", requireAuth, async (req: AuthenticatedRequ
   } catch (err) {
     res.status(500).json({ error: "Failed to leave event" });
   }
+});
+
+router.get("/admin/events/pending", requireAuth, requireAdmin, async (req: AuthenticatedRequest, res) => {
+  const page = Math.max(1, parseInt(req.query.page as string, 10) || 1);
+  const limit = Math.min(50, Math.max(1, parseInt(req.query.limit as string, 10) || 10));
+  const offset = (page - 1) * limit;
+
+  try {
+    const [events, [totalRow]] = await Promise.all([
+      db
+        .select({
+          id: eventsTable.id,
+          userId: eventsTable.userId,
+          title: eventsTable.title,
+          description: eventsTable.description,
+          location: eventsTable.location,
+          address: eventsTable.address,
+          city: eventsTable.city,
+          province: eventsTable.province,
+          eventDate: eventsTable.eventDate,
+          eventTime: eventsTable.eventTime,
+          endDate: eventsTable.endDate,
+          endTime: eventsTable.endTime,
+          moderationStatus: eventsTable.moderationStatus,
+          createdAt: eventsTable.createdAt,
+          username: usersTable.username,
+          userPhotoUrl: usersTable.photoUrl,
+        })
+        .from(eventsTable)
+        .leftJoin(usersTable, eq(eventsTable.userId, usersTable.clerkUserId))
+        .where(eq(eventsTable.moderationStatus, "pending"))
+        .orderBy(desc(eventsTable.createdAt))
+        .limit(limit)
+        .offset(offset),
+      db.select({ total: count() }).from(eventsTable).where(eq(eventsTable.moderationStatus, "pending")),
+    ]);
+
+    const total = Number(totalRow?.total ?? 0);
+    res.json({
+      items: events.map((event) => ({ ...event, createdAt: event.createdAt.toISOString() })),
+      total,
+      page,
+      limit,
+      hasMore: offset + events.length < total,
+    });
+  } catch (err) {
+    req.log.error({ err }, "Error listing pending events");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+async function reviewEvent(req: AuthenticatedRequest, res: any, status: "approved" | "rejected") {
+  const eventId = parseInt(req.params.eventId, 10);
+  if (isNaN(eventId)) {
+    res.status(400).json({ error: "Invalid eventId" });
+    return;
+  }
+
+  const message = typeof req.body?.message === "string" ? req.body.message.trim().slice(0, 2000) : "";
+
+  try {
+    const [event] = await db.select().from(eventsTable).where(eq(eventsTable.id, eventId));
+    if (!event) {
+      res.status(404).json({ error: "Event not found" });
+      return;
+    }
+
+    const [updated] = await db
+      .update(eventsTable)
+      .set({
+        moderationStatus: status,
+        moderationMessage: message || null,
+        reviewedBy: req.userId,
+        reviewedAt: new Date(),
+      })
+      .where(eq(eventsTable.id, eventId))
+      .returning();
+
+    const notificationTitle = status === "approved" ? "Evento approvato" : "Evento rifiutato";
+    const defaultMessage = status === "approved"
+      ? `Il tuo evento "${event.title}" è stato approvato ed è ora pubblicato.`
+      : `Il tuo evento "${event.title}" non è stato approvato.`;
+
+    await db.insert(userNotificationsTable).values({
+      userId: event.userId,
+      title: notificationTitle,
+      message: message || defaultMessage,
+      isRead: false,
+    });
+
+    const formatted = await formatEvent(updated, req.userId);
+    res.json(formatted);
+  } catch (err) {
+    req.log.error({ err, eventId, status }, "Error reviewing event");
+    res.status(500).json({ error: "Internal server error" });
+  }
+}
+
+router.patch("/admin/events/:eventId/approve", requireAuth, requireAdmin, async (req: AuthenticatedRequest, res) => {
+  await reviewEvent(req, res, "approved");
+});
+
+router.patch("/admin/events/:eventId/reject", requireAuth, requireAdmin, async (req: AuthenticatedRequest, res) => {
+  await reviewEvent(req, res, "rejected");
 });
 
 export default router;

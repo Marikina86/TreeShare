@@ -1414,6 +1414,12 @@ components:
         endTime:
           type: string
           nullable: true
+        moderationStatus:
+          type: string
+          enum: [pending, approved, rejected]
+        moderationMessage:
+          type: string
+          nullable: true
         participantCount:
           type: integer
         isParticipating:
@@ -1428,6 +1434,7 @@ components:
         - location
         - eventDate
         - eventTime
+        - moderationStatus
         - participantCount
         - isParticipating
         - createdAt

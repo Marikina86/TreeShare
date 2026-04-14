@@ -19,6 +19,7 @@ export * from "./createReportBody";
 export * from "./createTipBody";
 export * from "./createTreeBody";
 export * from "./event";
+export * from "./eventModerationStatus";
 export * from "./getCurrentWeeklyWinners200";
 export * from "./getMapMarkersParams";
 export * from "./getRecentTreesParams";

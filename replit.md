@@ -103,6 +103,12 @@ A plant/tree sharing social app. Community members document trees/plants they pl
 - Accessible to all users (no auth required to share)
 - Multilingual toast messages (6 languages)
 
+### Event Moderation
+- New and edited events are saved with `moderationStatus = "pending"` and are not listed publicly until approved.
+- Existing events remain approved by default when the moderation columns are added.
+- Admin review endpoints: `GET /api/admin/events/pending`, `PATCH /api/admin/events/:eventId/approve`, `PATCH /api/admin/events/:eventId/reject`.
+- Admin approval/rejection supports an optional message; the event creator receives it as a personal notification in the Avvisi page.
+
 ### Public CampaignsPage
 - Route `/campaigns` — public (no auth required), lists active paid campaigns
 - API: `GET /api/donations/campaigns/active` — public endpoint (only shows paid + not-expired)

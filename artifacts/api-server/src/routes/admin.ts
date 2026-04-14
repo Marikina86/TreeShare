@@ -343,13 +343,15 @@ router.get("/admin/trees", requireAuth, requireAdmin, async (req, res) => {
 // GET /admin/pending-counts — lightweight counts for badges (no heavy data)
 router.get("/admin/pending-counts", requireAuth, requireAdmin, async (req, res) => {
   try {
-    const [[treesCount], [updatesCount]] = await Promise.all([
+    const [[treesCount], [updatesCount], [eventsCount]] = await Promise.all([
       db.select({ total: count() }).from(treesTable).where(eq(treesTable.photoStatus, "pending")),
       db.select({ total: count() }).from(treeUpdatesTable).where(eq(treeUpdatesTable.photoStatus, "pending")),
+      db.select({ total: count() }).from(eventsTable).where(eq(eventsTable.moderationStatus, "pending")),
     ]);
     res.json({
       pendingTrees: Number(treesCount?.total ?? 0),
       pendingUpdates: Number(updatesCount?.total ?? 0),
+      pendingEvents: Number(eventsCount?.total ?? 0),
     });
   } catch (err) {
     req.log.error({ err }, "Error fetching pending counts");

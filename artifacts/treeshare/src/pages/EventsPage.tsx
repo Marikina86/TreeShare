@@ -46,6 +46,8 @@ type EventItem = {
   eventTime: string;
   endDate?: string | null;
   endTime?: string | null;
+  moderationStatus?: "pending" | "approved" | "rejected";
+  moderationMessage?: string | null;
   participantCount: number;
   isParticipating: boolean;
   createdAt: string;
@@ -193,7 +195,10 @@ export default function EventsPage() {
       queryClient.invalidateQueries({ queryKey: EVENTS_QK });
       setShowForm(false);
       setForm(emptyForm());
-      toast({ title: "Evento creato!" });
+      toast({
+        title: "Evento inviato per approvazione",
+        description: "Sarà pubblicato dopo la revisione di un amministratore.",
+      });
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Impossibile creare l'evento.";
       toast({ title: "Errore", description: msg, variant: "destructive" });
@@ -252,7 +257,10 @@ export default function EventsPage() {
       }),
     });
     queryClient.invalidateQueries({ queryKey: EVENTS_QK });
-    toast({ title: "Evento aggiornato!" });
+    toast({
+      title: "Modifiche inviate per approvazione",
+      description: "L'evento tornerà visibile dopo la revisione di un amministratore.",
+    });
   }, [getToken, queryClient, toast]);
 
   function toggleMyArea() {
