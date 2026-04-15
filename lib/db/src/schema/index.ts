@@ -318,6 +318,54 @@ export const discountCodeNotificationsTable = pgTable("discount_code_notificatio
   index("discount_code_notif_code_idx").on(table.discountCodeId),
 ]);
 
+// ── Adoptable Trees ───────────────────────────────────────────────────────────
+
+export const adoptableTreesTable = pgTable("adoptable_trees", {
+  id: serial("id").primaryKey(),
+  ownerId: text("owner_id").notNull(),
+  ownerEmail: text("owner_email").notNull(),
+  title: text("title").notNull(),
+  description: text("description").notNull(),
+  speciesName: text("species_name"),
+  latitude: real("latitude").notNull(),
+  longitude: real("longitude").notNull(),
+  imageUrl: text("image_url"),
+  thumbnailUrl: text("thumbnail_url"),
+  productDescription: text("product_description"),
+  priceCents: integer("price_cents").notNull().default(500),
+  durationDays: integer("duration_days").notNull().default(365),
+  maxAdoptions: integer("max_adoptions").notNull().default(10),
+  currentAdoptions: integer("current_adoptions").notNull().default(0),
+  status: text("status").notNull().default("active"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (table) => [
+  index("adoptable_trees_owner_id_idx").on(table.ownerId),
+  index("adoptable_trees_status_idx").on(table.status),
+]);
+
+export const treeAdoptionsTable = pgTable("tree_adoptions", {
+  id: serial("id").primaryKey(),
+  userId: text("user_id").notNull(),
+  treeId: integer("tree_id").notNull(),
+  treeName: text("tree_name").notNull(),
+  durationDays: integer("duration_days").notNull(),
+  startDate: timestamp("start_date").notNull().defaultNow(),
+  endDate: timestamp("end_date").notNull(),
+  amountCents: integer("amount_cents").notNull(),
+  platformFeeCents: integer("platform_fee_cents").notNull(),
+  netToEntityCents: integer("net_to_entity_cents").notNull(),
+  stripePaymentIntentId: text("stripe_payment_intent_id").notNull().unique(),
+  status: text("status").notNull().default("active"),
+  expiryNotifiedAt: timestamp("expiry_notified_at"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (table) => [
+  index("tree_adoptions_user_id_idx").on(table.userId),
+  index("tree_adoptions_tree_id_idx").on(table.treeId),
+  index("tree_adoptions_status_idx").on(table.status),
+  index("tree_adoptions_end_date_idx").on(table.endDate),
+]);
+
 export const insertUserSchema = createInsertSchema(usersTable).omit({ id: true, createdAt: true });
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof usersTable.$inferSelect;

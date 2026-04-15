@@ -272,6 +272,16 @@ export default function Layout({ children }: LayoutProps) {
       ),
     },
     {
+      path: "/adopt",
+      label: t.nav.adopt,
+      icon: (
+        <svg width="22" height="22" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+          <path d="M12 22V12" strokeLinecap="round"/>
+          <path d="M12 12C12 12 7 11 5 7C3 3 6 1 9 2C10.5 2.5 11.5 4 12 6C12.5 4 13.5 2.5 15 2C18 1 21 4 19 8C17 12 12 12 12 12Z"/>
+        </svg>
+      ),
+    },
+    {
       path: "/profile",
       label: t.nav.profile,
       icon: (

@@ -1,5 +1,6 @@
 import { db } from "@workspace/db";
 import { eventsTable, donationCampaignsTable, userNotificationsTable } from "@workspace/db";
+import { expireTreeAdoptions, notifyExpiringAdoptions } from "../routes/adoptions";
 import { sql, and, eq, lt, lte, gte, isNull } from "drizzle-orm";
 import { logger } from "./logger";
 
@@ -171,11 +172,15 @@ const CAMPAIGN_CLEANUP_INTERVAL_MS = 24 * 60 * 60 * 1000;
 export function startEventCleaner(): void {
   deleteExpiredEvents();
   archiveExpiredCampaigns();
+  expireTreeAdoptions();
   setInterval(deleteExpiredEvents, EVENT_CLEANUP_INTERVAL_MS);
   setInterval(archiveExpiredCampaigns, CAMPAIGN_CLEANUP_INTERVAL_MS);
+  setInterval(expireTreeAdoptions, CAMPAIGN_CLEANUP_INTERVAL_MS);
   setTimeout(() => {
     notifyExpiringCampaigns();
+    notifyExpiringAdoptions();
     setInterval(notifyExpiringCampaigns, CAMPAIGN_CLEANUP_INTERVAL_MS);
+    setInterval(notifyExpiringAdoptions, CAMPAIGN_CLEANUP_INTERVAL_MS);
   }, msUntilNextRome2359());
-  logger.info("[eventCleaner] Auto-cleanup scheduler started (events: 60s, campaign archive: 24h, expiry notifications: 23:59 Europe/Rome)");
+  logger.info("[eventCleaner] Auto-cleanup scheduler started (events: 60s, campaign archive: 24h, expiry notifications: 23:59 Europe/Rome, adoption expiry: 24h)");
 }
