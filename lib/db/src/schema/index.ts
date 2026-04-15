@@ -337,6 +337,7 @@ export const adoptableTreesTable = pgTable("adoptable_trees", {
   maxAdoptions: integer("max_adoptions").notNull().default(10),
   currentAdoptions: integer("current_adoptions").notNull().default(0),
   status: text("status").notNull().default("active"),
+  paused: boolean("paused").notNull().default(false),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 }, (table) => [

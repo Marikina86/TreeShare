@@ -60,6 +60,7 @@ router.get("/adopt/trees", async (req, res) => {
     const trees = await db
       .select()
       .from(adoptableTreesTable)
+      .where(eq(adoptableTreesTable.paused, false))
       .orderBy(desc(adoptableTreesTable.createdAt));
     res.json(trees.map((t) => ({
       ...t,
@@ -259,6 +260,54 @@ router.delete("/adopt/trees/:id", requireAuth, async (req, res) => {
   }
 });
 
+// ─── Org: pause adoptable tree ────────────────────────────────────────────────
+
+router.patch("/adopt/trees/:id/pause", requireAuth, async (req, res) => {
+  const userId = (req as AuthenticatedRequest).userId;
+  const id = parseInt(req.params.id, 10);
+  if (isNaN(id)) { res.status(400).json({ error: "ID non valido" }); return; }
+  try {
+    const accountType = await getAccountType(userId);
+    if (accountType !== "organization") { res.status(403).json({ error: "Non autorizzato" }); return; }
+    const [tree] = await db.select({ ownerId: adoptableTreesTable.ownerId }).from(adoptableTreesTable).where(eq(adoptableTreesTable.id, id));
+    if (!tree) { res.status(404).json({ error: "Albero non trovato" }); return; }
+    if (tree.ownerId !== userId) { res.status(403).json({ error: "Non autorizzato" }); return; }
+    const [updated] = await db
+      .update(adoptableTreesTable)
+      .set({ paused: true, updatedAt: new Date() })
+      .where(eq(adoptableTreesTable.id, id))
+      .returning();
+    res.json({ ...updated, createdAt: updated.createdAt.toISOString(), updatedAt: updated.updatedAt.toISOString() });
+  } catch (err) {
+    logger.error({ err }, "[adopt] pause tree error");
+    res.status(500).json({ error: "Errore interno" });
+  }
+});
+
+// ─── Org: resume adoptable tree ───────────────────────────────────────────────
+
+router.patch("/adopt/trees/:id/resume", requireAuth, async (req, res) => {
+  const userId = (req as AuthenticatedRequest).userId;
+  const id = parseInt(req.params.id, 10);
+  if (isNaN(id)) { res.status(400).json({ error: "ID non valido" }); return; }
+  try {
+    const accountType = await getAccountType(userId);
+    if (accountType !== "organization") { res.status(403).json({ error: "Non autorizzato" }); return; }
+    const [tree] = await db.select({ ownerId: adoptableTreesTable.ownerId }).from(adoptableTreesTable).where(eq(adoptableTreesTable.id, id));
+    if (!tree) { res.status(404).json({ error: "Albero non trovato" }); return; }
+    if (tree.ownerId !== userId) { res.status(403).json({ error: "Non autorizzato" }); return; }
+    const [updated] = await db
+      .update(adoptableTreesTable)
+      .set({ paused: false, updatedAt: new Date() })
+      .where(eq(adoptableTreesTable.id, id))
+      .returning();
+    res.json({ ...updated, createdAt: updated.createdAt.toISOString(), updatedAt: updated.updatedAt.toISOString() });
+  } catch (err) {
+    logger.error({ err }, "[adopt] resume tree error");
+    res.status(500).json({ error: "Errore interno" });
+  }
+});
+
 // ─── User: get my adoptions ───────────────────────────────────────────────────
 
 router.get("/adopt/my-adoptions", requireAuth, async (req, res) => {
@@ -427,6 +476,10 @@ router.post("/adopt/initiate", requireAuth, async (req, res) => {
       .where(eq(adoptableTreesTable.id, Number(treeId)));
 
     if (!tree) { res.status(404).json({ error: "Albero non trovato" }); return; }
+    if (tree.paused) {
+      res.status(400).json({ error: "Questo albero è attualmente in pausa e non è adottabile" });
+      return;
+    }
     if (tree.status === "full" || tree.currentAdoptions >= tree.maxAdoptions) {
       res.status(400).json({ error: "Questo albero ha raggiunto il numero massimo di adozioni" });
       return;

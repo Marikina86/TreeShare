@@ -23,6 +23,7 @@ interface AdoptableTree {
   maxAdoptions: number;
   currentAdoptions: number;
   status: string;
+  paused: boolean;
   ownerStripeReady: boolean;
   latitude: number;
   longitude: number;
@@ -107,6 +108,12 @@ const T = {
     shippingBtn: "📦 Invia i tuoi dati per la spedizione",
     shippingReceived: "✓ Dati ricevuti dall'ente",
     orgManageAdoptions: "Gestisci adozioni →",
+    pauseTree: "⏸ Metti in pausa",
+    resumeTree: "▶ Riattiva adozioni",
+    pausing: "Pausa in corso...",
+    resuming: "Riattivazione...",
+    pausedBadge: "In pausa",
+    pausedUserMsg: "Questo albero è temporaneamente in pausa e non è adottabile al momento.",
   },
   en: {
     loading: "Loading...",
@@ -159,6 +166,12 @@ const T = {
     shippingBtn: "📦 Send your shipping details",
     shippingReceived: "✓ Details received by the organization",
     orgManageAdoptions: "Manage adoptions →",
+    pauseTree: "⏸ Pause adoptions",
+    resumeTree: "▶ Resume adoptions",
+    pausing: "Pausing...",
+    resuming: "Resuming...",
+    pausedBadge: "Paused",
+    pausedUserMsg: "This tree is temporarily paused and is not available for adoption at the moment.",
   },
 };
 
@@ -360,8 +373,34 @@ function OrgManageSection({ tree, t }: { tree: AdoptableTree; t: typeof T.it }) 
   const [productDescription, setProductDescription] = useState(tree.productDescription ?? "");
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [toggling, setToggling] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const queryClient = useQueryClient();
+
+  async function handleTogglePause() {
+    setToggling(true);
+    setError(null);
+    const action = tree.paused ? "resume" : "pause";
+    try {
+      const token = await getToken();
+      const res = await fetch(`/api/adopt/trees/${tree.id}/${action}`, {
+        method: "PATCH",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        setError(d.error ?? t.error);
+        return;
+      }
+      await queryClient.invalidateQueries({ queryKey: ["adoptable-tree", tree.id] });
+      await queryClient.invalidateQueries({ queryKey: ["adoptable-trees"] });
+      await queryClient.invalidateQueries({ queryKey: ["adopt-my-trees"] });
+    } catch {
+      setError(t.error);
+    } finally {
+      setToggling(false);
+    }
+  }
 
   async function handleSave() {
     setSaving(true);
@@ -426,13 +465,33 @@ function OrgManageSection({ tree, t }: { tree: AdoptableTree; t: typeof T.it }) 
 
       {error && <p className="text-red-500 text-sm">{error}</p>}
 
+      {tree.paused && (
+        <div className="flex items-center gap-2 px-3 py-2 bg-orange-100 dark:bg-orange-900/30 border border-orange-300 dark:border-orange-700 rounded-lg">
+          <span className="text-orange-700 dark:text-orange-300 text-xs font-semibold">⏸ {t.pausedBadge}</span>
+          <span className="text-orange-600 dark:text-orange-400 text-xs">— non visibile agli utenti</span>
+        </div>
+      )}
+
       {!editMode ? (
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <button
             onClick={() => setEditMode(true)}
             className="px-3 py-1.5 rounded-lg bg-amber-500 text-white text-xs font-medium hover:bg-amber-600 transition-colors"
           >
             ✏️ {t.editTitle.split(" ")[0]}
+          </button>
+          <button
+            onClick={handleTogglePause}
+            disabled={toggling}
+            className={`px-3 py-1.5 rounded-lg text-white text-xs font-medium transition-colors disabled:opacity-50 ${
+              tree.paused
+                ? "bg-green-600 hover:bg-green-700"
+                : "bg-orange-500 hover:bg-orange-600"
+            }`}
+          >
+            {toggling
+              ? tree.paused ? t.resuming : t.pausing
+              : tree.paused ? t.resumeTree : t.pauseTree}
           </button>
           <button
             onClick={handleDelete}
@@ -771,8 +830,19 @@ export default function AdoptableTreeDetailPage() {
           <p className="text-red-500 text-sm mb-3">{initError}</p>
         )}
 
-        {/* Duration selector — visible to all visitors on non-full, non-owned trees */}
-        {!isOwner && !adopted && !activeAdoption && !isFull && !showPayment && (
+        {/* Paused banner — visible to non-owners when tree is paused */}
+        {tree.paused && !isOwner && !adopted && !activeAdoption && (
+          <div className="mb-4 p-4 bg-orange-50 dark:bg-orange-950/20 border border-orange-200 dark:border-orange-800 rounded-xl flex items-start gap-3">
+            <span className="text-2xl">⏸</span>
+            <div>
+              <p className="font-semibold text-orange-700 dark:text-orange-300 text-sm">{t.pausedBadge}</p>
+              <p className="text-xs text-orange-600 dark:text-orange-400 mt-0.5">{t.pausedUserMsg}</p>
+            </div>
+          </div>
+        )}
+
+        {/* Duration selector — visible to all visitors on non-full, non-paused, non-owned trees */}
+        {!isOwner && !adopted && !activeAdoption && !isFull && !tree.paused && !showPayment && (
           <div className="mb-4">
             <p className="text-sm font-medium text-foreground mb-2">{t.selectDuration}</p>
             <div className="grid grid-cols-4 gap-2">
@@ -801,7 +871,7 @@ export default function AdoptableTreeDetailPage() {
           </div>
         )}
 
-        {!isOwner && !adopted && !activeAdoption && (
+        {!isOwner && !adopted && !activeAdoption && !tree.paused && (
           <>
             {!user && (
               <Link href="/sign-in">
