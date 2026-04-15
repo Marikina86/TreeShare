@@ -13,6 +13,8 @@ interface AdoptableTree {
   id: number;
   ownerId: string;
   ownerEmail: string;
+  ownerUsername: string | null;
+  ownerPhotoUrl: string | null;
   title: string;
   description: string;
   speciesName: string | null;
@@ -115,6 +117,7 @@ const T = {
     resuming: "Riattivazione...",
     pausedBadge: "In pausa",
     pausedUserMsg: "Questo albero è temporaneamente in pausa e non è adottabile al momento.",
+    proposedBy: "Proposto da",
   },
   en: {
     loading: "Loading...",
@@ -173,6 +176,7 @@ const T = {
     resuming: "Resuming...",
     pausedBadge: "Paused",
     pausedUserMsg: "This tree is temporarily paused and is not available for adoption at the moment.",
+    proposedBy: "Proposed by",
   },
 };
 
@@ -731,6 +735,24 @@ export default function AdoptableTreeDetailPage() {
           <h1 className="text-2xl font-bold text-foreground">{tree.title}</h1>
           {tree.speciesName && (
             <p className="text-muted-foreground text-sm italic">{tree.speciesName}</p>
+          )}
+          {tree.ownerUsername && (
+            <Link href={`/profile/${tree.ownerId}`}>
+              <span className="inline-flex items-center gap-1.5 mt-1 group cursor-pointer">
+                {tree.ownerPhotoUrl ? (
+                  <img
+                    src={resolveImg(tree.ownerPhotoUrl)}
+                    alt={tree.ownerUsername}
+                    className="w-5 h-5 rounded-full object-cover"
+                  />
+                ) : (
+                  <span className="w-5 h-5 rounded-full bg-muted border border-border flex items-center justify-center text-[10px]">🌿</span>
+                )}
+                <span className="text-xs text-muted-foreground group-hover:text-primary transition-colors">
+                  {t.proposedBy} <span className="font-medium text-foreground group-hover:text-primary">@{tree.ownerUsername}</span>
+                </span>
+              </span>
+            </Link>
           )}
         </div>
 

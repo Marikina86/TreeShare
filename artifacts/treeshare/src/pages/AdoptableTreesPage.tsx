@@ -1,4 +1,4 @@
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { useGetMyProfile } from "@workspace/api-client-react";
 import Layout from "@/components/Layout";
@@ -10,6 +10,8 @@ interface AdoptableTree {
   id: number;
   ownerId: string;
   ownerEmail: string;
+  ownerUsername: string | null;
+  ownerPhotoUrl: string | null;
   title: string;
   description: string;
   speciesName: string | null;
@@ -64,6 +66,7 @@ const T = {
 
 function TreeCard({ tree, lang, currentUserId }: { tree: AdoptableTree; lang: "it" | "en"; currentUserId?: string | null }) {
   const t = T[lang] ?? T.it;
+  const [, navigate] = useLocation();
   const isPaused = tree.paused;
   const isOwner = !!currentUserId && currentUserId === tree.ownerId;
   const blockedByPause = isPaused && !isOwner;
@@ -113,6 +116,14 @@ function TreeCard({ tree, lang, currentUserId }: { tree: AdoptableTree; lang: "i
         </h3>
         {tree.speciesName && (
           <p className="text-xs text-muted-foreground mt-0.5 truncate">{tree.speciesName}</p>
+        )}
+        {tree.ownerUsername && (
+          <span
+            className="block text-[11px] text-muted-foreground hover:text-primary mt-0.5 truncate transition-colors cursor-pointer"
+            onClick={(e) => { e.stopPropagation(); navigate(`/profile/${tree.ownerId}`); }}
+          >
+            @{tree.ownerUsername}
+          </span>
         )}
         <div className="flex items-center justify-between mt-2">
           <span className={`font-bold text-sm ${blockedByPause ? "text-muted-foreground" : "text-primary"}`}>

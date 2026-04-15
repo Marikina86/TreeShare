@@ -58,8 +58,31 @@ async function isStripeAccountReady(accountId: string): Promise<boolean> {
 router.get("/adopt/trees", async (req, res) => {
   try {
     const trees = await db
-      .select()
+      .select({
+        id: adoptableTreesTable.id,
+        ownerId: adoptableTreesTable.ownerId,
+        ownerEmail: adoptableTreesTable.ownerEmail,
+        title: adoptableTreesTable.title,
+        description: adoptableTreesTable.description,
+        speciesName: adoptableTreesTable.speciesName,
+        latitude: adoptableTreesTable.latitude,
+        longitude: adoptableTreesTable.longitude,
+        imageUrl: adoptableTreesTable.imageUrl,
+        thumbnailUrl: adoptableTreesTable.thumbnailUrl,
+        productDescription: adoptableTreesTable.productDescription,
+        priceCents: adoptableTreesTable.priceCents,
+        durationDays: adoptableTreesTable.durationDays,
+        maxAdoptions: adoptableTreesTable.maxAdoptions,
+        currentAdoptions: adoptableTreesTable.currentAdoptions,
+        status: adoptableTreesTable.status,
+        paused: adoptableTreesTable.paused,
+        createdAt: adoptableTreesTable.createdAt,
+        updatedAt: adoptableTreesTable.updatedAt,
+        ownerUsername: usersTable.username,
+        ownerPhotoUrl: usersTable.photoUrl,
+      })
       .from(adoptableTreesTable)
+      .leftJoin(usersTable, eq(usersTable.clerkUserId, adoptableTreesTable.ownerId))
       .orderBy(desc(adoptableTreesTable.createdAt));
     res.json(trees.map((t) => ({
       ...t,
@@ -104,20 +127,46 @@ router.get("/adopt/trees/:id", async (req, res) => {
   const id = parseInt(req.params.id, 10);
   if (isNaN(id)) { res.status(400).json({ error: "ID non valido" }); return; }
   try {
-    const [tree] = await db.select().from(adoptableTreesTable).where(eq(adoptableTreesTable.id, id));
-    if (!tree) { res.status(404).json({ error: "Albero non trovato" }); return; }
+    const [row] = await db
+      .select({
+        id: adoptableTreesTable.id,
+        ownerId: adoptableTreesTable.ownerId,
+        ownerEmail: adoptableTreesTable.ownerEmail,
+        title: adoptableTreesTable.title,
+        description: adoptableTreesTable.description,
+        speciesName: adoptableTreesTable.speciesName,
+        latitude: adoptableTreesTable.latitude,
+        longitude: adoptableTreesTable.longitude,
+        imageUrl: adoptableTreesTable.imageUrl,
+        thumbnailUrl: adoptableTreesTable.thumbnailUrl,
+        productDescription: adoptableTreesTable.productDescription,
+        priceCents: adoptableTreesTable.priceCents,
+        durationDays: adoptableTreesTable.durationDays,
+        maxAdoptions: adoptableTreesTable.maxAdoptions,
+        currentAdoptions: adoptableTreesTable.currentAdoptions,
+        status: adoptableTreesTable.status,
+        paused: adoptableTreesTable.paused,
+        createdAt: adoptableTreesTable.createdAt,
+        updatedAt: adoptableTreesTable.updatedAt,
+        ownerUsername: usersTable.username,
+        ownerPhotoUrl: usersTable.photoUrl,
+      })
+      .from(adoptableTreesTable)
+      .leftJoin(usersTable, eq(usersTable.clerkUserId, adoptableTreesTable.ownerId))
+      .where(eq(adoptableTreesTable.id, id));
+    if (!row) { res.status(404).json({ error: "Albero non trovato" }); return; }
 
-    const stripeAccountId = await getOwnerStripeAccountId(tree.ownerId);
+    const stripeAccountId = await getOwnerStripeAccountId(row.ownerId);
     let ownerStripeReady = false;
     if (stripeAccountId) {
       ownerStripeReady = await isStripeAccountReady(stripeAccountId);
     }
 
     res.json({
-      ...tree,
+      ...row,
       ownerStripeReady,
-      createdAt: tree.createdAt.toISOString(),
-      updatedAt: tree.updatedAt.toISOString(),
+      createdAt: row.createdAt.toISOString(),
+      updatedAt: row.updatedAt.toISOString(),
     });
   } catch (err) {
     logger.error({ err }, "[adopt] tree detail error");
