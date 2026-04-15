@@ -87,7 +87,11 @@ async function ensurePlatformRevenueRow(tx: any) {
   }
 }
 
-async function activateCampaign(campaignId: number, piId: string) {
+async function activateCampaign(
+  campaignId: number,
+  piId: string,
+  discountInfo: { codeId: number; userKey: string } | null = null,
+) {
   return db.transaction(async (tx) => {
     const [campaign] = await tx
       .select()
@@ -101,6 +105,27 @@ async function activateCampaign(campaignId: number, piId: string) {
 
     if (!campaign) return { error: "not_found" };
     if (campaign.paymentStatus === "paid") return { idempotent: true, campaignId: campaign.id };
+
+    // ── Atomic discount use recording (inside transaction = race-safe) ───────
+    if (discountInfo) {
+      const [alreadyUsed] = await tx
+        .select({ id: discountCodeUsesTable.id })
+        .from(discountCodeUsesTable)
+        .where(
+          and(
+            eq(discountCodeUsesTable.discountCodeId, discountInfo.codeId),
+            eq(discountCodeUsesTable.userKey, discountInfo.userKey),
+          ),
+        );
+      if (alreadyUsed) return { error: "discount_used" };
+      await tx
+        .insert(discountCodeUsesTable)
+        .values({ discountCodeId: discountInfo.codeId, userKey: discountInfo.userKey, campaignId: campaign.id });
+      await tx
+        .update(discountCodesTable)
+        .set({ useCount: sql`${discountCodesTable.useCount} + 1` })
+        .where(eq(discountCodesTable.id, discountInfo.codeId));
+    }
 
     const durationDays = campaign.durationDays || 30;
     const expiresAt = getRomeExpiryDate(durationDays);
@@ -186,7 +211,11 @@ async function renewCampaign(campaignId: number, piId: string) {
   });
 }
 
-async function activateCampaignByPayPalOrder(campaignId: number, orderId: string) {
+async function activateCampaignByPayPalOrder(
+  campaignId: number,
+  orderId: string,
+  discountInfo: { codeId: number; userKey: string } | null = null,
+) {
   return db.transaction(async (tx) => {
     const [campaign] = await tx
       .select()
@@ -200,6 +229,27 @@ async function activateCampaignByPayPalOrder(campaignId: number, orderId: string
 
     if (!campaign) return { error: "not_found" };
     if (campaign.paymentStatus === "paid") return { idempotent: true, campaignId: campaign.id };
+
+    // ── Atomic discount use recording (inside transaction = race-safe) ───────
+    if (discountInfo) {
+      const [alreadyUsed] = await tx
+        .select({ id: discountCodeUsesTable.id })
+        .from(discountCodeUsesTable)
+        .where(
+          and(
+            eq(discountCodeUsesTable.discountCodeId, discountInfo.codeId),
+            eq(discountCodeUsesTable.userKey, discountInfo.userKey),
+          ),
+        );
+      if (alreadyUsed) return { error: "discount_used" };
+      await tx
+        .insert(discountCodeUsesTable)
+        .values({ discountCodeId: discountInfo.codeId, userKey: discountInfo.userKey, campaignId: campaign.id });
+      await tx
+        .update(discountCodesTable)
+        .set({ useCount: sql`${discountCodesTable.useCount} + 1` })
+        .where(eq(discountCodesTable.id, discountInfo.codeId));
+    }
 
     const durationDays = campaign.durationDays || 30;
     const expiresAt = getRomeExpiryDate(durationDays);
@@ -442,16 +492,6 @@ async function resolveDiscountCode(
   return { discountCodeId: dc.id, finalCents, savedCents: originalCents - finalCents };
 }
 
-async function recordDiscountUse(discountCodeId: number, userId: string, campaignId: number) {
-  try {
-    const userKey = `user:${userId}`;
-    await db.insert(discountCodeUsesTable).values({ discountCodeId, userKey, campaignId });
-    await db
-      .update(discountCodesTable)
-      .set({ useCount: sql`${discountCodesTable.useCount} + 1` })
-      .where(eq(discountCodesTable.id, discountCodeId));
-  } catch {}
-}
 
 router.post("/campaigns/initiate-payment", requireAuth, async (req, res) => {
   const userId = (req as AuthenticatedRequest).userId;
@@ -599,15 +639,19 @@ router.post("/campaigns/confirm-payment", requireAuth, async (req, res) => {
       return;
     }
 
-    const result = await activateCampaign(campaign.id, paymentIntentId);
+    const discountInfo = campaign.discountCodeId
+      ? { codeId: campaign.discountCodeId, userKey: `user:${userId}` }
+      : null;
 
+    const result = await activateCampaign(campaign.id, paymentIntentId, discountInfo);
+
+    if ((result as any).error === "discount_used") {
+      res.status(400).json({ error: "Hai già utilizzato questo codice sconto" });
+      return;
+    }
     if ((result as any).error) {
       res.status(404).json(result);
       return;
-    }
-
-    if (campaign.discountCodeId) {
-      await recordDiscountUse(campaign.discountCodeId, userId, campaign.id);
     }
 
     res.json(result);
@@ -760,15 +804,19 @@ router.post("/campaigns/confirm-payment-paypal", requireAuth, async (req, res) =
       return;
     }
 
-    const result = await activateCampaignByPayPalOrder(Number(campaignId), orderId);
+    const discountInfo = campaign.discountCodeId
+      ? { codeId: campaign.discountCodeId, userKey: `user:${userId}` }
+      : null;
 
+    const result = await activateCampaignByPayPalOrder(Number(campaignId), orderId, discountInfo);
+
+    if ((result as any).error === "discount_used") {
+      res.status(400).json({ error: "Hai già utilizzato questo codice sconto" });
+      return;
+    }
     if ((result as any).error) {
       res.status(404).json(result);
       return;
-    }
-
-    if (campaign.discountCodeId) {
-      await recordDiscountUse(campaign.discountCodeId, userId, campaign.id);
     }
 
     res.json(result);
