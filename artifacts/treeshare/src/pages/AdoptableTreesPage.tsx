@@ -20,6 +20,7 @@ interface AdoptableTree {
   maxAdoptions: number;
   currentAdoptions: number;
   status: string;
+  paused: boolean;
   createdAt: string;
 }
 
@@ -30,6 +31,7 @@ const T = {
     empty: "Nessun albero disponibile per l'adozione al momento.",
     available: "disponibili",
     full: "Esaurito",
+    paused: "In pausa",
     adopt: "Adotta",
     duration: "Durata",
     days: "giorni",
@@ -46,6 +48,7 @@ const T = {
     empty: "No trees available for adoption at the moment.",
     available: "available",
     full: "Full",
+    paused: "Paused",
     adopt: "Adopt",
     duration: "Duration",
     days: "days",
@@ -60,46 +63,69 @@ const T = {
 
 function TreeCard({ tree, lang }: { tree: AdoptableTree; lang: "it" | "en" }) {
   const t = T[lang] ?? T.it;
-  const isFull = tree.status === "full" || tree.currentAdoptions >= tree.maxAdoptions;
+  const isPaused = tree.paused;
+  const isFull = !isPaused && (tree.status === "full" || tree.currentAdoptions >= tree.maxAdoptions);
+  const imgSrc = resolveImg(tree.thumbnailUrl ?? tree.imageUrl);
 
-  return (
-    <Link href={`/adopt/${tree.id}`}>
-      <div className={`group bg-card border border-border rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-all cursor-pointer ${isFull ? "opacity-60" : ""}`}>
-        <div className="relative aspect-square bg-muted">
-          {resolveImg(tree.thumbnailUrl ?? tree.imageUrl) ? (
-            <img
-              src={resolveImg(tree.thumbnailUrl ?? tree.imageUrl)}
-              alt={tree.title}
-              loading="lazy"
-              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-            />
-          ) : (
-            <div className="w-full h-full flex items-center justify-center text-4xl">🌳</div>
-          )}
-          {isFull && (
-            <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
-              <span className="bg-black/70 text-white text-xs font-bold px-3 py-1 rounded-full">{t.full}</span>
-            </div>
-          )}
-        </div>
-        <div className="p-3">
-          <h3 className="font-semibold text-foreground text-sm truncate">{tree.title}</h3>
-          {tree.speciesName && (
-            <p className="text-xs text-muted-foreground mt-0.5 truncate">{tree.speciesName}</p>
-          )}
-          <div className="flex items-center justify-between mt-2">
-            <span className="text-primary font-bold text-sm">
-              €{(tree.priceCents / 100).toFixed(2)}
-              <span className="text-muted-foreground text-xs font-normal"> {t.perYear}</span>
-            </span>
-            <span className="text-xs text-muted-foreground">
-              {tree.durationDays} {t.days}
+  const inner = (
+    <div
+      className={`bg-card border border-border rounded-2xl overflow-hidden shadow-sm transition-all
+        ${isPaused ? "opacity-50 cursor-default select-none" : "group cursor-pointer hover:shadow-md"}
+        ${isFull ? "opacity-60" : ""}
+      `}
+    >
+      <div className="relative aspect-square bg-muted">
+        {imgSrc ? (
+          <img
+            src={imgSrc}
+            alt={tree.title}
+            loading="lazy"
+            className={`w-full h-full object-cover transition-transform duration-300
+              ${isPaused ? "grayscale brightness-75 saturate-0" : "group-hover:scale-105"}
+            `}
+          />
+        ) : (
+          <div className={`w-full h-full flex items-center justify-center text-4xl ${isPaused ? "opacity-40" : ""}`}>🌳</div>
+        )}
+
+        {isPaused && (
+          <div className="absolute inset-0 bg-blue-950/40 backdrop-blur-[1px] flex flex-col items-center justify-center gap-2">
+            <span className="text-4xl">☁️</span>
+            <span className="bg-slate-800/90 text-white text-xs font-bold px-3 py-1 rounded-full tracking-wide">
+              {t.paused}
             </span>
           </div>
+        )}
+
+        {isFull && !isPaused && (
+          <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+            <span className="bg-black/70 text-white text-xs font-bold px-3 py-1 rounded-full">{t.full}</span>
+          </div>
+        )}
+      </div>
+
+      <div className="p-3">
+        <h3 className={`font-semibold text-sm truncate ${isPaused ? "text-muted-foreground" : "text-foreground"}`}>
+          {tree.title}
+        </h3>
+        {tree.speciesName && (
+          <p className="text-xs text-muted-foreground mt-0.5 truncate">{tree.speciesName}</p>
+        )}
+        <div className="flex items-center justify-between mt-2">
+          <span className={`font-bold text-sm ${isPaused ? "text-muted-foreground" : "text-primary"}`}>
+            €{(tree.priceCents / 100).toFixed(2)}
+            <span className="text-muted-foreground text-xs font-normal"> {t.perYear}</span>
+          </span>
+          <span className="text-xs text-muted-foreground">
+            {tree.durationDays} {t.days}
+          </span>
         </div>
       </div>
-    </Link>
+    </div>
   );
+
+  if (isPaused) return <div>{inner}</div>;
+  return <Link href={`/adopt/${tree.id}`}>{inner}</Link>;
 }
 
 export default function AdoptableTreesPage() {

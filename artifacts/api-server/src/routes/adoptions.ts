@@ -60,7 +60,6 @@ router.get("/adopt/trees", async (req, res) => {
     const trees = await db
       .select()
       .from(adoptableTreesTable)
-      .where(eq(adoptableTreesTable.paused, false))
       .orderBy(desc(adoptableTreesTable.createdAt));
     res.json(trees.map((t) => ({
       ...t,
