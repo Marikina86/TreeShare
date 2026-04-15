@@ -6,6 +6,7 @@ import { useToast } from "@/hooks/use-toast";
 import { ManagerPhotoThumbnails, type CampaignPhoto } from "@/components/PhotoLightbox";
 import { loadStripe } from "@stripe/stripe-js";
 import { Elements, PaymentElement, useStripe, useElements } from "@stripe/react-stripe-js";
+import { PayPalScriptProvider, PayPalButtons } from "@paypal/react-paypal-js";
 
 interface Campaign {
   id: number;
@@ -78,6 +79,11 @@ const t = {
     treesPlanted: "Alberi piantati",
     co2Offset: "CO₂ compensata",
     renewCampaign: "Rinnova campagna",
+    payWithCard: "Paga con carta",
+    payWithPayPal: "Paga con PayPal",
+    payPalNotAvailable: "PayPal non configurato",
+    payPalCancelled: "Pagamento PayPal annullato",
+    payPalError: "Errore PayPal",
   },
   en: {
     title: "My campaigns",
@@ -123,12 +129,58 @@ const t = {
     treesPlanted: "Trees planted",
     co2Offset: "CO₂ offset",
     renewCampaign: "Renew campaign",
+    payWithCard: "Pay with card",
+    payWithPayPal: "Pay with PayPal",
+    payPalNotAvailable: "PayPal not available",
+    payPalCancelled: "PayPal payment cancelled",
+    payPalError: "PayPal error",
   },
 };
 
 type Lang = keyof typeof t;
 
 let stripePromise: ReturnType<typeof loadStripe> | null = null;
+
+interface PayPalConfig {
+  clientId: string;
+  environment: "sandbox" | "production";
+}
+
+function PayPalButtonsForm({
+  config,
+  onCreateOrder,
+  onSuccess,
+  onCancel,
+  onError,
+}: {
+  config: PayPalConfig;
+  onCreateOrder: () => Promise<string>;
+  onSuccess: (orderId: string) => Promise<void>;
+  onCancel: () => void;
+  onError: (err: unknown) => void;
+}) {
+  return (
+    <PayPalScriptProvider
+      options={{
+        clientId: config.clientId,
+        currency: "EUR",
+        intent: "capture",
+        components: "buttons",
+        ...(config.environment === "sandbox" ? { "enable-funding": "venmo", "disable-funding": "" } : {}),
+      }}
+    >
+      <PayPalButtons
+        style={{ layout: "vertical", shape: "rect", label: "pay", height: 44 }}
+        createOrder={onCreateOrder}
+        onApprove={async (data) => {
+          await onSuccess(data.orderID);
+        }}
+        onCancel={onCancel}
+        onError={onError}
+      />
+    </PayPalScriptProvider>
+  );
+}
 
 function PaymentForm({ clientSecret, onSuccess, onCancel, l }: {
   clientSecret: string;
@@ -211,11 +263,16 @@ export default function DonationCampaignManager({ accountType }: {
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [paymentIntentId, setPaymentIntentId] = useState<string | null>(null);
   const [stripeReady, setStripeReady] = useState(!!stripePromise);
+  const [paymentMethod, setPaymentMethod] = useState<"stripe" | "paypal">("stripe");
+  const [paypalConfig, setPaypalConfig] = useState<PayPalConfig | null | false>(null);
+  const [paypalCampaignId, setPaypalCampaignId] = useState<number | null>(null);
   const [renewingId, setRenewingId] = useState<number | null>(null);
   const [renewStep, setRenewStep] = useState<1 | 2>(1);
   const [renewSelectedPricing, setRenewSelectedPricing] = useState<number | null>(null);
   const [renewClientSecret, setRenewClientSecret] = useState<string | null>(null);
   const [renewPaymentIntentId, setRenewPaymentIntentId] = useState<string | null>(null);
+  const [renewPaypalOrderId, setRenewPaypalOrderId] = useState<string | null>(null);
+  const [renewPaymentMethod, setRenewPaymentMethod] = useState<"stripe" | "paypal">("stripe");
   const [renewSaving, setRenewSaving] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -343,6 +400,127 @@ export default function DonationCampaignManager({ accountType }: {
     }
   }
 
+  async function fetchPayPalConfig(): Promise<PayPalConfig | false> {
+    if (paypalConfig !== null) return paypalConfig || false;
+    try {
+      const res = await fetch("/api/donations/campaigns/paypal-config");
+      if (res.ok) {
+        const data = await res.json();
+        if (data.available) {
+          const cfg: PayPalConfig = { clientId: data.clientId, environment: data.environment };
+          setPaypalConfig(cfg);
+          return cfg;
+        }
+      }
+      setPaypalConfig(false);
+      return false;
+    } catch {
+      setPaypalConfig(false);
+      return false;
+    }
+  }
+
+  async function handleGoToPaymentPayPal() {
+    if (!selectedPricing || !formTitle.trim() || !formDesc.trim()) return;
+    setSaving(true);
+    try {
+      const cfg = await fetchPayPalConfig();
+      if (!cfg) {
+        toast({ title: l.payPalNotAvailable, variant: "destructive" });
+        return;
+      }
+      setPaymentMethod("paypal");
+      setPaypalCampaignId(null);
+      setFormStep(3);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handlePayPalCreateOrder(): Promise<string> {
+    const res = await authFetch("/api/donations/campaigns/initiate-payment-paypal", {
+      method: "POST",
+      body: JSON.stringify({
+        title: formTitle.trim(),
+        description: formDesc.trim(),
+        photos: formPhotos,
+        pricingId: selectedPricing,
+      }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || l.payPalError);
+    }
+    const data = await res.json();
+    setPaypalCampaignId(data.campaignId);
+    return data.orderId as string;
+  }
+
+  const handlePayPalSuccess = useCallback(async (orderId: string) => {
+    const cId = paypalCampaignId;
+    if (!cId) return;
+    try {
+      const res = await authFetch("/api/donations/campaigns/confirm-payment-paypal", {
+        method: "POST",
+        body: JSON.stringify({ orderId, campaignId: cId }),
+      });
+      if (res.ok) {
+        toast({ title: l.paymentSuccess });
+        resetForm();
+        queryClient.invalidateQueries({ queryKey: ["my-campaigns"] });
+      } else {
+        const data = await res.json().catch(() => ({}));
+        toast({ title: data.error || l.payPalError, variant: "destructive" });
+      }
+    } catch {
+      toast({ title: l.payPalError, variant: "destructive" });
+    }
+  }, [paypalCampaignId, queryClient, toast, l.paymentSuccess, l.payPalError]);
+
+  async function handleRenewalInitiatePayPal(campaignId: number, pricingId: number): Promise<string> {
+    setRenewSaving(true);
+    try {
+      const cfg = await fetchPayPalConfig();
+      if (!cfg) {
+        toast({ title: l.payPalNotAvailable, variant: "destructive" });
+        throw new Error("PayPal not configured");
+      }
+      const res = await authFetch(`/api/donations/campaigns/${campaignId}/initiate-renewal-paypal`, {
+        method: "POST",
+        body: JSON.stringify({ pricingId }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || l.renewError);
+      }
+      const data = await res.json();
+      setRenewPaypalOrderId(data.orderId);
+      return data.orderId as string;
+    } finally {
+      setRenewSaving(false);
+    }
+  }
+
+  const handleRenewalPayPalSuccess = useCallback(async (orderId: string) => {
+    if (!renewingId) return;
+    try {
+      const res = await authFetch(`/api/donations/campaigns/${renewingId}/confirm-renewal-paypal`, {
+        method: "POST",
+        body: JSON.stringify({ orderId }),
+      });
+      if (res.ok) {
+        toast({ title: l.renewSuccess });
+        resetRenew();
+        queryClient.invalidateQueries({ queryKey: ["my-campaigns"] });
+      } else {
+        const data = await res.json().catch(() => ({}));
+        toast({ title: data.error || l.renewError, variant: "destructive" });
+      }
+    } catch {
+      toast({ title: l.renewError, variant: "destructive" });
+    }
+  }, [renewingId, queryClient, toast, l.renewSuccess, l.renewError]);
+
   async function handleInitiateRenewal(campaignId: number, pricingId: number) {
     setRenewSaving(true);
     try {
@@ -401,6 +579,8 @@ export default function DonationCampaignManager({ accountType }: {
     setRenewSelectedPricing(null);
     setRenewClientSecret(null);
     setRenewPaymentIntentId(null);
+    setRenewPaypalOrderId(null);
+    setRenewPaymentMethod("stripe");
   }
 
   function startEdit(c: Campaign) {
@@ -520,6 +700,8 @@ export default function DonationCampaignManager({ accountType }: {
     setSelectedPricing(null);
     setClientSecret(null);
     setPaymentIntentId(null);
+    setPaymentMethod("stripe");
+    setPaypalCampaignId(null);
   }
 
   function statusBadge(c: Campaign) {
@@ -624,21 +806,42 @@ export default function DonationCampaignManager({ accountType }: {
                               </button>
                             ))}
                           </div>
-                          <div className="flex gap-2 pt-1">
-                            <button type="button" onClick={resetRenew} className="flex-1 py-2 border border-border rounded-xl text-sm font-medium text-foreground hover:bg-muted">
+                          <div className="flex gap-2 pt-1 flex-wrap">
+                            <button type="button" onClick={resetRenew} className="py-2 px-4 border border-border rounded-xl text-sm font-medium text-foreground hover:bg-muted">
                               {l.cancel}
                             </button>
                             <button
                               type="button"
-                              onClick={() => renewSelectedPricing && handleInitiateRenewal(c.id, renewSelectedPricing)}
+                              onClick={() => {
+                                if (renewSelectedPricing) {
+                                  setRenewPaymentMethod("stripe");
+                                  handleInitiateRenewal(c.id, renewSelectedPricing);
+                                }
+                              }}
                               disabled={!renewSelectedPricing || renewSaving}
                               className="flex-1 py-2.5 bg-emerald-600 text-white rounded-xl text-sm font-bold hover:bg-emerald-700 disabled:opacity-50"
                             >
-                              {renewSaving ? l.processing : l.proceedPayment}
+                              {renewSaving && renewPaymentMethod === "stripe" ? l.processing : l.payWithCard}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (renewSelectedPricing) {
+                                  setRenewPaymentMethod("paypal");
+                                  fetchPayPalConfig().then((cfg) => {
+                                    if (cfg) setRenewStep(2);
+                                    else toast({ title: l.payPalNotAvailable, variant: "destructive" });
+                                  });
+                                }
+                              }}
+                              disabled={!renewSelectedPricing || renewSaving}
+                              className="flex-1 py-2.5 bg-[#003087] text-white rounded-xl text-sm font-bold hover:bg-[#001f5c] disabled:opacity-50"
+                            >
+                              {renewSaving && renewPaymentMethod === "paypal" ? l.processing : l.payWithPayPal}
                             </button>
                           </div>
                         </>
-                      ) : (renewClientSecret && stripeReady && stripePromise && (
+                      ) : renewPaymentMethod === "stripe" && renewClientSecret && stripeReady && stripePromise ? (
                         <div className="space-y-4">
                           <Elements stripe={stripePromise} options={{ clientSecret: renewClientSecret, appearance: { theme: "stripe" } }}>
                             <PaymentForm
@@ -649,7 +852,23 @@ export default function DonationCampaignManager({ accountType }: {
                             />
                           </Elements>
                         </div>
-                      ))}
+                      ) : renewPaymentMethod === "paypal" && paypalConfig ? (
+                        <div className="space-y-4">
+                          <PayPalButtonsForm
+                            config={paypalConfig}
+                            onCreateOrder={() => handleRenewalInitiatePayPal(c.id, renewSelectedPricing!)}
+                            onSuccess={handleRenewalPayPalSuccess}
+                            onCancel={resetRenew}
+                            onError={(err) => {
+                              console.error("[PayPal] renewal error:", err);
+                              toast({ title: l.payPalError, variant: "destructive" });
+                            }}
+                          />
+                          <button type="button" onClick={resetRenew} className="w-full py-2 border border-border rounded-xl text-sm font-medium text-foreground hover:bg-muted">
+                            {l.cancel}
+                          </button>
+                        </div>
+                      ) : null}
                     </div>
                   ) : (
                   <>
@@ -883,7 +1102,7 @@ export default function DonationCampaignManager({ accountType }: {
                   <button
                     type="button"
                     onClick={() => setFormStep(1)}
-                    className="flex-1 py-2 border border-border rounded-xl text-sm font-medium text-foreground hover:bg-muted"
+                    className="py-2 px-4 border border-border rounded-xl text-sm font-medium text-foreground hover:bg-muted"
                   >
                     {l.back}
                   </button>
@@ -893,13 +1112,21 @@ export default function DonationCampaignManager({ accountType }: {
                     disabled={!selectedPricing || saving}
                     className="flex-1 py-2.5 bg-emerald-600 text-white rounded-xl text-sm font-bold hover:bg-emerald-700 disabled:opacity-50"
                   >
-                    {saving ? l.processing : l.proceedPayment}
+                    {saving ? l.processing : l.payWithCard}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleGoToPaymentPayPal}
+                    disabled={!selectedPricing || saving}
+                    className="flex-1 py-2.5 bg-[#003087] text-white rounded-xl text-sm font-bold hover:bg-[#001f5c] disabled:opacity-50"
+                  >
+                    {saving ? l.processing : l.payWithPayPal}
                   </button>
                 </div>
               </div>
             )}
 
-            {formStep === 3 && clientSecret && stripeReady && stripePromise && (
+            {formStep === 3 && paymentMethod === "stripe" && clientSecret && stripeReady && stripePromise && (
               <div className="space-y-4">
                 <div className="bg-emerald-50 dark:bg-emerald-950/20 rounded-xl p-3 text-sm">
                   <p className="font-medium text-emerald-700 dark:text-emerald-300">{formTitle}</p>
@@ -913,6 +1140,32 @@ export default function DonationCampaignManager({ accountType }: {
                     l={l}
                   />
                 </Elements>
+              </div>
+            )}
+
+            {formStep === 3 && paymentMethod === "paypal" && paypalConfig && (
+              <div className="space-y-4">
+                <div className="bg-emerald-50 dark:bg-emerald-950/20 rounded-xl p-3 text-sm">
+                  <p className="font-medium text-emerald-700 dark:text-emerald-300">{formTitle}</p>
+                  <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{formDesc}</p>
+                </div>
+                <PayPalButtonsForm
+                  config={paypalConfig}
+                  onCreateOrder={handlePayPalCreateOrder}
+                  onSuccess={handlePayPalSuccess}
+                  onCancel={resetForm}
+                  onError={(err) => {
+                    console.error("[PayPal] payment error:", err);
+                    toast({ title: l.payPalError, variant: "destructive" });
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={resetForm}
+                  className="w-full py-2 border border-border rounded-xl text-sm font-medium text-foreground hover:bg-muted"
+                >
+                  {l.cancel}
+                </button>
               </div>
             )}
           </div>

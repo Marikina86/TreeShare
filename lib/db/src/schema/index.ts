@@ -250,7 +250,9 @@ export const donationCampaignsTable = pgTable("donation_campaigns", {
   inAppExpiryNotifiedAt: timestamp("in_app_expiry_notified_at"),
   paymentStatus: text("payment_status").notNull().default("draft"),
   stripePaymentIntentId: text("stripe_payment_intent_id"),
+  paypalOrderId: text("paypal_order_id"),
   renewalStripePaymentIntentId: text("renewal_stripe_payment_intent_id"),
+  renewalPaypalOrderId: text("renewal_paypal_order_id"),
   renewalDurationDays: integer("renewal_duration_days"),
   renewalPriceCents: integer("renewal_price_cents"),
   pricePaidCents: integer("price_paid_cents"),
@@ -261,7 +263,9 @@ export const donationCampaignsTable = pgTable("donation_campaigns", {
   index("donation_campaigns_payment_status_idx").on(table.paymentStatus),
   index("donation_campaigns_expires_at_idx").on(table.expiresAt),
   uniqueIndex("donation_campaigns_stripe_pi_idx").on(table.stripePaymentIntentId),
+  uniqueIndex("donation_campaigns_paypal_order_idx").on(table.paypalOrderId),
   uniqueIndex("donation_campaigns_renewal_stripe_pi_idx").on(table.renewalStripePaymentIntentId),
+  uniqueIndex("donation_campaigns_renewal_paypal_order_idx").on(table.renewalPaypalOrderId),
 ]);
 
 export const platformRevenueTable = pgTable("platform_revenue", {

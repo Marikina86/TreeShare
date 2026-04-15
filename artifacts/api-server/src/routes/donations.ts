@@ -11,6 +11,13 @@ import { eq, and, desc, sql, gt, gte, lte, count } from "drizzle-orm";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth";
 import { requireAdmin } from "../middlewares/requireAdmin";
 import { getUncachableStripeClient, getStripePublishableKey } from "../lib/stripe";
+import {
+  isPayPalConfigured,
+  getPayPalClientId,
+  createPayPalOrder,
+  capturePayPalOrder,
+  verifyPayPalWebhookSignature,
+} from "../lib/paypal";
 import { getRomeExpiryDate } from "../lib/eventCleaner";
 
 const MAX_CAMPAIGN_PHOTOS = 10;
@@ -176,6 +183,105 @@ async function renewCampaign(campaignId: number, piId: string) {
   });
 }
 
+async function activateCampaignByPayPalOrder(campaignId: number, orderId: string) {
+  return db.transaction(async (tx) => {
+    const [campaign] = await tx
+      .select()
+      .from(donationCampaignsTable)
+      .where(
+        and(
+          eq(donationCampaignsTable.id, campaignId),
+          eq(donationCampaignsTable.paypalOrderId, orderId),
+        ),
+      );
+
+    if (!campaign) return { error: "not_found" };
+    if (campaign.paymentStatus === "paid") return { idempotent: true, campaignId: campaign.id };
+
+    const durationDays = campaign.durationDays || 30;
+    const expiresAt = getRomeExpiryDate(durationDays);
+
+    await tx
+      .update(donationCampaignsTable)
+      .set({
+        paymentStatus: "paid",
+        isActive: true,
+        archivedAt: null,
+        storageTier: "hot",
+        inAppExpiryNotifiedAt: null,
+        expiryNotificationSentAt: null,
+        expiresAt,
+        updatedAt: new Date(),
+      })
+      .where(eq(donationCampaignsTable.id, campaign.id));
+
+    await ensurePlatformRevenueRow(tx);
+    const pricePaid = campaign.pricePaidCents || 0;
+    await tx
+      .update(platformRevenueTable)
+      .set({
+        totalCommissions: sql`${platformRevenueTable.totalCommissions} + ${pricePaid}`,
+        transactionCount: sql`${platformRevenueTable.transactionCount} + 1`,
+        updatedAt: new Date(),
+      })
+      .where(eq(platformRevenueTable.id, 1));
+
+    return { success: true, campaignId: campaign.id, expiresAt: expiresAt.toISOString(), durationDays };
+  });
+}
+
+async function renewCampaignByPayPalOrder(campaignId: number, orderId: string) {
+  return db.transaction(async (tx) => {
+    const [campaign] = await tx
+      .select()
+      .from(donationCampaignsTable)
+      .where(
+        and(
+          eq(donationCampaignsTable.id, campaignId),
+          eq(donationCampaignsTable.renewalPaypalOrderId, orderId),
+        ),
+      );
+
+    if (!campaign) return { error: "not_found" };
+
+    const durationDays = campaign.renewalDurationDays || campaign.durationDays || 30;
+    const baseDate = campaign.expiresAt && campaign.expiresAt > new Date() ? campaign.expiresAt : new Date();
+    const expiresAt = getRomeExpiryDate(durationDays, baseDate);
+
+    await tx
+      .update(donationCampaignsTable)
+      .set({
+        paymentStatus: "paid",
+        isActive: true,
+        archivedAt: null,
+        storageTier: "hot",
+        expiresAt,
+        durationDays,
+        pricePaidCents: campaign.renewalPriceCents ?? campaign.pricePaidCents,
+        expiryNotificationSentAt: null,
+        inAppExpiryNotifiedAt: null,
+        renewalPaypalOrderId: null,
+        renewalDurationDays: null,
+        renewalPriceCents: null,
+        updatedAt: new Date(),
+      })
+      .where(eq(donationCampaignsTable.id, campaign.id));
+
+    await ensurePlatformRevenueRow(tx);
+    const pricePaid = campaign.renewalPriceCents || 0;
+    await tx
+      .update(platformRevenueTable)
+      .set({
+        totalCommissions: sql`${platformRevenueTable.totalCommissions} + ${pricePaid}`,
+        transactionCount: sql`${platformRevenueTable.transactionCount} + 1`,
+        updatedAt: new Date(),
+      })
+      .where(eq(platformRevenueTable.id, 1));
+
+    return { success: true, campaignId: campaign.id, expiresAt: expiresAt.toISOString(), durationDays };
+  });
+}
+
 const router = Router();
 
 router.get("/campaigns/stripe-config", async (_req, res) => {
@@ -185,6 +291,24 @@ router.get("/campaigns/stripe-config", async (_req, res) => {
   } catch (err) {
     console.error("[campaigns] stripe-config error:", err);
     res.status(500).json({ error: "Stripe not configured" });
+  }
+});
+
+router.get("/campaigns/paypal-config", async (_req, res) => {
+  try {
+    if (!isPayPalConfigured()) {
+      res.status(503).json({ error: "PayPal not configured", available: false });
+      return;
+    }
+    const clientId = await getPayPalClientId();
+    res.json({
+      clientId,
+      available: true,
+      environment: process.env.PAYPAL_ENV === "production" ? "production" : "sandbox",
+    });
+  } catch (err) {
+    console.error("[campaigns] paypal-config error:", err);
+    res.status(500).json({ error: "PayPal config failed", available: false });
   }
 });
 
@@ -416,6 +540,144 @@ router.post("/campaigns/confirm-payment", requireAuth, async (req, res) => {
     res.json(result);
   } catch (err) {
     console.error("[campaigns] confirm-payment error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.post("/campaigns/initiate-payment-paypal", requireAuth, async (req, res) => {
+  const userId = (req as AuthenticatedRequest).userId;
+  try {
+    if (!isPayPalConfigured()) {
+      res.status(503).json({ error: "PayPal not configured" });
+      return;
+    }
+
+    const [user] = await db
+      .select({ accountType: usersTable.accountType })
+      .from(usersTable)
+      .where(eq(usersTable.clerkUserId, userId));
+
+    if (!user || user.accountType !== "organization") {
+      res.status(403).json({ error: "Only organizations can create campaigns" });
+      return;
+    }
+
+    const { title, description, photos, pricingId } = req.body;
+    if (!title || !description) {
+      res.status(400).json({ error: "Title and description required" });
+      return;
+    }
+    if (typeof title !== "string" || title.trim().length === 0 || title.trim().length > 200) {
+      res.status(400).json({ error: "Title must be 1-200 characters" });
+      return;
+    }
+    if (typeof description !== "string" || description.trim().length === 0 || description.trim().length > 2000) {
+      res.status(400).json({ error: "Description must be 1-2000 characters" });
+      return;
+    }
+    if (Array.isArray(photos) && photos.length > MAX_CAMPAIGN_PHOTOS) {
+      res.status(400).json({ error: `Maximum ${MAX_CAMPAIGN_PHOTOS} photos allowed` });
+      return;
+    }
+    const finalPhotos = normalizeCampaignPhotos(photos);
+    if (!pricingId) {
+      res.status(400).json({ error: "pricingId required" });
+      return;
+    }
+
+    const [pricing] = await db
+      .select()
+      .from(campaignPricingTable)
+      .where(and(eq(campaignPricingTable.id, Number(pricingId)), eq(campaignPricingTable.isActive, true)));
+
+    if (!pricing) {
+      res.status(404).json({ error: "Pricing option not found" });
+      return;
+    }
+
+    const customId = `campaign_pub_${userId}_${Date.now()}`;
+    const { orderId } = await createPayPalOrder(
+      pricing.priceCents,
+      "EUR",
+      customId,
+      title.trim(),
+    );
+
+    const [pendingCampaign] = await db
+      .insert(donationCampaignsTable)
+      .values({
+        userId,
+        title: title.trim(),
+        description: description.trim(),
+        photos: finalPhotos,
+        isActive: false,
+        paymentStatus: "pending",
+        paypalOrderId: orderId,
+        durationDays: pricing.durationDays,
+        pricePaidCents: pricing.priceCents,
+      })
+      .returning();
+
+    res.json({
+      orderId,
+      campaignId: pendingCampaign.id,
+      priceCents: pricing.priceCents,
+      durationDays: pricing.durationDays,
+      label: pricing.label,
+    });
+  } catch (err) {
+    console.error("[campaigns] initiate-payment-paypal error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.post("/campaigns/confirm-payment-paypal", requireAuth, async (req, res) => {
+  const userId = (req as AuthenticatedRequest).userId;
+  try {
+    const { orderId, campaignId } = req.body;
+    if (!orderId || !campaignId) {
+      res.status(400).json({ error: "orderId and campaignId required" });
+      return;
+    }
+
+    const [campaign] = await db
+      .select()
+      .from(donationCampaignsTable)
+      .where(
+        and(
+          eq(donationCampaignsTable.id, Number(campaignId)),
+          eq(donationCampaignsTable.userId, userId),
+          eq(donationCampaignsTable.paypalOrderId, orderId),
+        ),
+      );
+
+    if (!campaign) {
+      res.status(404).json({ error: "Campaign not found or not authorized" });
+      return;
+    }
+
+    if (campaign.paymentStatus === "paid") {
+      res.json({ idempotent: true, campaignId: campaign.id });
+      return;
+    }
+
+    const { captured, status } = await capturePayPalOrder(orderId);
+
+    if (!captured) {
+      res.status(400).json({ error: "PayPal order not completed", paypalStatus: status });
+      return;
+    }
+
+    const result = await activateCampaignByPayPalOrder(Number(campaignId), orderId);
+
+    if ((result as any).error) {
+      res.status(404).json(result);
+      return;
+    }
+
+    res.json(result);
+  } catch (err) {
+    console.error("[campaigns] confirm-payment-paypal error:", err);
     res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -653,6 +915,194 @@ router.post("/campaigns/:campaignId/confirm-renewal", requireAuth, async (req, r
   } catch (err) {
     console.error("[campaigns] confirm-renewal error:", err);
     res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.post("/campaigns/:campaignId/initiate-renewal-paypal", requireAuth, async (req, res) => {
+  const userId = (req as AuthenticatedRequest).userId;
+  const campaignId = Number(req.params.campaignId);
+  try {
+    if (!isPayPalConfigured()) {
+      res.status(503).json({ error: "PayPal not configured" });
+      return;
+    }
+
+    const { pricingId } = req.body;
+    if (!pricingId) {
+      res.status(400).json({ error: "pricingId required" });
+      return;
+    }
+
+    const [campaign] = await db
+      .select()
+      .from(donationCampaignsTable)
+      .where(
+        and(
+          eq(donationCampaignsTable.id, campaignId),
+          eq(donationCampaignsTable.userId, userId),
+          eq(donationCampaignsTable.paymentStatus, "paid"),
+        ),
+      );
+
+    if (!campaign) {
+      res.status(404).json({ error: "Campaign not found" });
+      return;
+    }
+
+    const [pricing] = await db
+      .select()
+      .from(campaignPricingTable)
+      .where(and(eq(campaignPricingTable.id, Number(pricingId)), eq(campaignPricingTable.isActive, true)));
+
+    if (!pricing) {
+      res.status(404).json({ error: "Pricing option not found" });
+      return;
+    }
+
+    const customId = `campaign_renew_${campaignId}_${Date.now()}`;
+    const { orderId } = await createPayPalOrder(
+      pricing.priceCents,
+      "EUR",
+      customId,
+      `Rinnovo campagna: ${campaign.title}`,
+    );
+
+    await db
+      .update(donationCampaignsTable)
+      .set({
+        renewalPaypalOrderId: orderId,
+        renewalDurationDays: pricing.durationDays,
+        renewalPriceCents: pricing.priceCents,
+        updatedAt: new Date(),
+      })
+      .where(eq(donationCampaignsTable.id, campaign.id));
+
+    res.json({
+      orderId,
+      campaignId: campaign.id,
+      priceCents: pricing.priceCents,
+      durationDays: pricing.durationDays,
+      label: pricing.label,
+    });
+  } catch (err) {
+    console.error("[campaigns] initiate-renewal-paypal error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.post("/campaigns/:campaignId/confirm-renewal-paypal", requireAuth, async (req, res) => {
+  const userId = (req as AuthenticatedRequest).userId;
+  const campaignId = Number(req.params.campaignId);
+  try {
+    const { orderId } = req.body;
+    if (!orderId) {
+      res.status(400).json({ error: "orderId required" });
+      return;
+    }
+
+    const [campaign] = await db
+      .select()
+      .from(donationCampaignsTable)
+      .where(
+        and(
+          eq(donationCampaignsTable.id, campaignId),
+          eq(donationCampaignsTable.userId, userId),
+          eq(donationCampaignsTable.renewalPaypalOrderId, orderId),
+        ),
+      );
+
+    if (!campaign) {
+      res.status(404).json({ error: "Campaign not found or not authorized" });
+      return;
+    }
+
+    const { captured, status } = await capturePayPalOrder(orderId);
+
+    if (!captured) {
+      res.status(400).json({ error: "PayPal order not completed", paypalStatus: status });
+      return;
+    }
+
+    const result = await renewCampaignByPayPalOrder(campaignId, orderId);
+    if ((result as any).error) {
+      res.status(404).json(result);
+      return;
+    }
+    res.json(result);
+  } catch (err) {
+    console.error("[campaigns] confirm-renewal-paypal error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.post("/campaigns/webhook/paypal", async (req, res) => {
+  try {
+    const webhookId = process.env.PAYPAL_WEBHOOK_ID;
+    const event = req.body;
+
+    if (webhookId) {
+      const valid = await verifyPayPalWebhookSignature({
+        authAlgo: req.headers["paypal-auth-algo"] as string,
+        certUrl: req.headers["paypal-cert-url"] as string,
+        transmissionId: req.headers["paypal-transmission-id"] as string,
+        transmissionSig: req.headers["paypal-transmission-sig"] as string,
+        transmissionTime: req.headers["paypal-transmission-time"] as string,
+        webhookId,
+        webhookEvent: event,
+      });
+      if (!valid) {
+        console.warn("[campaigns] PayPal webhook signature verification failed");
+        res.status(400).json({ error: "Invalid webhook signature" });
+        return;
+      }
+    }
+
+    const eventType = event?.event_type as string;
+    const resource = event?.resource as any;
+
+    if (eventType === "CHECKOUT.ORDER.APPROVED") {
+      const orderId = resource?.id as string;
+      if (orderId) {
+        const [campaign] = await db
+          .select()
+          .from(donationCampaignsTable)
+          .where(eq(donationCampaignsTable.paypalOrderId, orderId));
+
+        if (campaign && campaign.paymentStatus !== "paid") {
+          try {
+            const { captured } = await capturePayPalOrder(orderId);
+            if (captured) {
+              await activateCampaignByPayPalOrder(campaign.id, orderId);
+              console.info(`[campaigns] PayPal webhook activated campaign=${campaign.id} for order=${orderId}`);
+            }
+          } catch (captureErr) {
+            console.error(`[campaigns] PayPal webhook capture failed for order=${orderId}:`, captureErr);
+          }
+        }
+
+        const [renewalCampaign] = await db
+          .select()
+          .from(donationCampaignsTable)
+          .where(eq(donationCampaignsTable.renewalPaypalOrderId, orderId));
+
+        if (renewalCampaign) {
+          try {
+            const { captured } = await capturePayPalOrder(orderId);
+            if (captured) {
+              await renewCampaignByPayPalOrder(renewalCampaign.id, orderId);
+              console.info(`[campaigns] PayPal webhook renewed campaign=${renewalCampaign.id} for order=${orderId}`);
+            }
+          } catch (captureErr) {
+            console.error(`[campaigns] PayPal webhook renewal capture failed for order=${orderId}:`, captureErr);
+          }
+        }
+      }
+    }
+
+    res.json({ received: true });
+  } catch (err) {
+    console.error("[campaigns] PayPal webhook error:", err);
+    res.status(500).json({ error: "Webhook processing failed" });
   }
 });
 
