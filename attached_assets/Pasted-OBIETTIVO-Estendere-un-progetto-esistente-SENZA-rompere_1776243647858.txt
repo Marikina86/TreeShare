@@ -1,0 +1,122 @@
+OBIETTIVO: Estendere un progetto esistente SENZA rompere la struttura attuale e SENZA modificare funzionalità già esistenti non richieste.
+
+REQUISITI DA IMPLEMENTARE:
+
+1. GESTIONE FOTO CAMPAGNE
+
+- Consentire l’inserimento fino a un massimo di 10 immagini per ogni campagna
+
+- Le immagini devono essere associate alla campagna nel database
+
+- Garantire compatibilità con il sistema già esistente di upload (se presente)
+
+- Aggiungere validazione lato client e server (max 10)
+
+- OTTIMIZZAZIONE IMMAGINI:
+  
+  - Implementare compressione automatica delle immagini in fase di upload
+  - Ridurre dimensione file mantenendo qualità adeguata per la UI
+  - Generare versioni ottimizzate (es. thumbnail + versione standard)
+  - NON modificare logica esistente di visualizzazione, ma adattarla se necessario per usare immagini ottimizzate
+  - Supportare formati moderni (es. WebP se compatibile)
+
+- STORAGE OTTIMIZZATO:
+  
+  - Implementare logica di storage “cold” per immagini di campagne archiviate
+  - Le immagini delle campagne attive restano in storage “hot” (accesso rapido)
+  - Le immagini delle campagne archiviate vengono spostate in storage a basso costo (cold storage)
+  - Il recupero delle immagini archiviate deve avvenire on-demand senza rompere UX
+  - NON modificare struttura esistente se non necessario, ma estendere in modo modulare
+
+2. ARCHIVIAZIONE CAMPAGNE
+
+- Le campagne scadute devono essere automaticamente archiviate
+- La scadenza della campagna deve essere impostata:
+  - all’ultimo giorno utile alle ore 23:59
+  - nel fuso orario Europe/Rome
+- Le campagne archiviate devono essere visibili nel profilo utente del creatore
+- Le campagne archiviate devono rimanere pubbliche e visibili a tutti gli utenti
+- SOLO il creatore della campagna può eliminarle
+- Non modificare la logica esistente delle campagne attive
+
+3. DATI AMBIENTALI (ALBERI E CO2)
+
+- All’interno della campagna aggiungere:
+  
+  - numero di alberi piantati
+  - quantità di CO2 compensata/bruciata
+
+- I valori devono essere calcolati o collegati alla tabella già esistente nel database
+
+- NON duplicare tabelle esistenti
+
+- Collegare correttamente le relazioni già presenti
+
+- IMPORTANTE (NO POLLING CLIENT):
+  
+  - NON utilizzare polling continuo lato client
+  - I dati devono aggiornarsi:
+    - all’apertura della piattaforma / pagina
+    - al refresh manuale
+    - quando l’utente raggiunge la sezione (scroll / lazy loading / intersection observer)
+  - Preferire:
+    - fetch on demand
+    - event-driven updates
+    - caching leggero
+
+4. RINNOVO CAMPAGNA
+
+- Implementare la possibilità di rinnovare una campagna in prossimità della scadenza
+- Il rinnovo deve:
+  - estendere la durata della campagna mantenendo la logica:
+    - nuova scadenza sempre alle 23:59 (Europe/Rome)
+  - richiedere un nuovo pagamento
+- Non creare nuove campagne, ma aggiornare quella esistente
+
+6. NOTIFICA SCADENZA CAMPAGNA (SERVER)
+
+- Implementare un sistema server-side (cron job o scheduler)
+- Il controllo deve avvenire UNA VOLTA AL GIORNO alle ore 23:59 (fuso orario Europe/Rome)
+- Identificare campagne in scadenza (es. entro X giorni configurabili)
+- Inviare eventuali notifiche server (es. email se previste)
+- Evitare duplicazioni di notifiche
+- Il controllo deve essere asincrono e NON basato su polling lato client
+
+7. NOTIFICA IN-APP PRE-SCADENZA (CLIENT TRIGGER)
+
+- Implementare una notifica in-app per il creatore della campagna
+
+- La notifica deve attivarsi quando:
+  
+  - l’utente apre l’app / piattaforma
+
+- Condizione:
+  
+  - la campagna scade entro le successive 24 ore
+
+- Logica:
+  
+  - verificare lato backend o tramite endpoint dedicato le campagne dell’utente
+  - restituire eventuali campagne in scadenza entro 24h
+  - mostrare notifica in-app (banner / alert / badge)
+
+- Vincoli:
+  
+  - NON utilizzare polling continuo
+  - mostrare la notifica una sola volta (gestire stato “notificato”)
+  - usare fetch on app load / login
+  - compatibile con sistema notifiche esistente
+
+9. VINCOLI IMPORTANTI
+
+- NON modificare codice non richiesto
+- NON cambiare struttura del database se non strettamente necessario
+- NON rompere API esistenti
+- Mantenere retrocompatibilità
+- Scrivere codice modulare e coerente con lo stile già presente nel progetto
+
+OUTPUT ATTESO:
+
+- Codice pronto all’integrazione
+- Commenti chiari solo dove necessario
+- Nessuna regressione nelle funzionalità esistenti

@@ -1,12 +1,25 @@
 import { useState, useEffect, useCallback } from "react";
 
-function photoSrc(url: string) {
+export type CampaignPhoto = string | {
+  standard: string;
+  thumbnail?: string;
+  original?: string;
+  storageTier?: "hot" | "cold";
+};
+
+function photoUrl(photo: CampaignPhoto, preferred: "thumbnail" | "standard" = "standard") {
+  if (typeof photo === "string") return photo;
+  return preferred === "thumbnail" ? (photo.thumbnail || photo.standard) : photo.standard;
+}
+
+function photoSrc(photo: CampaignPhoto, preferred: "thumbnail" | "standard" = "standard") {
+  const url = photoUrl(photo, preferred);
   if (url.startsWith("http")) return url;
   return `/api/storage${url.startsWith("/") ? "" : "/"}${url}`;
 }
 
 export function CampaignPhotoGrid({ photos, className }: {
-  photos: string[];
+  photos: CampaignPhoto[];
   className?: string;
 }) {
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
@@ -22,7 +35,7 @@ export function CampaignPhotoGrid({ photos, className }: {
         {photos.map((photo, i) => (
           <img
             key={i}
-            src={photoSrc(photo)}
+            src={photoSrc(photo, "thumbnail")}
             alt=""
             onClick={() => setLightboxIndex(i)}
             className={`rounded-xl object-cover border border-border w-full cursor-pointer hover:opacity-90 transition-opacity ${photos.length === 1 ? "max-h-52" : "h-28"}`}
@@ -42,7 +55,7 @@ export function CampaignPhotoGrid({ photos, className }: {
 }
 
 export function CampaignPhotoGridCompact({ photos, className }: {
-  photos: string[];
+  photos: CampaignPhoto[];
   className?: string;
 }) {
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
@@ -58,7 +71,7 @@ export function CampaignPhotoGridCompact({ photos, className }: {
         {photos.map((photo, i) => (
           <img
             key={i}
-            src={photoSrc(photo)}
+            src={photoSrc(photo, "thumbnail")}
             alt=""
             onClick={() => setLightboxIndex(i)}
             className={`rounded-xl object-cover border border-emerald-200 dark:border-emerald-800 w-full cursor-pointer hover:opacity-90 transition-opacity ${photos.length === 1 ? "max-h-48" : "h-24"}`}
@@ -78,7 +91,7 @@ export function CampaignPhotoGridCompact({ photos, className }: {
 }
 
 export function ManagerPhotoThumbnails({ photos, onRemove }: {
-  photos: string[];
+  photos: CampaignPhoto[];
   onRemove: (index: number) => void;
   campaignId: number;
 }) {
@@ -101,7 +114,7 @@ export function ManagerPhotoThumbnails({ photos, onRemove }: {
         {photos.map((photo, i) => (
           <div key={i} className="relative flex-shrink-0">
             <img
-              src={photoSrc(photo)}
+              src={photoSrc(photo, "thumbnail")}
               alt=""
               onClick={() => setLightboxIndex(i)}
               className="w-20 h-20 rounded-xl object-cover border border-border cursor-pointer hover:opacity-90 transition-opacity"
@@ -129,7 +142,7 @@ export function ManagerPhotoThumbnails({ photos, onRemove }: {
 }
 
 function Lightbox({ photos, currentIndex, onClose, onChange, onDelete }: {
-  photos: string[];
+  photos: CampaignPhoto[];
   currentIndex: number;
   onClose: () => void;
   onChange: (index: number) => void;
@@ -197,7 +210,7 @@ function Lightbox({ photos, currentIndex, onClose, onChange, onDelete }: {
       )}
 
       <img
-        src={photoSrc(photos[currentIndex])}
+        src={photoSrc(photos[currentIndex], "standard")}
         alt=""
         onClick={(e) => e.stopPropagation()}
         className="relative z-10 max-w-[90vw] max-h-[85vh] rounded-2xl object-contain shadow-2xl"

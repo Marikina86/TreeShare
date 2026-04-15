@@ -2,14 +2,69 @@ import { Router, type Request, type Response } from "express";
 import { db } from "@workspace/db";
 import {
   usersTable,
+  treesTable,
   donationCampaignsTable,
   campaignPricingTable,
   platformRevenueTable,
 } from "@workspace/db";
-import { eq, and, desc, sql, gt } from "drizzle-orm";
+import { eq, and, desc, sql, gt, gte, lte, count } from "drizzle-orm";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth";
 import { requireAdmin } from "../middlewares/requireAdmin";
 import { getUncachableStripeClient, getStripePublishableKey } from "../lib/stripe";
+import { getRomeExpiryDate } from "../lib/eventCleaner";
+
+const MAX_CAMPAIGN_PHOTOS = 10;
+const CO2_KG_PER_TREE = 21;
+
+type CampaignPhoto = string | {
+  standard: string;
+  thumbnail?: string;
+  original?: string;
+  storageTier?: "hot" | "cold";
+};
+
+function normalizeCampaignPhotos(photos: unknown): CampaignPhoto[] {
+  if (!Array.isArray(photos)) return [];
+  return photos.slice(0, MAX_CAMPAIGN_PHOTOS).filter((photo): photo is CampaignPhoto => {
+    if (typeof photo === "string") return photo.trim().length > 0;
+    if (!photo || typeof photo !== "object") return false;
+    const value = photo as Record<string, unknown>;
+    return typeof value.standard === "string" && value.standard.trim().length > 0;
+  }).map((photo) => {
+    if (typeof photo === "string") return photo;
+    return {
+      standard: photo.standard,
+      thumbnail: photo.thumbnail,
+      original: photo.original,
+      storageTier: photo.storageTier === "cold" ? "cold" : "hot",
+    };
+  });
+}
+
+async function getCampaignEnvironmentalStats(userId: string) {
+  const [row] = await db
+    .select({ treesPlanted: count() })
+    .from(treesTable)
+    .where(and(eq(treesTable.userId, userId), eq(treesTable.photoStatus, "approved")));
+  const treesPlanted = Number(row?.treesPlanted ?? 0);
+  return {
+    treesPlanted,
+    co2Kg: treesPlanted * CO2_KG_PER_TREE,
+  };
+}
+
+async function enrichCampaign<T extends { userId: string; photos?: unknown; storageTier?: string }>(campaign: T) {
+  const stats = await getCampaignEnvironmentalStats(campaign.userId);
+  const photos = normalizeCampaignPhotos(campaign.photos).map((photo) => {
+    if (typeof photo === "string") return photo;
+    return { ...photo, storageTier: campaign.storageTier === "cold" ? "cold" : photo.storageTier };
+  });
+  return { ...campaign, photos, ...stats };
+}
+
+async function enrichCampaigns<T extends { userId: string; photos?: unknown; storageTier?: string }>(campaigns: T[]) {
+  return Promise.all(campaigns.map((campaign) => enrichCampaign(campaign)));
+}
 
 async function ensurePlatformRevenueRow(tx: any) {
   const [existing] = await tx.select({ id: platformRevenueTable.id }).from(platformRevenueTable).where(eq(platformRevenueTable.id, 1));
@@ -38,14 +93,17 @@ async function activateCampaign(campaignId: number, piId: string) {
     if (campaign.paymentStatus === "paid") return { idempotent: true, campaignId: campaign.id };
 
     const durationDays = campaign.durationDays || 30;
-    const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + durationDays);
+    const expiresAt = getRomeExpiryDate(durationDays);
 
     await tx
       .update(donationCampaignsTable)
       .set({
         paymentStatus: "paid",
         isActive: true,
+        archivedAt: null,
+        storageTier: "hot",
+        inAppExpiryNotifiedAt: null,
+        expiryNotificationSentAt: null,
         expiresAt,
         updatedAt: new Date(),
       })
@@ -54,6 +112,57 @@ async function activateCampaign(campaignId: number, piId: string) {
     await ensurePlatformRevenueRow(tx);
 
     const pricePaid = campaign.pricePaidCents || 0;
+    await tx
+      .update(platformRevenueTable)
+      .set({
+        totalCommissions: sql`${platformRevenueTable.totalCommissions} + ${pricePaid}`,
+        transactionCount: sql`${platformRevenueTable.transactionCount} + 1`,
+        updatedAt: new Date(),
+      })
+      .where(eq(platformRevenueTable.id, 1));
+
+    return { success: true, campaignId: campaign.id, expiresAt: expiresAt.toISOString(), durationDays };
+  });
+}
+
+async function renewCampaign(campaignId: number, piId: string) {
+  return db.transaction(async (tx) => {
+    const [campaign] = await tx
+      .select()
+      .from(donationCampaignsTable)
+      .where(
+        and(
+          eq(donationCampaignsTable.id, campaignId),
+          eq(donationCampaignsTable.renewalStripePaymentIntentId, piId),
+        ),
+      );
+
+    if (!campaign) return { error: "not_found" };
+    const durationDays = campaign.renewalDurationDays || campaign.durationDays || 30;
+    const baseDate = campaign.expiresAt && campaign.expiresAt > new Date() ? campaign.expiresAt : new Date();
+    const expiresAt = getRomeExpiryDate(durationDays, baseDate);
+
+    await tx
+      .update(donationCampaignsTable)
+      .set({
+        paymentStatus: "paid",
+        isActive: true,
+        archivedAt: null,
+        storageTier: "hot",
+        expiresAt,
+        durationDays,
+        pricePaidCents: campaign.renewalPriceCents ?? campaign.pricePaidCents,
+        expiryNotificationSentAt: null,
+        inAppExpiryNotifiedAt: null,
+        renewalStripePaymentIntentId: null,
+        renewalDurationDays: null,
+        renewalPriceCents: null,
+        updatedAt: new Date(),
+      })
+      .where(eq(donationCampaignsTable.id, campaign.id));
+
+    await ensurePlatformRevenueRow(tx);
+    const pricePaid = campaign.renewalPriceCents || 0;
     await tx
       .update(platformRevenueTable)
       .set({
@@ -165,7 +274,7 @@ router.get("/campaigns/my-campaigns", requireAuth, async (req, res) => {
         ),
       )
       .orderBy(desc(donationCampaignsTable.createdAt));
-    res.json(campaigns);
+    res.json(await enrichCampaigns(campaigns));
   } catch (err) {
     console.error("[campaigns] my-campaigns error:", err);
     res.status(500).json({ error: "Internal server error" });
@@ -198,7 +307,11 @@ router.post("/campaigns/initiate-payment", requireAuth, async (req, res) => {
       res.status(400).json({ error: "Description must be 1-2000 characters" });
       return;
     }
-    const finalPhotos = Array.isArray(photos) ? photos.slice(0, 3).filter((p: any) => typeof p === "string" && p.length > 0) : [];
+    if (Array.isArray(photos) && photos.length > MAX_CAMPAIGN_PHOTOS) {
+      res.status(400).json({ error: `Maximum ${MAX_CAMPAIGN_PHOTOS} photos allowed` });
+      return;
+    }
+    const finalPhotos = normalizeCampaignPhotos(photos);
     if (!pricingId) {
       res.status(400).json({ error: "pricingId required" });
       return;
@@ -347,15 +460,16 @@ router.patch("/campaigns/:campaignId", requireAuth, async (req, res) => {
         res.status(400).json({ error: "Photos must be an array" });
         return;
       }
-      if (req.body.photos.length > 3) {
-        res.status(400).json({ error: "Maximum 3 photos allowed" });
+      if (req.body.photos.length > MAX_CAMPAIGN_PHOTOS) {
+        res.status(400).json({ error: `Maximum ${MAX_CAMPAIGN_PHOTOS} photos allowed` });
         return;
       }
-      if (!req.body.photos.every((p: any) => typeof p === "string" && p.length > 0)) {
-        res.status(400).json({ error: "Each photo must be a non-empty string" });
+      const photos = normalizeCampaignPhotos(req.body.photos);
+      if (photos.length !== req.body.photos.length) {
+        res.status(400).json({ error: "Each photo must be a valid uploaded image reference" });
         return;
       }
-      updates.photos = req.body.photos;
+      updates.photos = photos;
     }
 
     const [updated] = await db
@@ -364,7 +478,7 @@ router.patch("/campaigns/:campaignId", requireAuth, async (req, res) => {
       .where(eq(donationCampaignsTable.id, campaignId))
       .returning();
 
-    res.json(updated);
+    res.json(await enrichCampaign(updated));
   } catch (err) {
     console.error("[campaigns] update campaign error:", err);
     res.status(500).json({ error: "Internal server error" });
@@ -401,6 +515,147 @@ router.delete("/campaigns/:campaignId", requireAuth, async (req, res) => {
   }
 });
 
+router.get("/campaigns/expiring-soon", requireAuth, async (req, res) => {
+  const userId = (req as AuthenticatedRequest).userId;
+  const now = new Date();
+  const threshold = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+  try {
+    const campaigns = await db
+      .select()
+      .from(donationCampaignsTable)
+      .where(
+        and(
+          eq(donationCampaignsTable.userId, userId),
+          eq(donationCampaignsTable.paymentStatus, "paid"),
+          eq(donationCampaignsTable.isActive, true),
+          gte(donationCampaignsTable.expiresAt, now),
+          lte(donationCampaignsTable.expiresAt, threshold),
+          sql`${donationCampaignsTable.inAppExpiryNotifiedAt} IS NULL`,
+        ),
+      )
+      .orderBy(donationCampaignsTable.expiresAt);
+
+    if (campaigns.length > 0) {
+      await db
+        .update(donationCampaignsTable)
+        .set({ inAppExpiryNotifiedAt: now, updatedAt: now })
+        .where(sql`${donationCampaignsTable.id} IN (${sql.join(campaigns.map((c) => sql`${c.id}`), sql`,`)})`);
+    }
+
+    res.json(await enrichCampaigns(campaigns));
+  } catch (err) {
+    console.error("[campaigns] expiring-soon error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.post("/campaigns/:campaignId/initiate-renewal", requireAuth, async (req, res) => {
+  const userId = (req as AuthenticatedRequest).userId;
+  const campaignId = Number(req.params.campaignId);
+  try {
+    const { pricingId } = req.body;
+    if (!pricingId) {
+      res.status(400).json({ error: "pricingId required" });
+      return;
+    }
+
+    const [campaign] = await db
+      .select()
+      .from(donationCampaignsTable)
+      .where(
+        and(
+          eq(donationCampaignsTable.id, campaignId),
+          eq(donationCampaignsTable.userId, userId),
+          eq(donationCampaignsTable.paymentStatus, "paid"),
+        ),
+      );
+
+    if (!campaign) {
+      res.status(404).json({ error: "Campaign not found" });
+      return;
+    }
+
+    const [pricing] = await db
+      .select()
+      .from(campaignPricingTable)
+      .where(and(eq(campaignPricingTable.id, Number(pricingId)), eq(campaignPricingTable.isActive, true)));
+
+    if (!pricing) {
+      res.status(404).json({ error: "Pricing option not found" });
+      return;
+    }
+
+    const stripe = await getUncachableStripeClient();
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount: pricing.priceCents,
+      currency: "eur",
+      metadata: {
+        userId,
+        campaignId: String(campaign.id),
+        pricingId: String(pricing.id),
+        durationDays: String(pricing.durationDays),
+        priceCents: String(pricing.priceCents),
+        type: "campaign_renewal",
+      },
+    });
+
+    await db
+      .update(donationCampaignsTable)
+      .set({
+        renewalStripePaymentIntentId: paymentIntent.id,
+        renewalDurationDays: pricing.durationDays,
+        renewalPriceCents: pricing.priceCents,
+        updatedAt: new Date(),
+      })
+      .where(eq(donationCampaignsTable.id, campaign.id));
+
+    res.json({
+      clientSecret: paymentIntent.client_secret,
+      paymentIntentId: paymentIntent.id,
+      campaignId: campaign.id,
+      priceCents: pricing.priceCents,
+      durationDays: pricing.durationDays,
+      label: pricing.label,
+    });
+  } catch (err) {
+    console.error("[campaigns] initiate-renewal error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.post("/campaigns/:campaignId/confirm-renewal", requireAuth, async (req, res) => {
+  const userId = (req as AuthenticatedRequest).userId;
+  const campaignId = Number(req.params.campaignId);
+  try {
+    const { paymentIntentId } = req.body;
+    if (!paymentIntentId) {
+      res.status(400).json({ error: "paymentIntentId required" });
+      return;
+    }
+
+    const stripe = await getUncachableStripeClient();
+    const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
+    if (paymentIntent.status !== "succeeded") {
+      res.status(400).json({ error: "Payment not yet succeeded", stripeStatus: paymentIntent.status });
+      return;
+    }
+    if (paymentIntent.metadata?.userId !== userId || paymentIntent.metadata?.campaignId !== String(campaignId)) {
+      res.status(403).json({ error: "Payment does not belong to this campaign" });
+      return;
+    }
+
+    const result = await renewCampaign(campaignId, paymentIntentId);
+    if ((result as any).error) {
+      res.status(404).json(result);
+      return;
+    }
+    res.json(result);
+  } catch (err) {
+    console.error("[campaigns] confirm-renewal error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 router.get("/campaigns/active", async (_req, res) => {
   try {
     const now = new Date();
@@ -430,7 +685,7 @@ router.get("/campaigns/active", async (_req, res) => {
       .orderBy(desc(donationCampaignsTable.createdAt))
       .limit(50);
 
-    res.json(campaigns);
+    res.json(await enrichCampaigns(campaigns));
   } catch (err) {
     console.error("[campaigns] active campaigns error:", err);
     res.status(500).json({ error: "Internal server error" });
@@ -440,22 +695,19 @@ router.get("/campaigns/active", async (_req, res) => {
 router.get("/campaigns/user/:userId", async (req, res) => {
   const targetUserId = req.params.userId;
   try {
-    const now = new Date();
     const campaigns = await db
       .select()
       .from(donationCampaignsTable)
       .where(
         and(
           eq(donationCampaignsTable.userId, targetUserId),
-          eq(donationCampaignsTable.isActive, true),
           eq(donationCampaignsTable.paymentStatus, "paid"),
-          gt(donationCampaignsTable.expiresAt, now),
         ),
       )
-      .orderBy(desc(donationCampaignsTable.createdAt))
+      .orderBy(desc(donationCampaignsTable.isActive), desc(donationCampaignsTable.createdAt))
       .limit(1);
 
-    res.json(campaigns[0] || null);
+    res.json(campaigns[0] ? await enrichCampaign(campaigns[0]) : null);
   } catch (err) {
     console.error("[campaigns] get campaign error:", err);
     res.status(500).json({ error: "Internal server error" });
@@ -544,6 +796,16 @@ export async function webhookHandler(req: Request, res: Response) {
           }
         }
       }
+
+      if (paymentIntent.metadata?.type === "campaign_renewal") {
+        const campaignId = Number(paymentIntent.metadata?.campaignId);
+        if (campaignId) {
+          const result = await renewCampaign(campaignId, piId);
+          if (!(result as any).error) {
+            console.info(`[campaigns] webhook renewed campaign=${campaignId} for PI=${piId}`);
+          }
+        }
+      }
     }
 
     if (event.type === "payment_intent.payment_failed") {
@@ -557,6 +819,20 @@ export async function webhookHandler(req: Request, res: Response) {
           .where(eq(donationCampaignsTable.stripePaymentIntentId, piId));
 
         console.warn(`[campaigns] payment_intent.payment_failed: ${piId}`);
+      }
+
+      if (paymentIntent.metadata?.type === "campaign_renewal") {
+        await db
+          .update(donationCampaignsTable)
+          .set({
+            renewalStripePaymentIntentId: null,
+            renewalDurationDays: null,
+            renewalPriceCents: null,
+            updatedAt: new Date(),
+          })
+          .where(eq(donationCampaignsTable.renewalStripePaymentIntentId, piId));
+
+        console.warn(`[campaigns] renewal payment_intent.payment_failed: ${piId}`);
       }
     }
 

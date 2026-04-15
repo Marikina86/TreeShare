@@ -244,15 +244,24 @@ export const donationCampaignsTable = pgTable("donation_campaigns", {
   photos: json("photos").notNull().default([]),
   durationDays: integer("duration_days"),
   expiresAt: timestamp("expires_at"),
+  archivedAt: timestamp("archived_at"),
+  storageTier: text("storage_tier").notNull().default("hot"),
+  expiryNotificationSentAt: timestamp("expiry_notification_sent_at"),
+  inAppExpiryNotifiedAt: timestamp("in_app_expiry_notified_at"),
   paymentStatus: text("payment_status").notNull().default("draft"),
   stripePaymentIntentId: text("stripe_payment_intent_id"),
+  renewalStripePaymentIntentId: text("renewal_stripe_payment_intent_id"),
+  renewalDurationDays: integer("renewal_duration_days"),
+  renewalPriceCents: integer("renewal_price_cents"),
   pricePaidCents: integer("price_paid_cents"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 }, (table) => [
   index("donation_campaigns_user_id_idx").on(table.userId),
   index("donation_campaigns_payment_status_idx").on(table.paymentStatus),
+  index("donation_campaigns_expires_at_idx").on(table.expiresAt),
   uniqueIndex("donation_campaigns_stripe_pi_idx").on(table.stripePaymentIntentId),
+  uniqueIndex("donation_campaigns_renewal_stripe_pi_idx").on(table.renewalStripePaymentIntentId),
 ]);
 
 export const platformRevenueTable = pgTable("platform_revenue", {
