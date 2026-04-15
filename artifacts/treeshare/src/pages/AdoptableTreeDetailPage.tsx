@@ -105,19 +105,7 @@ const T = {
     selectDuration: "Seleziona durata",
     selectedPrice: "Prezzo calcolato",
     shippingBtn: "📦 Invia i tuoi dati per la spedizione",
-    shippingTitle: "Dati per la spedizione",
-    shippingFullName: "Nome completo",
-    shippingPhone: "Telefono",
-    shippingAddress: "Indirizzo",
-    shippingCity: "Città",
-    shippingPostalCode: "CAP",
-    shippingCountry: "Paese",
-    shippingNotes: "Note aggiuntive",
-    shippingSubmit: "Invia dati",
-    shippingSubmitting: "Invio in corso...",
-    shippingSuccess: "✓ Dati di spedizione inviati con successo!",
-    shippingAlreadySent: "Dati di spedizione già inviati",
-    shippingCancel: "Annulla",
+    shippingReceived: "✓ Dati ricevuti dall'ente",
     orgManageAdoptions: "Gestisci adozioni →",
   },
   en: {
@@ -169,19 +157,7 @@ const T = {
     selectDuration: "Select duration",
     selectedPrice: "Calculated price",
     shippingBtn: "📦 Send your shipping details",
-    shippingTitle: "Shipping details",
-    shippingFullName: "Full name",
-    shippingPhone: "Phone",
-    shippingAddress: "Address",
-    shippingCity: "City",
-    shippingPostalCode: "Postal code",
-    shippingCountry: "Country",
-    shippingNotes: "Additional notes",
-    shippingSubmit: "Submit details",
-    shippingSubmitting: "Submitting...",
-    shippingSuccess: "✓ Shipping details sent successfully!",
-    shippingAlreadySent: "Shipping details already submitted",
-    shippingCancel: "Cancel",
+    shippingReceived: "✓ Details received by the organization",
     orgManageAdoptions: "Manage adoptions →",
   },
 };
@@ -252,106 +228,6 @@ function PaymentForm({
           className="px-4 py-2.5 rounded-lg bg-muted text-foreground text-sm hover:bg-muted/80 transition-colors"
         >
           {t.cancel}
-        </button>
-      </div>
-    </form>
-  );
-}
-
-function ShippingForm({
-  adoptionId,
-  t,
-  getToken,
-  onSuccess,
-  onCancel,
-}: {
-  adoptionId: number;
-  t: typeof T.it;
-  getToken: () => Promise<string | null>;
-  onSuccess: () => void;
-  onCancel: () => void;
-}) {
-  const [fullName, setFullName] = useState("");
-  const [phone, setPhone] = useState("");
-  const [address, setAddress] = useState("");
-  const [city, setCity] = useState("");
-  const [postalCode, setPostalCode] = useState("");
-  const [country, setCountry] = useState("Italia");
-  const [notes, setNotes] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!fullName.trim() || !address.trim() || !city.trim() || !country.trim()) {
-      setError("Compila tutti i campi obbligatori.");
-      return;
-    }
-    setSubmitting(true);
-    setError(null);
-    try {
-      const token = await getToken();
-      const res = await fetch(`/api/adopt/my-adoptions/${adoptionId}/shipping`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ fullName, phone, address, city, postalCode, country, notes }),
-      });
-      const data = await res.json();
-      if (!res.ok) { setError(data.error ?? t.error); return; }
-      onSuccess();
-    } catch {
-      setError(t.error);
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  const inputClass = "w-full border border-border rounded-lg px-3 py-2 text-sm bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40";
-  const labelClass = "block text-xs font-medium text-foreground mb-1";
-
-  return (
-    <form onSubmit={handleSubmit} className="space-y-3 mt-3">
-      <div>
-        <label className={labelClass}>{t.shippingFullName} <span className="text-red-500">*</span></label>
-        <input value={fullName} onChange={(e) => setFullName(e.target.value)} className={inputClass} placeholder="Mario Rossi" required />
-      </div>
-      <div>
-        <label className={labelClass}>{t.shippingPhone}</label>
-        <input value={phone} onChange={(e) => setPhone(e.target.value)} className={inputClass} placeholder="+39 333 1234567" type="tel" />
-      </div>
-      <div>
-        <label className={labelClass}>{t.shippingAddress} <span className="text-red-500">*</span></label>
-        <input value={address} onChange={(e) => setAddress(e.target.value)} className={inputClass} placeholder="Via Roma 1" required />
-      </div>
-      <div className="grid grid-cols-2 gap-2">
-        <div>
-          <label className={labelClass}>{t.shippingCity} <span className="text-red-500">*</span></label>
-          <input value={city} onChange={(e) => setCity(e.target.value)} className={inputClass} placeholder="Catania" required />
-        </div>
-        <div>
-          <label className={labelClass}>{t.shippingPostalCode}</label>
-          <input value={postalCode} onChange={(e) => setPostalCode(e.target.value)} className={inputClass} placeholder="95100" />
-        </div>
-      </div>
-      <div>
-        <label className={labelClass}>{t.shippingCountry} <span className="text-red-500">*</span></label>
-        <input value={country} onChange={(e) => setCountry(e.target.value)} className={inputClass} required />
-      </div>
-      <div>
-        <label className={labelClass}>{t.shippingNotes}</label>
-        <textarea value={notes} onChange={(e) => setNotes(e.target.value)} className={inputClass + " resize-none"} rows={2} placeholder="Citofono, orari preferiti, ecc." />
-      </div>
-      {error && <p className="text-red-500 text-xs">{error}</p>}
-      <div className="flex gap-2 pt-1">
-        <button
-          type="submit"
-          disabled={submitting}
-          className="flex-1 py-2.5 rounded-lg bg-primary text-primary-foreground text-sm font-semibold hover:opacity-90 transition-opacity disabled:opacity-50"
-        >
-          {submitting ? t.shippingSubmitting : t.shippingSubmit}
-        </button>
-        <button type="button" onClick={onCancel} disabled={submitting} className="px-4 py-2.5 rounded-lg bg-muted text-foreground text-sm hover:bg-muted/80 transition-colors">
-          {t.shippingCancel}
         </button>
       </div>
     </form>
@@ -636,10 +512,7 @@ export default function AdoptableTreeDetailPage() {
   const [adopted, setAdopted] = useState(false);
   const [adoptedEndDate, setAdoptedEndDate] = useState<string | null>(null);
   const [adoptedCode, setAdoptedCode] = useState<string | null>(null);
-  const [adoptedId, setAdoptedId] = useState<number | null>(null);
   const [stripePromiseLoaded, setStripePromiseLoaded] = useState<ReturnType<typeof loadStripe> | null>(null);
-  const [showShipping, setShowShipping] = useState(false);
-  const [shippingDone, setShippingDone] = useState(false);
 
   const treeQuery = useQuery<AdoptableTree>({
     queryKey: ["adoptable-tree", treeId],
@@ -725,7 +598,6 @@ export default function AdoptableTreeDetailPage() {
         setAdopted(true);
         setAdoptedEndDate(data.endDate ?? null);
         setAdoptedCode(data.adoptionCode ?? null);
-        setAdoptedId(data.adoptionId ?? null);
         setShowPayment(false);
         await queryClient.invalidateQueries({ queryKey: ["adoptable-tree", treeId] });
         await queryClient.invalidateQueries({ queryKey: ["adoptable-trees"] });
@@ -762,8 +634,6 @@ export default function AdoptableTreeDetailPage() {
       </Layout>
     );
   }
-
-  const shippingAlreadySent = !!(activeAdoption?.shippingData) || !!(activeAdoption?.orgStatus);
 
   return (
     <Layout>
@@ -860,28 +730,13 @@ export default function AdoptableTreeDetailPage() {
               </div>
             )}
 
-            {!shippingDone && !showShipping && (
-              <button
-                onClick={() => setShowShipping(true)}
-                className="mt-2 w-full py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:opacity-90 transition-opacity"
+            {adoptedCode && (
+              <a
+                href={`mailto:${tree.ownerEmail}?subject=${encodeURIComponent(`ID adozione: ${adoptedCode}`)}`}
+                className="mt-2 w-full py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:opacity-90 transition-opacity flex items-center justify-center"
               >
                 {t.shippingBtn}
-              </button>
-            )}
-            {showShipping && !shippingDone && adoptedId && (
-              <div className="mt-2 bg-white dark:bg-green-900/10 rounded-xl border border-green-200 dark:border-green-700 p-3">
-                <h4 className="text-sm font-semibold text-green-800 dark:text-green-200 mb-1">{t.shippingTitle}</h4>
-                <ShippingForm
-                  adoptionId={adoptedId}
-                  t={t}
-                  getToken={getToken}
-                  onSuccess={() => { setShippingDone(true); setShowShipping(false); }}
-                  onCancel={() => setShowShipping(false)}
-                />
-              </div>
-            )}
-            {shippingDone && (
-              <p className="text-sm font-medium text-green-700 dark:text-green-300 mt-1">{t.shippingSuccess}</p>
+              </a>
             )}
           </div>
         )}
@@ -899,33 +754,15 @@ export default function AdoptableTreeDetailPage() {
                 <p className="font-mono font-bold text-blue-800 dark:text-blue-200 text-sm tracking-wider">{activeAdoption.adoptionCode}</p>
               </div>
             )}
-            {shippingAlreadySent ? (
-              <p className="text-xs text-blue-600 dark:text-blue-400 font-medium">✓ {t.shippingAlreadySent}</p>
+            {activeAdoption.orgStatus ? (
+              <p className="text-xs text-blue-600 dark:text-blue-400 font-medium">{t.shippingReceived}</p>
             ) : (
-              <>
-                {!showShipping ? (
-                  <button
-                    onClick={() => setShowShipping(true)}
-                    className="mt-1 w-full py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:opacity-90 transition-opacity"
-                  >
-                    {t.shippingBtn}
-                  </button>
-                ) : (
-                  <div className="mt-2 bg-white dark:bg-blue-900/10 rounded-xl border border-blue-200 dark:border-blue-700 p-3">
-                    <h4 className="text-sm font-semibold text-blue-800 dark:text-blue-200 mb-1">{t.shippingTitle}</h4>
-                    <ShippingForm
-                      adoptionId={activeAdoption.id}
-                      t={t}
-                      getToken={getToken}
-                      onSuccess={() => { setShippingDone(true); setShowShipping(false); queryClient.invalidateQueries({ queryKey: ["adopt-my-adoptions"] }); }}
-                      onCancel={() => setShowShipping(false)}
-                    />
-                  </div>
-                )}
-                {shippingDone && (
-                  <p className="text-sm font-medium text-blue-700 dark:text-blue-300">{t.shippingSuccess}</p>
-                )}
-              </>
+              <a
+                href={`mailto:${tree.ownerEmail}?subject=${encodeURIComponent(`ID adozione: ${activeAdoption.adoptionCode ?? activeAdoption.id}`)}`}
+                className="mt-1 w-full py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:opacity-90 transition-opacity flex items-center justify-center"
+              >
+                {t.shippingBtn}
+              </a>
             )}
           </div>
         )}
