@@ -30,6 +30,7 @@ import CampaignsPage from "@/pages/CampaignsPage";
 import AdoptableTreesPage from "@/pages/AdoptableTreesPage";
 import AdoptableTreeDetailPage from "@/pages/AdoptableTreeDetailPage";
 import CreateAdoptableTreePage from "@/pages/CreateAdoptableTreePage";
+import OrgAdoptionsPage from "@/pages/OrgAdoptionsPage";
 import ResetPasswordPage from "@/pages/ResetPasswordPage";
 import NotFound from "@/pages/not-found";
 import InstallPrompt from "@/components/InstallPrompt";
@@ -174,6 +175,7 @@ function AuthProviderWithRoutes() {
             <Route path="/campaigns" component={CampaignsPage} />
             <Route path="/adopt" component={AdoptableTreesPage} />
             <Route path="/adopt/create" component={() => <ProtectedRoute component={CreateAdoptableTreePage} />} />
+            <Route path="/adopt/manage" component={() => <ProtectedRoute component={OrgAdoptionsPage} />} />
             <Route path="/adopt/:id" component={AdoptableTreeDetailPage} />
             <Route path="/admin" component={() => <AdminRoute component={AdminPage} />} />
             <Route path="/privacy" component={PrivacyPage} />

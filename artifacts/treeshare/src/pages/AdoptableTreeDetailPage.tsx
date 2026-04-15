@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useParams, useLocation, useSearch, Link } from "wouter";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { loadStripe } from "@stripe/stripe-js";
@@ -24,6 +24,8 @@ interface AdoptableTree {
   currentAdoptions: number;
   status: string;
   ownerStripeReady: boolean;
+  latitude: number;
+  longitude: number;
   createdAt: string;
 }
 
@@ -31,8 +33,11 @@ interface MyAdoption {
   id: number;
   treeId: number;
   status: string;
+  orgStatus: string | null;
+  adoptionCode: string | null;
   endDate: string;
   treeName: string;
+  shippingData: unknown | null;
 }
 
 interface ConnectStatus {
@@ -43,6 +48,13 @@ interface ConnectStatus {
   accountId?: string;
 }
 
+const DURATION_OPTIONS = [
+  { labelIt: "1 mese", labelEn: "1 month", days: 30 },
+  { labelIt: "3 mesi", labelEn: "3 months", days: 90 },
+  { labelIt: "6 mesi", labelEn: "6 months", days: 180 },
+  { labelIt: "1 anno", labelEn: "1 year", days: 365 },
+];
+
 const T = {
   it: {
     loading: "Caricamento...",
@@ -52,10 +64,9 @@ const T = {
     adopt: "Adotta questo albero",
     alreadyAdopted: "Hai già un'adozione attiva",
     activeUntil: "Attiva fino al",
-    price: "Prezzo adozione",
+    price: "Prezzo",
     duration: "Durata",
     days: "giorni",
-    slots: "Posti disponibili",
     species: "Specie",
     desc: "Descrizione",
     pay: "Paga e adotta",
@@ -64,7 +75,7 @@ const T = {
     successTitle: "Adozione avvenuta!",
     successMsg: "Hai adottato questo albero con successo.",
     expiresOn: "Scade il",
-    ownerContact: "Contatta l'ente",
+    adoptionCode: "Codice adozione",
     orgSection: "Gestione albero",
     editTitle: "Modifica titolo",
     editDesc: "Modifica descrizione",
@@ -91,6 +102,23 @@ const T = {
     stripeConnectRefresh: "Sessione Stripe scaduta — riprova il collegamento.",
     stripeNotReadyAdopt: "L'ente non ha ancora attivato i pagamenti. Contatta l'organizzazione.",
     stripeDesc: "Collega il tuo account bancario per ricevere direttamente gli importi delle adozioni (l'80% ti viene accreditato automaticamente da Stripe).",
+    selectDuration: "Seleziona durata",
+    selectedPrice: "Prezzo calcolato",
+    shippingBtn: "📦 Invia i tuoi dati per la spedizione",
+    shippingTitle: "Dati per la spedizione",
+    shippingFullName: "Nome completo",
+    shippingPhone: "Telefono",
+    shippingAddress: "Indirizzo",
+    shippingCity: "Città",
+    shippingPostalCode: "CAP",
+    shippingCountry: "Paese",
+    shippingNotes: "Note aggiuntive",
+    shippingSubmit: "Invia dati",
+    shippingSubmitting: "Invio in corso...",
+    shippingSuccess: "✓ Dati di spedizione inviati con successo!",
+    shippingAlreadySent: "Dati di spedizione già inviati",
+    shippingCancel: "Annulla",
+    orgManageAdoptions: "Gestisci adozioni →",
   },
   en: {
     loading: "Loading...",
@@ -100,10 +128,9 @@ const T = {
     adopt: "Adopt this tree",
     alreadyAdopted: "You already have an active adoption",
     activeUntil: "Active until",
-    price: "Adoption price",
+    price: "Price",
     duration: "Duration",
     days: "days",
-    slots: "Available slots",
     species: "Species",
     desc: "Description",
     pay: "Pay and adopt",
@@ -112,7 +139,7 @@ const T = {
     successTitle: "Adoption complete!",
     successMsg: "You have successfully adopted this tree.",
     expiresOn: "Expires on",
-    ownerContact: "Contact the organization",
+    adoptionCode: "Adoption code",
     orgSection: "Tree management",
     editTitle: "Edit title",
     editDesc: "Edit description",
@@ -139,6 +166,23 @@ const T = {
     stripeConnectRefresh: "Stripe session expired — please try connecting again.",
     stripeNotReadyAdopt: "This organization has not yet activated payments. Contact the organization.",
     stripeDesc: "Connect your bank account to receive adoption payments directly (80% is automatically credited to you by Stripe).",
+    selectDuration: "Select duration",
+    selectedPrice: "Calculated price",
+    shippingBtn: "📦 Send your shipping details",
+    shippingTitle: "Shipping details",
+    shippingFullName: "Full name",
+    shippingPhone: "Phone",
+    shippingAddress: "Address",
+    shippingCity: "City",
+    shippingPostalCode: "Postal code",
+    shippingCountry: "Country",
+    shippingNotes: "Additional notes",
+    shippingSubmit: "Submit details",
+    shippingSubmitting: "Submitting...",
+    shippingSuccess: "✓ Shipping details sent successfully!",
+    shippingAlreadySent: "Shipping details already submitted",
+    shippingCancel: "Cancel",
+    orgManageAdoptions: "Manage adoptions →",
   },
 };
 
@@ -208,6 +252,106 @@ function PaymentForm({
           className="px-4 py-2.5 rounded-lg bg-muted text-foreground text-sm hover:bg-muted/80 transition-colors"
         >
           {t.cancel}
+        </button>
+      </div>
+    </form>
+  );
+}
+
+function ShippingForm({
+  adoptionId,
+  t,
+  getToken,
+  onSuccess,
+  onCancel,
+}: {
+  adoptionId: number;
+  t: typeof T.it;
+  getToken: () => Promise<string | null>;
+  onSuccess: () => void;
+  onCancel: () => void;
+}) {
+  const [fullName, setFullName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [address, setAddress] = useState("");
+  const [city, setCity] = useState("");
+  const [postalCode, setPostalCode] = useState("");
+  const [country, setCountry] = useState("Italia");
+  const [notes, setNotes] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!fullName.trim() || !address.trim() || !city.trim() || !country.trim()) {
+      setError("Compila tutti i campi obbligatori.");
+      return;
+    }
+    setSubmitting(true);
+    setError(null);
+    try {
+      const token = await getToken();
+      const res = await fetch(`/api/adopt/my-adoptions/${adoptionId}/shipping`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ fullName, phone, address, city, postalCode, country, notes }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setError(data.error ?? t.error); return; }
+      onSuccess();
+    } catch {
+      setError(t.error);
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  const inputClass = "w-full border border-border rounded-lg px-3 py-2 text-sm bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40";
+  const labelClass = "block text-xs font-medium text-foreground mb-1";
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-3 mt-3">
+      <div>
+        <label className={labelClass}>{t.shippingFullName} <span className="text-red-500">*</span></label>
+        <input value={fullName} onChange={(e) => setFullName(e.target.value)} className={inputClass} placeholder="Mario Rossi" required />
+      </div>
+      <div>
+        <label className={labelClass}>{t.shippingPhone}</label>
+        <input value={phone} onChange={(e) => setPhone(e.target.value)} className={inputClass} placeholder="+39 333 1234567" type="tel" />
+      </div>
+      <div>
+        <label className={labelClass}>{t.shippingAddress} <span className="text-red-500">*</span></label>
+        <input value={address} onChange={(e) => setAddress(e.target.value)} className={inputClass} placeholder="Via Roma 1" required />
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <div>
+          <label className={labelClass}>{t.shippingCity} <span className="text-red-500">*</span></label>
+          <input value={city} onChange={(e) => setCity(e.target.value)} className={inputClass} placeholder="Catania" required />
+        </div>
+        <div>
+          <label className={labelClass}>{t.shippingPostalCode}</label>
+          <input value={postalCode} onChange={(e) => setPostalCode(e.target.value)} className={inputClass} placeholder="95100" />
+        </div>
+      </div>
+      <div>
+        <label className={labelClass}>{t.shippingCountry} <span className="text-red-500">*</span></label>
+        <input value={country} onChange={(e) => setCountry(e.target.value)} className={inputClass} required />
+      </div>
+      <div>
+        <label className={labelClass}>{t.shippingNotes}</label>
+        <textarea value={notes} onChange={(e) => setNotes(e.target.value)} className={inputClass + " resize-none"} rows={2} placeholder="Citofono, orari preferiti, ecc." />
+      </div>
+      {error && <p className="text-red-500 text-xs">{error}</p>}
+      <div className="flex gap-2 pt-1">
+        <button
+          type="submit"
+          disabled={submitting}
+          className="flex-1 py-2.5 rounded-lg bg-primary text-primary-foreground text-sm font-semibold hover:opacity-90 transition-opacity disabled:opacity-50"
+        >
+          {submitting ? t.shippingSubmitting : t.shippingSubmit}
+        </button>
+        <button type="button" onClick={onCancel} disabled={submitting} className="px-4 py-2.5 rounded-lg bg-muted text-foreground text-sm hover:bg-muted/80 transition-colors">
+          {t.shippingCancel}
         </button>
       </div>
     </form>
@@ -395,7 +539,12 @@ function OrgManageSection({ tree, t }: { tree: AdoptableTree; t: typeof T.it }) 
 
   return (
     <div className="mt-6 p-4 border border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-800 rounded-xl space-y-3">
-      <h3 className="font-semibold text-amber-700 dark:text-amber-300 text-sm">{t.orgSection}</h3>
+      <div className="flex items-center justify-between">
+        <h3 className="font-semibold text-amber-700 dark:text-amber-300 text-sm">{t.orgSection}</h3>
+        <Link href="/adopt/manage" className="text-xs text-amber-600 dark:text-amber-400 hover:underline">
+          {t.orgManageAdoptions}
+        </Link>
+      </div>
 
       <StripeConnectPanel treeId={tree.id} t={t} />
 
@@ -478,6 +627,7 @@ export default function AdoptableTreeDetailPage() {
   const searchParams = new URLSearchParams(search);
   const stripeConnectResult = searchParams.get("stripe_connect");
 
+  const [selectedDurationDays, setSelectedDurationDays] = useState<number | null>(null);
   const [showPayment, setShowPayment] = useState(false);
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [paymentIntentId, setPaymentIntentId] = useState<string | null>(null);
@@ -485,7 +635,11 @@ export default function AdoptableTreeDetailPage() {
   const [initError, setInitError] = useState<string | null>(null);
   const [adopted, setAdopted] = useState(false);
   const [adoptedEndDate, setAdoptedEndDate] = useState<string | null>(null);
+  const [adoptedCode, setAdoptedCode] = useState<string | null>(null);
+  const [adoptedId, setAdoptedId] = useState<number | null>(null);
   const [stripePromiseLoaded, setStripePromiseLoaded] = useState<ReturnType<typeof loadStripe> | null>(null);
+  const [showShipping, setShowShipping] = useState(false);
+  const [shippingDone, setShippingDone] = useState(false);
 
   const treeQuery = useQuery<AdoptableTree>({
     queryKey: ["adoptable-tree", treeId],
@@ -518,6 +672,17 @@ export default function AdoptableTreeDetailPage() {
   const isOwner = !!userId && tree?.ownerId === userId;
   const isFull = tree?.status === "full" || (tree?.currentAdoptions ?? 0) >= (tree?.maxAdoptions ?? 0);
 
+  useEffect(() => {
+    if (tree && selectedDurationDays === null) {
+      setSelectedDurationDays(tree.durationDays);
+    }
+  }, [tree, selectedDurationDays]);
+
+  const safeDuration = selectedDurationDays ?? (tree?.durationDays ?? 365);
+  const calculatedPriceCents = tree
+    ? Math.max(50, Math.round((tree.priceCents / tree.durationDays) * safeDuration))
+    : 0;
+
   async function handleAdoptClick() {
     if (!userId) return;
     setInitiating(true);
@@ -529,7 +694,7 @@ export default function AdoptableTreeDetailPage() {
       const res = await fetch("/api/adopt/initiate", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ treeId }),
+        body: JSON.stringify({ treeId, selectedDurationDays: safeDuration }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -559,6 +724,8 @@ export default function AdoptableTreeDetailPage() {
       if (res.ok) {
         setAdopted(true);
         setAdoptedEndDate(data.endDate ?? null);
+        setAdoptedCode(data.adoptionCode ?? null);
+        setAdoptedId(data.adoptionId ?? null);
         setShowPayment(false);
         await queryClient.invalidateQueries({ queryKey: ["adoptable-tree", treeId] });
         await queryClient.invalidateQueries({ queryKey: ["adoptable-trees"] });
@@ -595,6 +762,8 @@ export default function AdoptableTreeDetailPage() {
       </Layout>
     );
   }
+
+  const shippingAlreadySent = !!(activeAdoption?.shippingData) || !!(activeAdoption?.orgStatus);
 
   return (
     <Layout>
@@ -635,25 +804,17 @@ export default function AdoptableTreeDetailPage() {
           )}
         </div>
 
-        <div className="grid grid-cols-3 gap-3 mb-5">
+        {/* Stats: 2 columns (removed "Posti disponibili") */}
+        <div className="grid grid-cols-2 gap-3 mb-5">
           <div className="bg-muted rounded-xl p-3 text-center">
             <p className="text-xs text-muted-foreground mb-1">{t.price}</p>
-            <p className="font-bold text-foreground text-sm">€{(tree.priceCents / 100).toFixed(2)}</p>
+            <p className="font-bold text-foreground text-sm">€{(calculatedPriceCents / 100).toFixed(2)}</p>
             <p className="text-[10px] text-muted-foreground">{t.perAdoption}</p>
           </div>
           <div className="bg-muted rounded-xl p-3 text-center">
             <p className="text-xs text-muted-foreground mb-1">{t.duration}</p>
-            <p className="font-bold text-foreground text-sm">{tree.durationDays}</p>
+            <p className="font-bold text-foreground text-sm">{safeDuration}</p>
             <p className="text-[10px] text-muted-foreground">{t.days}</p>
-          </div>
-          <div className="bg-muted rounded-xl p-3 text-center">
-            <p className="text-xs text-muted-foreground mb-1">{t.slots}</p>
-            <p className={`font-bold text-sm ${isFull ? "text-red-500" : "text-green-600"}`}>
-              {isFull ? tree.maxAdoptions : tree.maxAdoptions - tree.currentAdoptions}
-            </p>
-            <p className={`text-[10px] ${isFull ? "text-red-400" : "text-muted-foreground"}`}>
-              {isFull ? t.full : `${t.of} ${tree.maxAdoptions}`}
-            </p>
           </div>
         </div>
 
@@ -669,35 +830,103 @@ export default function AdoptableTreeDetailPage() {
           </div>
         )}
 
-        <div className="mb-2 text-xs text-muted-foreground">
+        <div className="mb-5 text-xs text-muted-foreground">
           📍 {tree.latitude.toFixed(4)}, {tree.longitude.toFixed(4)}
+          {" · "}
+          <a
+            href={`https://www.openstreetmap.org/?mlat=${tree.latitude}&mlon=${tree.longitude}&zoom=15`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-primary hover:underline"
+          >
+            Vedi mappa
+          </a>
         </div>
 
-        <a
-          href={`mailto:${tree.ownerEmail}`}
-          className="inline-flex items-center gap-1 text-primary text-sm hover:underline mb-5"
-        >
-          ✉️ {t.ownerContact}
-        </a>
-
+        {/* Success banner (just adopted) */}
         {adopted && (
-          <div className="mb-4 p-4 bg-green-50 dark:bg-green-950/20 border border-green-300 dark:border-green-700 rounded-xl">
+          <div className="mb-4 p-4 bg-green-50 dark:bg-green-950/20 border border-green-300 dark:border-green-700 rounded-xl space-y-2">
             <h3 className="font-bold text-green-700 dark:text-green-300">{t.successTitle}</h3>
-            <p className="text-sm text-green-700 dark:text-green-300 mt-1">{t.successMsg}</p>
+            <p className="text-sm text-green-700 dark:text-green-300">{t.successMsg}</p>
             {adoptedEndDate && (
-              <p className="text-xs text-green-600 dark:text-green-400 mt-1">
+              <p className="text-xs text-green-600 dark:text-green-400">
                 {t.expiresOn}: {new Date(adoptedEndDate).toLocaleDateString()}
               </p>
+            )}
+            {adoptedCode && (
+              <div className="mt-2 bg-white dark:bg-green-900/20 rounded-lg px-3 py-2 border border-green-200 dark:border-green-700">
+                <p className="text-[10px] text-green-600 dark:text-green-400 font-medium uppercase tracking-wide">{t.adoptionCode}</p>
+                <p className="font-mono font-bold text-green-800 dark:text-green-200 text-sm tracking-wider">{adoptedCode}</p>
+              </div>
+            )}
+
+            {!shippingDone && !showShipping && (
+              <button
+                onClick={() => setShowShipping(true)}
+                className="mt-2 w-full py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:opacity-90 transition-opacity"
+              >
+                {t.shippingBtn}
+              </button>
+            )}
+            {showShipping && !shippingDone && adoptedId && (
+              <div className="mt-2 bg-white dark:bg-green-900/10 rounded-xl border border-green-200 dark:border-green-700 p-3">
+                <h4 className="text-sm font-semibold text-green-800 dark:text-green-200 mb-1">{t.shippingTitle}</h4>
+                <ShippingForm
+                  adoptionId={adoptedId}
+                  t={t}
+                  getToken={getToken}
+                  onSuccess={() => { setShippingDone(true); setShowShipping(false); }}
+                  onCancel={() => setShowShipping(false)}
+                />
+              </div>
+            )}
+            {shippingDone && (
+              <p className="text-sm font-medium text-green-700 dark:text-green-300 mt-1">{t.shippingSuccess}</p>
             )}
           </div>
         )}
 
+        {/* Already-adopted banner */}
         {activeAdoption && !adopted && (
-          <div className="mb-4 p-4 bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-xl">
+          <div className="mb-4 p-4 bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-xl space-y-2">
             <p className="font-semibold text-blue-700 dark:text-blue-300 text-sm">{t.alreadyAdopted}</p>
-            <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
+            <p className="text-xs text-blue-600 dark:text-blue-400">
               {t.activeUntil}: {new Date(activeAdoption.endDate).toLocaleDateString()}
             </p>
+            {activeAdoption.adoptionCode && (
+              <div className="bg-white dark:bg-blue-900/20 rounded-lg px-3 py-2 border border-blue-200 dark:border-blue-700">
+                <p className="text-[10px] text-blue-600 dark:text-blue-400 font-medium uppercase tracking-wide">{t.adoptionCode}</p>
+                <p className="font-mono font-bold text-blue-800 dark:text-blue-200 text-sm tracking-wider">{activeAdoption.adoptionCode}</p>
+              </div>
+            )}
+            {shippingAlreadySent ? (
+              <p className="text-xs text-blue-600 dark:text-blue-400 font-medium">✓ {t.shippingAlreadySent}</p>
+            ) : (
+              <>
+                {!showShipping ? (
+                  <button
+                    onClick={() => setShowShipping(true)}
+                    className="mt-1 w-full py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:opacity-90 transition-opacity"
+                  >
+                    {t.shippingBtn}
+                  </button>
+                ) : (
+                  <div className="mt-2 bg-white dark:bg-blue-900/10 rounded-xl border border-blue-200 dark:border-blue-700 p-3">
+                    <h4 className="text-sm font-semibold text-blue-800 dark:text-blue-200 mb-1">{t.shippingTitle}</h4>
+                    <ShippingForm
+                      adoptionId={activeAdoption.id}
+                      t={t}
+                      getToken={getToken}
+                      onSuccess={() => { setShippingDone(true); setShowShipping(false); queryClient.invalidateQueries({ queryKey: ["adopt-my-adoptions"] }); }}
+                      onCancel={() => setShowShipping(false)}
+                    />
+                  </div>
+                )}
+                {shippingDone && (
+                  <p className="text-sm font-medium text-blue-700 dark:text-blue-300">{t.shippingSuccess}</p>
+                )}
+              </>
+            )}
           </div>
         )}
 
@@ -721,19 +950,50 @@ export default function AdoptableTreeDetailPage() {
                     ⚠ {t.stripeNotReadyAdopt}
                   </p>
                 )}
+
+                {/* Duration selector */}
+                {tree.ownerStripeReady && !isFull && (
+                  <div className="mb-4">
+                    <p className="text-sm font-medium text-foreground mb-2">{t.selectDuration}</p>
+                    <div className="grid grid-cols-4 gap-2">
+                      {DURATION_OPTIONS.map((opt) => {
+                        const price = Math.max(50, Math.round((tree.priceCents / tree.durationDays) * opt.days));
+                        const isSelected = safeDuration === opt.days;
+                        return (
+                          <button
+                            key={opt.days}
+                            type="button"
+                            onClick={() => setSelectedDurationDays(opt.days)}
+                            className={`py-2 px-1 rounded-xl border text-center transition-colors ${
+                              isSelected
+                                ? "bg-primary text-primary-foreground border-primary"
+                                : "bg-background text-foreground border-border hover:border-primary/50"
+                            }`}
+                          >
+                            <p className="text-xs font-semibold">{lang === "it" ? opt.labelIt : opt.labelEn}</p>
+                            <p className={`text-[11px] mt-0.5 ${isSelected ? "text-primary-foreground/80" : "text-muted-foreground"}`}>
+                              €{(price / 100).toFixed(2)}
+                            </p>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
                 <button
                   onClick={handleAdoptClick}
                   disabled={isFull || initiating || !tree.ownerStripeReady}
                   className="w-full py-3 rounded-xl bg-primary text-primary-foreground font-semibold text-sm hover:opacity-90 transition-opacity disabled:opacity-50"
                 >
-                  {initiating ? t.paying : isFull ? t.full : t.adopt}
+                  {initiating ? t.paying : isFull ? t.full : `${t.adopt} · €${(calculatedPriceCents / 100).toFixed(2)}`}
                 </button>
               </>
             )}
             {user && showPayment && clientSecret && stripePromiseLoaded && (
               <div className="border border-border rounded-xl p-4 bg-card mt-2">
                 <p className="text-sm font-medium text-foreground mb-1">
-                  €{(tree.priceCents / 100).toFixed(2)} · {tree.title}
+                  €{(calculatedPriceCents / 100).toFixed(2)} · {tree.title} · {safeDuration} {t.days}
                 </p>
                 <p className="text-xs text-muted-foreground mb-4">{t.fee}</p>
                 <Elements stripe={stripePromiseLoaded} options={{ clientSecret, appearance: { theme: "stripe" } }}>

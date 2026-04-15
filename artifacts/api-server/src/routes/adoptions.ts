@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { randomUUID } from "crypto";
 import { db } from "@workspace/db";
 import {
   adoptableTreesTable,
@@ -6,11 +7,15 @@ import {
   usersTable,
   userNotificationsTable,
 } from "@workspace/db";
-import { eq, and, desc, lt, lte, gte, isNull } from "drizzle-orm";
+import { eq, and, desc, lt, lte, gte, isNull, inArray } from "drizzle-orm";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth";
 import { getUncachableStripeClient, getStripePublishableKey } from "../lib/stripe";
 import { getRomeExpiryDate } from "../lib/eventCleaner";
 import { logger } from "../lib/logger";
+
+function generateAdoptionCode(): string {
+  return "ADO-" + randomUUID().replace(/-/g, "").toUpperCase().substring(0, 8);
+}
 
 const router = Router();
 
@@ -413,7 +418,7 @@ router.post("/adopt/initiate", requireAuth, async (req, res) => {
       return;
     }
 
-    const { treeId } = req.body;
+    const { treeId, selectedDurationDays } = req.body;
     if (!treeId) { res.status(400).json({ error: "treeId obbligatorio" }); return; }
 
     const [tree] = await db
@@ -461,7 +466,11 @@ router.post("/adopt/initiate", requireAuth, async (req, res) => {
       return;
     }
 
-    const amount = Math.max(50, tree.priceCents);
+    const reqDays = selectedDurationDays ? Number(selectedDurationDays) : tree.durationDays;
+    const safeDays = Math.max(1, reqDays);
+    const pricePerDay = tree.priceCents / tree.durationDays;
+    const calculatedCents = Math.round(pricePerDay * safeDays);
+    const amount = Math.max(50, calculatedCents);
     const { platformFeeCents, netToEntityCents } = computeFees(amount);
 
     const paymentIntent = await stripe.paymentIntents.create({
@@ -476,7 +485,7 @@ router.post("/adopt/initiate", requireAuth, async (req, res) => {
         userId,
         treeId: String(tree.id),
         treeName: tree.title,
-        durationDays: String(tree.durationDays),
+        durationDays: String(safeDays),
         amountCents: String(amount),
         platformFeeCents: String(platformFeeCents),
         netToEntityCents: String(netToEntityCents),
@@ -490,7 +499,7 @@ router.post("/adopt/initiate", requireAuth, async (req, res) => {
       priceCents: amount,
       platformFeeCents,
       netToEntityCents,
-      durationDays: tree.durationDays,
+      durationDays: safeDays,
       treeName: tree.title,
     });
   } catch (err) {
@@ -553,9 +562,12 @@ router.post("/adopt/confirm", requireAuth, async (req, res) => {
       const startDate = new Date();
       const endDate = getRomeExpiryDate(durationDays, startDate);
 
+      const adoptionCode = generateAdoptionCode();
+
       const [adoption] = await tx
         .insert(treeAdoptionsTable)
         .values({
+          adoptionCode,
           userId,
           treeId,
           treeName,
@@ -578,7 +590,7 @@ router.post("/adopt/confirm", requireAuth, async (req, res) => {
         .set({ currentAdoptions: newCount, status: newStatus, updatedAt: new Date() })
         .where(eq(adoptableTreesTable.id, treeId));
 
-      return { success: true, adoptionId: adoption.id, endDate: endDate.toISOString(), treeName: tree.title, ownerEmail: tree.ownerEmail };
+      return { success: true, adoptionId: adoption.id, adoptionCode, endDate: endDate.toISOString(), treeName: tree.title, ownerEmail: tree.ownerEmail };
     });
 
     if ((result as any).error) {
@@ -589,6 +601,143 @@ router.post("/adopt/confirm", requireAuth, async (req, res) => {
     res.json(result);
   } catch (err) {
     logger.error({ err }, "[adopt] confirm error");
+    res.status(500).json({ error: "Errore interno" });
+  }
+});
+
+// ─── User: submit shipping data ───────────────────────────────────────────────
+
+router.post("/adopt/my-adoptions/:id/shipping", requireAuth, async (req, res) => {
+  const userId = (req as AuthenticatedRequest).userId;
+  const id = parseInt(req.params.id, 10);
+  if (isNaN(id)) { res.status(400).json({ error: "ID non valido" }); return; }
+  try {
+    const [adoption] = await db
+      .select()
+      .from(treeAdoptionsTable)
+      .where(and(eq(treeAdoptionsTable.id, id), eq(treeAdoptionsTable.userId, userId)));
+    if (!adoption) { res.status(404).json({ error: "Adozione non trovata" }); return; }
+
+    const { fullName, phone, address, city, postalCode, country, notes } = req.body;
+    if (!fullName || typeof fullName !== "string") {
+      res.status(400).json({ error: "Nome completo obbligatorio" }); return;
+    }
+    if (!address || typeof address !== "string") {
+      res.status(400).json({ error: "Indirizzo obbligatorio" }); return;
+    }
+    if (!city || typeof city !== "string") {
+      res.status(400).json({ error: "Città obbligatoria" }); return;
+    }
+    if (!country || typeof country !== "string") {
+      res.status(400).json({ error: "Paese obbligatorio" }); return;
+    }
+
+    const shippingData = JSON.stringify({
+      fullName: fullName.trim(),
+      phone: phone?.trim() || null,
+      address: address.trim(),
+      city: city.trim(),
+      postalCode: postalCode?.trim() || null,
+      country: country.trim(),
+      notes: notes?.trim() || null,
+      submittedAt: new Date().toISOString(),
+    });
+
+    await db
+      .update(treeAdoptionsTable)
+      .set({ shippingData, orgStatus: "pending_shipping", userName: fullName.trim(), userPhone: phone?.trim() || null })
+      .where(eq(treeAdoptionsTable.id, id));
+
+    res.json({ success: true });
+  } catch (err) {
+    logger.error({ err }, "[adopt] shipping data error");
+    res.status(500).json({ error: "Errore interno" });
+  }
+});
+
+// ─── Org: list adoptions for my trees ────────────────────────────────────────
+
+router.get("/adopt/org/adoptions", requireAuth, async (req, res) => {
+  const userId = (req as AuthenticatedRequest).userId;
+  try {
+    const accountType = await getAccountType(userId);
+    if (accountType !== "organization") {
+      res.status(403).json({ error: "Accesso riservato alle organizzazioni" }); return;
+    }
+
+    const myTrees = await db
+      .select({ id: adoptableTreesTable.id, title: adoptableTreesTable.title })
+      .from(adoptableTreesTable)
+      .where(eq(adoptableTreesTable.ownerId, userId));
+
+    if (myTrees.length === 0) {
+      res.json([]); return;
+    }
+
+    const treeIds = myTrees.map((t) => t.id);
+    const treeMap = Object.fromEntries(myTrees.map((t) => [t.id, t.title]));
+
+    const adoptions = await db
+      .select()
+      .from(treeAdoptionsTable)
+      .where(inArray(treeAdoptionsTable.treeId, treeIds))
+      .orderBy(desc(treeAdoptionsTable.createdAt));
+
+    res.json(adoptions.map((a) => ({
+      ...a,
+      treeTitle: treeMap[a.treeId] ?? a.treeName,
+      shippingData: a.shippingData ? JSON.parse(a.shippingData) : null,
+      startDate: a.startDate.toISOString(),
+      endDate: a.endDate.toISOString(),
+      createdAt: a.createdAt.toISOString(),
+      expiryNotifiedAt: a.expiryNotifiedAt?.toISOString() ?? null,
+    })));
+  } catch (err) {
+    logger.error({ err }, "[adopt] org adoptions error");
+    res.status(500).json({ error: "Errore interno" });
+  }
+});
+
+// ─── Org: update adoption org-status ─────────────────────────────────────────
+
+router.patch("/adopt/org/adoptions/:id/status", requireAuth, async (req, res) => {
+  const userId = (req as AuthenticatedRequest).userId;
+  const id = parseInt(req.params.id, 10);
+  if (isNaN(id)) { res.status(400).json({ error: "ID non valido" }); return; }
+  try {
+    const accountType = await getAccountType(userId);
+    if (accountType !== "organization") {
+      res.status(403).json({ error: "Accesso riservato alle organizzazioni" }); return;
+    }
+
+    const { orgStatus } = req.body;
+    const validStatuses = ["pending_shipping", "shipping_received", "shipped"];
+    if (!orgStatus || !validStatuses.includes(orgStatus)) {
+      res.status(400).json({ error: `Stato non valido. Valori ammessi: ${validStatuses.join(", ")}` }); return;
+    }
+
+    const [adoption] = await db
+      .select({ id: treeAdoptionsTable.id, treeId: treeAdoptionsTable.treeId })
+      .from(treeAdoptionsTable)
+      .where(eq(treeAdoptionsTable.id, id));
+    if (!adoption) { res.status(404).json({ error: "Adozione non trovata" }); return; }
+
+    const [tree] = await db
+      .select({ ownerId: adoptableTreesTable.ownerId })
+      .from(adoptableTreesTable)
+      .where(eq(adoptableTreesTable.id, adoption.treeId));
+    if (!tree || tree.ownerId !== userId) {
+      res.status(403).json({ error: "Non autorizzato" }); return;
+    }
+
+    await db
+      .update(treeAdoptionsTable)
+      .set({ orgStatus })
+      .where(eq(treeAdoptionsTable.id, id));
+
+    res.json({ success: true });
+  } catch (err) {
+    logger.error({ err }, "[adopt] update org status error");
     res.status(500).json({ error: "Errore interno" });
   }
 });

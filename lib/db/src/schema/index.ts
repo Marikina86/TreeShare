@@ -346,6 +346,7 @@ export const adoptableTreesTable = pgTable("adoptable_trees", {
 
 export const treeAdoptionsTable = pgTable("tree_adoptions", {
   id: serial("id").primaryKey(),
+  adoptionCode: text("adoption_code").unique(),
   userId: text("user_id").notNull(),
   treeId: integer("tree_id").notNull(),
   treeName: text("tree_name").notNull(),
@@ -357,6 +358,10 @@ export const treeAdoptionsTable = pgTable("tree_adoptions", {
   netToEntityCents: integer("net_to_entity_cents").notNull(),
   stripePaymentIntentId: text("stripe_payment_intent_id").notNull().unique(),
   status: text("status").notNull().default("active"),
+  orgStatus: text("org_status"),
+  shippingData: text("shipping_data"),
+  userName: text("user_name"),
+  userPhone: text("user_phone"),
   expiryNotifiedAt: timestamp("expiry_notified_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 }, (table) => [

@@ -153,6 +153,8 @@ export default function CreateAdoptableTreePage() {
   const [maxAdoptions, setMaxAdoptions] = useState("10");
   const [latitude, setLatitude] = useState("");
   const [longitude, setLongitude] = useState("");
+  const [gpsLoading, setGpsLoading] = useState(false);
+  const [gpsError, setGpsError] = useState<string | null>(null);
 
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
@@ -447,6 +449,59 @@ export default function CreateAdoptableTreePage() {
           <section className="bg-card border border-border rounded-2xl p-4 space-y-4">
             <h2 className="font-semibold text-sm uppercase tracking-wide text-muted-foreground">{t.sectionLocation}</h2>
             <p className="text-xs text-muted-foreground">{t.locationHelp}</p>
+
+            <button
+              type="button"
+              disabled={gpsLoading}
+              onClick={() => {
+                setGpsError(null);
+                if (!navigator.geolocation) {
+                  setGpsError("GPS non disponibile su questo dispositivo.");
+                  return;
+                }
+                setGpsLoading(true);
+                navigator.geolocation.getCurrentPosition(
+                  (pos) => {
+                    setLatitude(pos.coords.latitude.toFixed(6));
+                    setLongitude(pos.coords.longitude.toFixed(6));
+                    setGpsLoading(false);
+                  },
+                  () => {
+                    setGpsError("Impossibile rilevare la posizione. Verifica i permessi GPS.");
+                    setGpsLoading(false);
+                  },
+                  { timeout: 10000, enableHighAccuracy: true },
+                );
+              }}
+              className="flex items-center gap-2 px-3 py-2 rounded-lg border border-border text-sm text-foreground hover:bg-muted transition-colors disabled:opacity-50"
+            >
+              {gpsLoading ? (
+                <svg className="animate-spin" width="15" height="15" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
+                </svg>
+              ) : (
+                <svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                  <circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/>
+                </svg>
+              )}
+              {gpsLoading ? "Rilevamento..." : "📍 Rileva posizione GPS"}
+            </button>
+            {gpsError && <p className="text-red-500 text-xs">{gpsError}</p>}
+            {latitude && longitude && (
+              <p className="text-xs text-muted-foreground">
+                Posizione rilevata: {latitude}, {longitude}
+                {" · "}
+                <a
+                  href={`https://www.openstreetmap.org/?mlat=${latitude}&mlon=${longitude}&zoom=15`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-primary hover:underline"
+                >
+                  Verifica su mappa
+                </a>
+              </p>
+            )}
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-sm font-medium text-foreground mb-1">

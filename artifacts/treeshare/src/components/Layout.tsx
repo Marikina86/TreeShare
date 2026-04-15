@@ -24,7 +24,6 @@ export default function Layout({ children }: LayoutProps) {
   const [signingOut, setSigningOut] = useState(false);
   const profileQuery = useGetMyProfile();
   const isAdmin = (profileQuery.data as any)?.isAdmin === true;
-  const isOrg = (profileQuery.data as any)?.accountType === "organization";
 
   // ── Badge nuovi eventi ────────────────────────────────────────────────────
   const [lastSeenAt, setLastSeenAt] = useState(() => getEventsLastSeenAt());
@@ -346,20 +345,6 @@ export default function Layout({ children }: LayoutProps) {
           >
             🌍
           </Link>
-          {isOrg && (
-            <Link
-              href="/adopt/create"
-              title="Aggiungi albero"
-              className={`p-2 rounded-lg transition-colors ${
-                location === "/adopt/create" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground"
-              }`}
-            >
-              <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-                <circle cx="12" cy="12" r="9"/>
-                <path d="M12 8v8M8 12h8"/>
-              </svg>
-            </Link>
-          )}
           <Link
             href="/campaigns"
             className={`p-2 rounded-lg transition-colors ${
@@ -434,20 +419,6 @@ export default function Layout({ children }: LayoutProps) {
           >
             🌍
           </Link>
-          {isOrg && (
-            <Link
-              href="/adopt/create"
-              title="Aggiungi albero"
-              className={`p-2 rounded-lg transition-colors ${
-                location === "/adopt/create" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"
-              }`}
-            >
-              <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-                <circle cx="12" cy="12" r="9"/>
-                <path d="M12 8v8M8 12h8"/>
-              </svg>
-            </Link>
-          )}
           <Link
             href="/campaigns"
             className={`p-2 rounded-lg transition-colors ${
