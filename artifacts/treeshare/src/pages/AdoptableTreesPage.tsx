@@ -1,7 +1,6 @@
-import { useState } from "react";
 import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import { useAuth } from "@/lib/auth";
+import { useGetMyProfile } from "@workspace/api-client-react";
 import Layout from "@/components/Layout";
 import { useLang } from "@/lib/i18n";
 
@@ -110,8 +109,9 @@ function TreeCard({ tree, lang }: { tree: AdoptableTree; lang: "it" | "en" }) {
 
 export default function AdoptableTreesPage() {
   const { lang } = useLang();
-  const { getToken, userId } = useAuth() as any;
   const t = T[lang as "it" | "en"] ?? T.it;
+  const profile = useGetMyProfile();
+  const isOrg = (profile.data as any)?.accountType === "organization";
 
   const treesQuery = useQuery<AdoptableTree[]>({
     queryKey: ["adoptable-trees"],
@@ -122,20 +122,6 @@ export default function AdoptableTreesPage() {
     },
     staleTime: 60_000,
   });
-
-  const myTreesQuery = useQuery<AdoptableTree[]>({
-    queryKey: ["adopt-my-trees"],
-    queryFn: async () => {
-      const token = await getToken();
-      const res = await fetch("/api/adopt/my-trees", { headers: { Authorization: `Bearer ${token}` } });
-      if (!res.ok) return [];
-      return res.json();
-    },
-    enabled: !!userId,
-    staleTime: 60_000,
-  });
-
-  const isOrg = Array.isArray(myTreesQuery.data);
 
   const trees = treesQuery.data ?? [];
 
