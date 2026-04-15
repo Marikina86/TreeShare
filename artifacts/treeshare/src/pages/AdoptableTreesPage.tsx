@@ -4,6 +4,7 @@ import { useGetMyProfile } from "@workspace/api-client-react";
 import Layout from "@/components/Layout";
 import { useLang } from "@/lib/i18n";
 import { resolveImg } from "@/lib/imageUtils";
+import { useAuth } from "@/lib/auth";
 
 interface AdoptableTree {
   id: number;
@@ -61,16 +62,18 @@ const T = {
   },
 };
 
-function TreeCard({ tree, lang }: { tree: AdoptableTree; lang: "it" | "en" }) {
+function TreeCard({ tree, lang, currentUserId }: { tree: AdoptableTree; lang: "it" | "en"; currentUserId?: string | null }) {
   const t = T[lang] ?? T.it;
   const isPaused = tree.paused;
+  const isOwner = !!currentUserId && currentUserId === tree.ownerId;
+  const blockedByPause = isPaused && !isOwner;
   const isFull = !isPaused && (tree.status === "full" || tree.currentAdoptions >= tree.maxAdoptions);
   const imgSrc = resolveImg(tree.thumbnailUrl ?? tree.imageUrl);
 
   const inner = (
     <div
       className={`bg-card border border-border rounded-2xl overflow-hidden shadow-sm transition-all
-        ${isPaused ? "opacity-50 cursor-default select-none" : "group cursor-pointer hover:shadow-md"}
+        ${blockedByPause ? "opacity-50 cursor-default select-none" : "group cursor-pointer hover:shadow-md"}
         ${isFull ? "opacity-60" : ""}
       `}
     >
@@ -81,11 +84,11 @@ function TreeCard({ tree, lang }: { tree: AdoptableTree; lang: "it" | "en" }) {
             alt={tree.title}
             loading="lazy"
             className={`w-full h-full object-cover transition-transform duration-300
-              ${isPaused ? "grayscale brightness-75 saturate-0" : "group-hover:scale-105"}
+              ${blockedByPause ? "grayscale brightness-75 saturate-0" : "group-hover:scale-105"}
             `}
           />
         ) : (
-          <div className={`w-full h-full flex items-center justify-center text-4xl ${isPaused ? "opacity-40" : ""}`}>🌳</div>
+          <div className={`w-full h-full flex items-center justify-center text-4xl ${blockedByPause ? "opacity-40" : ""}`}>🌳</div>
         )}
 
         {isPaused && (
@@ -105,14 +108,14 @@ function TreeCard({ tree, lang }: { tree: AdoptableTree; lang: "it" | "en" }) {
       </div>
 
       <div className="p-3">
-        <h3 className={`font-semibold text-sm truncate ${isPaused ? "text-muted-foreground" : "text-foreground"}`}>
+        <h3 className={`font-semibold text-sm truncate ${blockedByPause ? "text-muted-foreground" : "text-foreground"}`}>
           {tree.title}
         </h3>
         {tree.speciesName && (
           <p className="text-xs text-muted-foreground mt-0.5 truncate">{tree.speciesName}</p>
         )}
         <div className="flex items-center justify-between mt-2">
-          <span className={`font-bold text-sm ${isPaused ? "text-muted-foreground" : "text-primary"}`}>
+          <span className={`font-bold text-sm ${blockedByPause ? "text-muted-foreground" : "text-primary"}`}>
             €{(tree.priceCents / 100).toFixed(2)}
             <span className="text-muted-foreground text-xs font-normal"> {t.perYear}</span>
           </span>
@@ -124,7 +127,7 @@ function TreeCard({ tree, lang }: { tree: AdoptableTree; lang: "it" | "en" }) {
     </div>
   );
 
-  if (isPaused) return <div>{inner}</div>;
+  if (blockedByPause) return <div>{inner}</div>;
   return <Link href={`/adopt/${tree.id}`}>{inner}</Link>;
 }
 
@@ -133,6 +136,7 @@ export default function AdoptableTreesPage() {
   const t = T[lang as "it" | "en"] ?? T.it;
   const profile = useGetMyProfile();
   const isOrg = (profile.data as any)?.accountType === "organization";
+  const { userId } = useAuth() as any;
 
   const treesQuery = useQuery<AdoptableTree[]>({
     queryKey: ["adoptable-trees"],
@@ -192,7 +196,7 @@ export default function AdoptableTreesPage() {
         {!treesQuery.isLoading && trees.length > 0 && (
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
             {trees.map((tree) => (
-              <TreeCard key={tree.id} tree={tree} lang={lang as "it" | "en"} />
+              <TreeCard key={tree.id} tree={tree} lang={lang as "it" | "en"} currentUserId={userId} />
             ))}
           </div>
         )}
