@@ -4,10 +4,9 @@ import {
   adoptableTreesTable,
   treeAdoptionsTable,
   usersTable,
-  platformRevenueTable,
   userNotificationsTable,
 } from "@workspace/db";
-import { eq, and, desc, lt, lte, gte, isNull, sql } from "drizzle-orm";
+import { eq, and, desc, lt, lte, gte, isNull } from "drizzle-orm";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth";
 import { getUncachableStripeClient, getStripePublishableKey } from "../lib/stripe";
 import { getRomeExpiryDate } from "../lib/eventCleaner";
@@ -23,13 +22,6 @@ function computeFees(amountCents: number) {
   return { platformFeeCents, netToEntityCents };
 }
 
-async function ensurePlatformRevenueRow(tx: any) {
-  const [existing] = await tx.select({ id: platformRevenueTable.id }).from(platformRevenueTable).where(eq(platformRevenueTable.id, 1));
-  if (!existing) {
-    await tx.insert(platformRevenueTable).values({ totalCommissions: 0, totalPayoutFees: 0, transactionCount: 0 });
-  }
-}
-
 async function getAccountType(userId: string): Promise<string | null> {
   const [user] = await db
     .select({ accountType: usersTable.accountType })
@@ -38,7 +30,25 @@ async function getAccountType(userId: string): Promise<string | null> {
   return user?.accountType ?? null;
 }
 
-// ─── Public: list active adoptable trees ────────────────────────────────────
+async function getOwnerStripeAccountId(ownerId: string): Promise<string | null> {
+  const [user] = await db
+    .select({ stripeAccountId: usersTable.stripeAccountId })
+    .from(usersTable)
+    .where(eq(usersTable.clerkUserId, ownerId));
+  return user?.stripeAccountId ?? null;
+}
+
+async function isStripeAccountReady(accountId: string): Promise<boolean> {
+  try {
+    const stripe = await getUncachableStripeClient();
+    const account = await stripe.accounts.retrieve(accountId);
+    return account.charges_enabled === true;
+  } catch {
+    return false;
+  }
+}
+
+// ─── Public: list active adoptable trees ─────────────────────────────────────
 
 router.get("/adopt/trees", async (req, res) => {
   try {
@@ -57,7 +67,7 @@ router.get("/adopt/trees", async (req, res) => {
   }
 });
 
-// ─── Org: list my trees ──────────────────────────────────────────────────────
+// ─── Org: list my trees ───────────────────────────────────────────────────────
 
 router.get("/adopt/my-trees", requireAuth, async (req, res) => {
   const userId = (req as AuthenticatedRequest).userId;
@@ -83,7 +93,7 @@ router.get("/adopt/my-trees", requireAuth, async (req, res) => {
   }
 });
 
-// ─── Public: tree detail ─────────────────────────────────────────────────────
+// ─── Public: tree detail (includes ownerStripeReady) ─────────────────────────
 
 router.get("/adopt/trees/:id", async (req, res) => {
   const id = parseInt(req.params.id, 10);
@@ -91,14 +101,26 @@ router.get("/adopt/trees/:id", async (req, res) => {
   try {
     const [tree] = await db.select().from(adoptableTreesTable).where(eq(adoptableTreesTable.id, id));
     if (!tree) { res.status(404).json({ error: "Albero non trovato" }); return; }
-    res.json({ ...tree, createdAt: tree.createdAt.toISOString(), updatedAt: tree.updatedAt.toISOString() });
+
+    const stripeAccountId = await getOwnerStripeAccountId(tree.ownerId);
+    let ownerStripeReady = false;
+    if (stripeAccountId) {
+      ownerStripeReady = await isStripeAccountReady(stripeAccountId);
+    }
+
+    res.json({
+      ...tree,
+      ownerStripeReady,
+      createdAt: tree.createdAt.toISOString(),
+      updatedAt: tree.updatedAt.toISOString(),
+    });
   } catch (err) {
     logger.error({ err }, "[adopt] tree detail error");
     res.status(500).json({ error: "Errore interno" });
   }
 });
 
-// ─── Org: create adoptable tree ──────────────────────────────────────────────
+// ─── Org: create adoptable tree ───────────────────────────────────────────────
 
 router.post("/adopt/trees", requireAuth, async (req, res) => {
   const userId = (req as AuthenticatedRequest).userId;
@@ -169,7 +191,7 @@ router.post("/adopt/trees", requireAuth, async (req, res) => {
   }
 });
 
-// ─── Org: update adoptable tree ──────────────────────────────────────────────
+// ─── Org: update adoptable tree ───────────────────────────────────────────────
 
 router.patch("/adopt/trees/:id", requireAuth, async (req, res) => {
   const userId = (req as AuthenticatedRequest).userId;
@@ -209,7 +231,7 @@ router.patch("/adopt/trees/:id", requireAuth, async (req, res) => {
   }
 });
 
-// ─── Org: delete adoptable tree ──────────────────────────────────────────────
+// ─── Org: delete adoptable tree ───────────────────────────────────────────────
 
 router.delete("/adopt/trees/:id", requireAuth, async (req, res) => {
   const userId = (req as AuthenticatedRequest).userId;
@@ -232,7 +254,7 @@ router.delete("/adopt/trees/:id", requireAuth, async (req, res) => {
   }
 });
 
-// ─── User: get my adoptions ──────────────────────────────────────────────────
+// ─── User: get my adoptions ───────────────────────────────────────────────────
 
 router.get("/adopt/my-adoptions", requireAuth, async (req, res) => {
   const userId = (req as AuthenticatedRequest).userId;
@@ -255,18 +277,103 @@ router.get("/adopt/my-adoptions", requireAuth, async (req, res) => {
   }
 });
 
-// ─── Stripe config ───────────────────────────────────────────────────────────
+// ─── Stripe config ────────────────────────────────────────────────────────────
 
 router.get("/adopt/stripe-config", async (_req, res) => {
   try {
     const publishableKey = await getStripePublishableKey();
     res.json({ publishableKey });
-  } catch (err) {
+  } catch {
     res.status(500).json({ error: "Stripe non configurato" });
   }
 });
 
-// ─── User: initiate adoption payment ────────────────────────────────────────
+// ─── Stripe Connect: get onboarding URL ──────────────────────────────────────
+
+router.post("/adopt/connect/onboard", requireAuth, async (req, res) => {
+  const userId = (req as AuthenticatedRequest).userId;
+  try {
+    const accountType = await getAccountType(userId);
+    if (accountType !== "organization") {
+      res.status(403).json({ error: "Solo le organizzazioni possono collegarsi a Stripe Connect" });
+      return;
+    }
+
+    const stripe = await getUncachableStripeClient();
+    const appOrigin = process.env.APP_ORIGIN
+      || (process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : "http://localhost:19256");
+
+    const { returnPath } = req.body;
+    const returnUrl = `${appOrigin}${returnPath || "/adopt"}?stripe_connect=success`;
+    const refreshUrl = `${appOrigin}${returnPath || "/adopt"}?stripe_connect=refresh`;
+
+    const [user] = await db
+      .select({ stripeAccountId: usersTable.stripeAccountId })
+      .from(usersTable)
+      .where(eq(usersTable.clerkUserId, userId));
+
+    let accountId = user?.stripeAccountId;
+
+    if (!accountId) {
+      const account = await stripe.accounts.create({
+        type: "express",
+        capabilities: {
+          card_payments: { requested: true },
+          transfers: { requested: true },
+        },
+      });
+      accountId = account.id;
+      await db
+        .update(usersTable)
+        .set({ stripeAccountId: accountId })
+        .where(eq(usersTable.clerkUserId, userId));
+    }
+
+    const accountLink = await stripe.accountLinks.create({
+      account: accountId,
+      refresh_url: refreshUrl,
+      return_url: returnUrl,
+      type: "account_onboarding",
+    });
+
+    res.json({ url: accountLink.url, accountId });
+  } catch (err) {
+    logger.error({ err }, "[adopt] connect onboard error");
+    res.status(500).json({ error: "Errore interno durante la configurazione di Stripe Connect" });
+  }
+});
+
+// ─── Stripe Connect: check status ────────────────────────────────────────────
+
+router.get("/adopt/connect/status", requireAuth, async (req, res) => {
+  const userId = (req as AuthenticatedRequest).userId;
+  try {
+    const [user] = await db
+      .select({ stripeAccountId: usersTable.stripeAccountId })
+      .from(usersTable)
+      .where(eq(usersTable.clerkUserId, userId));
+
+    if (!user?.stripeAccountId) {
+      res.json({ connected: false, chargesEnabled: false });
+      return;
+    }
+
+    const stripe = await getUncachableStripeClient();
+    const account = await stripe.accounts.retrieve(user.stripeAccountId);
+
+    res.json({
+      connected: true,
+      chargesEnabled: account.charges_enabled,
+      accountId: user.stripeAccountId,
+      detailsSubmitted: account.details_submitted,
+    });
+  } catch (err) {
+    logger.error({ err }, "[adopt] connect status error");
+    res.status(500).json({ error: "Errore interno" });
+  }
+});
+
+// ─── User: initiate adoption payment (Stripe Connect Destination Charge) ──────
 
 router.post("/adopt/initiate", requireAuth, async (req, res) => {
   const userId = (req as AuthenticatedRequest).userId;
@@ -286,11 +393,7 @@ router.post("/adopt/initiate", requireAuth, async (req, res) => {
       .where(eq(adoptableTreesTable.id, Number(treeId)));
 
     if (!tree) { res.status(404).json({ error: "Albero non trovato" }); return; }
-    if (tree.status === "full") {
-      res.status(400).json({ error: "Questo albero ha raggiunto il numero massimo di adozioni" });
-      return;
-    }
-    if (tree.currentAdoptions >= tree.maxAdoptions) {
+    if (tree.status === "full" || tree.currentAdoptions >= tree.maxAdoptions) {
       res.status(400).json({ error: "Questo albero ha raggiunto il numero massimo di adozioni" });
       return;
     }
@@ -310,27 +413,52 @@ router.post("/adopt/initiate", requireAuth, async (req, res) => {
       return;
     }
 
-    const { platformFeeCents, netToEntityCents } = computeFees(tree.priceCents);
+    const orgStripeAccountId = await getOwnerStripeAccountId(tree.ownerId);
+    if (!orgStripeAccountId) {
+      res.status(400).json({
+        error: "L'ente non ha ancora attivato i pagamenti Stripe. Contatta l'organizzazione.",
+        code: "ORG_STRIPE_NOT_CONFIGURED",
+      });
+      return;
+    }
+
     const stripe = await getUncachableStripeClient();
+    const account = await stripe.accounts.retrieve(orgStripeAccountId);
+    if (!account.charges_enabled) {
+      res.status(400).json({
+        error: "L'ente non ha completato la configurazione dei pagamenti Stripe.",
+        code: "ORG_STRIPE_NOT_READY",
+      });
+      return;
+    }
+
+    const amount = Math.max(50, tree.priceCents);
+    const { platformFeeCents, netToEntityCents } = computeFees(amount);
+
     const paymentIntent = await stripe.paymentIntents.create({
-      amount: Math.max(50, tree.priceCents),
+      amount,
       currency: "eur",
+      application_fee_amount: platformFeeCents,
+      transfer_data: {
+        destination: orgStripeAccountId,
+      },
       metadata: {
         type: "tree_adoption",
         userId,
         treeId: String(tree.id),
         treeName: tree.title,
         durationDays: String(tree.durationDays),
-        amountCents: String(tree.priceCents),
+        amountCents: String(amount),
         platformFeeCents: String(platformFeeCents),
         netToEntityCents: String(netToEntityCents),
+        orgStripeAccountId,
       },
     });
 
     res.json({
       clientSecret: paymentIntent.client_secret,
       paymentIntentId: paymentIntent.id,
-      priceCents: tree.priceCents,
+      priceCents: amount,
       platformFeeCents,
       netToEntityCents,
       durationDays: tree.durationDays,
@@ -342,7 +470,7 @@ router.post("/adopt/initiate", requireAuth, async (req, res) => {
   }
 });
 
-// ─── User: confirm adoption after payment ────────────────────────────────────
+// ─── User: confirm adoption after payment ─────────────────────────────────────
 
 router.post("/adopt/confirm", requireAuth, async (req, res) => {
   const userId = (req as AuthenticatedRequest).userId;
@@ -421,16 +549,6 @@ router.post("/adopt/confirm", requireAuth, async (req, res) => {
         .set({ currentAdoptions: newCount, status: newStatus, updatedAt: new Date() })
         .where(eq(adoptableTreesTable.id, treeId));
 
-      await ensurePlatformRevenueRow(tx);
-      await tx
-        .update(platformRevenueTable)
-        .set({
-          totalCommissions: sql`${platformRevenueTable.totalCommissions} + ${platformFeeCents}`,
-          transactionCount: sql`${platformRevenueTable.transactionCount} + 1`,
-          updatedAt: new Date(),
-        })
-        .where(eq(platformRevenueTable.id, 1));
-
       return { success: true, adoptionId: adoption.id, endDate: endDate.toISOString(), treeName: tree.title, ownerEmail: tree.ownerEmail };
     });
 
@@ -445,6 +563,8 @@ router.post("/adopt/confirm", requireAuth, async (req, res) => {
     res.status(500).json({ error: "Errore interno" });
   }
 });
+
+// ─── Scheduled jobs (exported for eventCleaner) ───────────────────────────────
 
 export async function expireTreeAdoptions(): Promise<void> {
   try {

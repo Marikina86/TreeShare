@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { useParams, useLocation, Link } from "wouter";
+import { useState } from "react";
+import { useParams, useLocation, useSearch, Link } from "wouter";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { loadStripe } from "@stripe/stripe-js";
 import { Elements, PaymentElement, useStripe, useElements } from "@stripe/react-stripe-js";
@@ -23,6 +23,7 @@ interface AdoptableTree {
   maxAdoptions: number;
   currentAdoptions: number;
   status: string;
+  ownerStripeReady: boolean;
   createdAt: string;
 }
 
@@ -32,6 +33,13 @@ interface MyAdoption {
   status: string;
   endDate: string;
   treeName: string;
+}
+
+interface ConnectStatus {
+  connected: boolean;
+  chargesEnabled: boolean;
+  detailsSubmitted?: boolean;
+  accountId?: string;
 }
 
 const T = {
@@ -56,22 +64,32 @@ const T = {
     successMsg: "Hai adottato questo albero con successo.",
     expiresOn: "Scade il",
     ownerContact: "Contatta l'ente",
-    orgSection: "Gestione (admin ente)",
+    orgSection: "Gestione albero",
     editTitle: "Modifica titolo",
     editDesc: "Modifica descrizione",
     save: "Salva",
     saving: "Salvataggio...",
     deleteTree: "Elimina albero",
     confirmDelete: "Sei sicuro di voler eliminare questo albero?",
-    deleted: "Albero eliminato.",
     loginToAdopt: "Accedi per adottare",
     of: "di",
-    available: "disponibili",
-    fee: "di cui alla piattaforma (20%)",
+    fee: "di cui 20% fee piattaforma → direttamente a Stripe",
     perAdoption: "/ adozione",
-    orgOnly: "Solo le organizzazioni possono gestire gli alberi.",
     error: "Errore",
     productDesc: "Cosa ricevi",
+    stripeSection: "Pagamenti Stripe Connect",
+    stripeConnected: "Stripe collegato ✓",
+    stripeNotConnected: "Stripe non collegato",
+    stripeIncomplete: "Onboarding incompleto",
+    stripeConnectBtn: "Collega Stripe",
+    stripeResumeBtn: "Completa onboarding",
+    stripeRefreshBtn: "Aggiorna stato",
+    stripeRefreshing: "Controllo in corso...",
+    stripeConnecting: "Apertura Stripe...",
+    stripeConnectSuccess: "Account Stripe collegato con successo!",
+    stripeConnectRefresh: "Sessione Stripe scaduta — riprova il collegamento.",
+    stripeNotReadyAdopt: "L'ente non ha ancora attivato i pagamenti. Contatta l'organizzazione.",
+    stripeDesc: "Collega il tuo account bancario per ricevere direttamente gli importi delle adozioni (l'80% ti viene accreditato automaticamente da Stripe).",
   },
   en: {
     loading: "Loading...",
@@ -94,22 +112,32 @@ const T = {
     successMsg: "You have successfully adopted this tree.",
     expiresOn: "Expires on",
     ownerContact: "Contact the organization",
-    orgSection: "Management (org admin)",
+    orgSection: "Tree management",
     editTitle: "Edit title",
     editDesc: "Edit description",
     save: "Save",
     saving: "Saving...",
     deleteTree: "Delete tree",
     confirmDelete: "Are you sure you want to delete this tree?",
-    deleted: "Tree deleted.",
     loginToAdopt: "Sign in to adopt",
     of: "of",
-    available: "available",
-    fee: "of which platform fee (20%)",
+    fee: "of which 20% platform fee → direct to Stripe",
     perAdoption: "/ adoption",
-    orgOnly: "Only organizations can manage trees.",
     error: "Error",
     productDesc: "What you receive",
+    stripeSection: "Stripe Connect Payments",
+    stripeConnected: "Stripe connected ✓",
+    stripeNotConnected: "Stripe not connected",
+    stripeIncomplete: "Onboarding incomplete",
+    stripeConnectBtn: "Connect Stripe",
+    stripeResumeBtn: "Complete onboarding",
+    stripeRefreshBtn: "Refresh status",
+    stripeRefreshing: "Checking...",
+    stripeConnecting: "Opening Stripe...",
+    stripeConnectSuccess: "Stripe account connected successfully!",
+    stripeConnectRefresh: "Stripe session expired — please try connecting again.",
+    stripeNotReadyAdopt: "This organization has not yet activated payments. Contact the organization.",
+    stripeDesc: "Connect your bank account to receive adoption payments directly (80% is automatically credited to you by Stripe).",
   },
 };
 
@@ -147,10 +175,7 @@ function PaymentForm({
     setPaying(true);
     setError(null);
     try {
-      const result = await stripe.confirmPayment({
-        elements,
-        redirect: "if_required",
-      });
+      const result = await stripe.confirmPayment({ elements, redirect: "if_required" });
       if (result.error) {
         setError(result.error.message ?? t.error);
         setPaying(false);
@@ -185,6 +210,116 @@ function PaymentForm({
         </button>
       </div>
     </form>
+  );
+}
+
+function StripeConnectPanel({ treeId, t }: { treeId: number; t: typeof T.it }) {
+  const { getToken } = useAuth() as any;
+  const [refreshing, setRefreshing] = useState(false);
+  const [connecting, setConnecting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const statusQuery = useQuery<ConnectStatus>({
+    queryKey: ["adopt-connect-status"],
+    queryFn: async () => {
+      const token = await getToken();
+      const res = await fetch("/api/adopt/connect/status", { headers: { Authorization: `Bearer ${token}` } });
+      if (!res.ok) throw new Error("failed");
+      return res.json();
+    },
+    staleTime: 30_000,
+  });
+
+  const queryClient = useQueryClient();
+
+  async function handleRefresh() {
+    setRefreshing(true);
+    await queryClient.invalidateQueries({ queryKey: ["adopt-connect-status"] });
+    await queryClient.invalidateQueries({ queryKey: ["adoptable-tree", treeId] });
+    setRefreshing(false);
+  }
+
+  async function handleConnect() {
+    setConnecting(true);
+    setError(null);
+    try {
+      const token = await getToken();
+      const res = await fetch("/api/adopt/connect/onboard", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ returnPath: `/adopt/${treeId}` }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error ?? t.error);
+        setConnecting(false);
+        return;
+      }
+      window.location.href = data.url;
+    } catch {
+      setError(t.error);
+      setConnecting(false);
+    }
+  }
+
+  const status = statusQuery.data;
+
+  return (
+    <div className="mt-2 p-3 bg-violet-50 dark:bg-violet-950/20 border border-violet-200 dark:border-violet-800 rounded-xl">
+      <div className="flex items-center justify-between mb-2">
+        <h4 className="text-xs font-semibold text-violet-700 dark:text-violet-300">{t.stripeSection}</h4>
+        <button
+          onClick={handleRefresh}
+          disabled={refreshing || statusQuery.isLoading}
+          className="text-[10px] text-violet-600 hover:underline disabled:opacity-50"
+        >
+          {refreshing ? t.stripeRefreshing : t.stripeRefreshBtn}
+        </button>
+      </div>
+
+      {statusQuery.isLoading && (
+        <div className="h-4 bg-violet-100 dark:bg-violet-900/30 rounded animate-pulse" />
+      )}
+
+      {!statusQuery.isLoading && status && (
+        <>
+          <div className="flex items-center gap-2 mb-2">
+            {status.chargesEnabled ? (
+              <span className="inline-flex items-center gap-1 text-xs font-medium text-green-700 bg-green-100 dark:bg-green-900/30 dark:text-green-300 px-2 py-0.5 rounded-full">
+                ✓ {t.stripeConnected}
+              </span>
+            ) : status.connected ? (
+              <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-700 bg-amber-100 dark:bg-amber-900/30 dark:text-amber-300 px-2 py-0.5 rounded-full">
+                ⚠ {t.stripeIncomplete}
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1 text-xs font-medium text-red-700 bg-red-100 dark:bg-red-900/30 dark:text-red-300 px-2 py-0.5 rounded-full">
+                ✗ {t.stripeNotConnected}
+              </span>
+            )}
+          </div>
+
+          {!status.chargesEnabled && (
+            <>
+              <p className="text-[11px] text-muted-foreground mb-2">{t.stripeDesc}</p>
+              <button
+                onClick={handleConnect}
+                disabled={connecting}
+                className="w-full py-2 rounded-lg bg-violet-600 text-white text-xs font-semibold hover:bg-violet-700 transition-colors disabled:opacity-50"
+              >
+                {connecting
+                  ? t.stripeConnecting
+                  : status.connected
+                    ? t.stripeResumeBtn
+                    : t.stripeConnectBtn}
+              </button>
+            </>
+          )}
+        </>
+      )}
+
+      {error && <p className="text-red-500 text-xs mt-2">{error}</p>}
+    </div>
   );
 }
 
@@ -251,23 +386,27 @@ function OrgManageSection({ tree, t }: { tree: AdoptableTree; t: typeof T.it }) 
   }
 
   return (
-    <div className="mt-6 p-4 border border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-800 rounded-xl">
-      <h3 className="font-semibold text-amber-700 dark:text-amber-300 text-sm mb-3">{t.orgSection}</h3>
-      {error && <p className="text-red-500 text-sm mb-2">{error}</p>}
+    <div className="mt-6 p-4 border border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-800 rounded-xl space-y-3">
+      <h3 className="font-semibold text-amber-700 dark:text-amber-300 text-sm">{t.orgSection}</h3>
+
+      <StripeConnectPanel treeId={tree.id} t={t} />
+
+      {error && <p className="text-red-500 text-sm">{error}</p>}
+
       {!editMode ? (
         <div className="flex gap-2">
           <button
             onClick={() => setEditMode(true)}
             className="px-3 py-1.5 rounded-lg bg-amber-500 text-white text-xs font-medium hover:bg-amber-600 transition-colors"
           >
-            {t.save} / {t.editTitle.split(" ")[0]}
+            ✏️ {t.editTitle.split(" ")[0]}
           </button>
           <button
             onClick={handleDelete}
             disabled={deleting}
             className="px-3 py-1.5 rounded-lg bg-red-500 text-white text-xs font-medium hover:bg-red-600 transition-colors disabled:opacity-50"
           >
-            {deleting ? "..." : t.deleteTree}
+            {deleting ? "..." : `🗑 ${t.deleteTree}`}
           </button>
         </div>
       ) : (
@@ -327,6 +466,9 @@ export default function AdoptableTreeDetailPage() {
   const { user } = useUser();
   const t = T[lang as "it" | "en"] ?? T.it;
   const queryClient = useQueryClient();
+  const search = useSearch();
+  const searchParams = new URLSearchParams(search);
+  const stripeConnectResult = searchParams.get("stripe_connect");
 
   const [showPayment, setShowPayment] = useState(false);
   const [clientSecret, setClientSecret] = useState<string | null>(null);
@@ -456,6 +598,17 @@ export default function AdoptableTreeDetailPage() {
           {t.back}
         </Link>
 
+        {stripeConnectResult === "success" && (
+          <div className="mb-4 p-3 bg-green-50 dark:bg-green-950/20 border border-green-300 dark:border-green-700 rounded-xl text-sm text-green-700 dark:text-green-300 font-medium">
+            ✓ {t.stripeConnectSuccess}
+          </div>
+        )}
+        {stripeConnectResult === "refresh" && (
+          <div className="mb-4 p-3 bg-amber-50 dark:bg-amber-950/20 border border-amber-300 dark:border-amber-700 rounded-xl text-sm text-amber-700 dark:text-amber-300">
+            ⚠ {t.stripeConnectRefresh}
+          </div>
+        )}
+
         {tree.imageUrl && (
           <div className="rounded-2xl overflow-hidden mb-4 bg-muted max-h-72">
             <img src={tree.imageUrl} alt={tree.title} className="w-full h-72 object-cover" />
@@ -488,9 +641,11 @@ export default function AdoptableTreeDetailPage() {
           <div className="bg-muted rounded-xl p-3 text-center">
             <p className="text-xs text-muted-foreground mb-1">{t.slots}</p>
             <p className={`font-bold text-sm ${isFull ? "text-red-500" : "text-green-600"}`}>
-              {isFull ? t.full : tree.maxAdoptions - tree.currentAdoptions}
+              {isFull ? tree.maxAdoptions : tree.maxAdoptions - tree.currentAdoptions}
             </p>
-            <p className="text-[10px] text-muted-foreground">{t.of} {tree.maxAdoptions}</p>
+            <p className={`text-[10px] ${isFull ? "text-red-400" : "text-muted-foreground"}`}>
+              {isFull ? t.full : `${t.of} ${tree.maxAdoptions}`}
+            </p>
           </div>
         </div>
 
@@ -552,22 +707,27 @@ export default function AdoptableTreeDetailPage() {
               </Link>
             )}
             {user && !showPayment && (
-              <button
-                onClick={handleAdoptClick}
-                disabled={isFull || initiating}
-                className="w-full py-3 rounded-xl bg-primary text-primary-foreground font-semibold text-sm hover:opacity-90 transition-opacity disabled:opacity-50"
-              >
-                {initiating ? t.paying : isFull ? t.full : t.adopt}
-              </button>
+              <>
+                {!tree.ownerStripeReady && (
+                  <p className="text-sm text-amber-600 dark:text-amber-400 mb-2 p-3 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-lg">
+                    ⚠ {t.stripeNotReadyAdopt}
+                  </p>
+                )}
+                <button
+                  onClick={handleAdoptClick}
+                  disabled={isFull || initiating || !tree.ownerStripeReady}
+                  className="w-full py-3 rounded-xl bg-primary text-primary-foreground font-semibold text-sm hover:opacity-90 transition-opacity disabled:opacity-50"
+                >
+                  {initiating ? t.paying : isFull ? t.full : t.adopt}
+                </button>
+              </>
             )}
             {user && showPayment && clientSecret && stripePromiseLoaded && (
               <div className="border border-border rounded-xl p-4 bg-card mt-2">
-                <p className="text-sm font-medium text-foreground mb-3">
+                <p className="text-sm font-medium text-foreground mb-1">
                   €{(tree.priceCents / 100).toFixed(2)} · {tree.title}
                 </p>
-                <p className="text-xs text-muted-foreground mb-4">
-                  {Math.round(tree.priceCents * 0.2 / 100 * 100) / 100}€ {t.fee}
-                </p>
+                <p className="text-xs text-muted-foreground mb-4">{t.fee}</p>
                 <Elements stripe={stripePromiseLoaded} options={{ clientSecret, appearance: { theme: "stripe" } }}>
                   <PaymentForm
                     clientSecret={clientSecret}
