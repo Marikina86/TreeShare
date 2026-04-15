@@ -7,6 +7,7 @@ import { useAuth } from "@/lib/auth";
 import { useUser } from "@/lib/auth";
 import Layout from "@/components/Layout";
 import { useLang } from "@/lib/i18n";
+import { resolveImg } from "@/lib/imageUtils";
 
 interface AdoptableTree {
   id: number;
@@ -717,7 +718,7 @@ export default function AdoptableTreeDetailPage() {
 
         {tree.imageUrl && (
           <div className="rounded-2xl overflow-hidden mb-4 bg-muted max-h-72">
-            <img src={tree.imageUrl} alt={tree.title} className="w-full h-72 object-cover" />
+            <img src={resolveImg(tree.imageUrl)} alt={tree.title} className="w-full h-72 object-cover" />
           </div>
         )}
         {!tree.imageUrl && (

@@ -50,3 +50,9 @@ export async function resizeToBase64(file: File, maxPx = 768, quality = 0.72): P
   const img = await loadImage(file);
   return buildCanvas(img, maxPx).toDataURL("image/jpeg", quality);
 }
+
+export function resolveImg(url: string | null | undefined): string | undefined {
+  if (!url) return undefined;
+  if (url.startsWith("/objects/")) return `/api/storage${url}`;
+  return url;
+}

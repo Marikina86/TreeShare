@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useGetMyProfile } from "@workspace/api-client-react";
 import Layout from "@/components/Layout";
 import { useLang } from "@/lib/i18n";
+import { resolveImg } from "@/lib/imageUtils";
 
 interface AdoptableTree {
   id: number;
@@ -65,9 +66,9 @@ function TreeCard({ tree, lang }: { tree: AdoptableTree; lang: "it" | "en" }) {
     <Link href={`/adopt/${tree.id}`}>
       <div className={`group bg-card border border-border rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-all cursor-pointer ${isFull ? "opacity-60" : ""}`}>
         <div className="relative aspect-square bg-muted">
-          {tree.thumbnailUrl || tree.imageUrl ? (
+          {resolveImg(tree.thumbnailUrl ?? tree.imageUrl) ? (
             <img
-              src={tree.thumbnailUrl || tree.imageUrl!}
+              src={resolveImg(tree.thumbnailUrl ?? tree.imageUrl)}
               alt={tree.title}
               loading="lazy"
               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
