@@ -6,8 +6,11 @@ import {
   donationCampaignsTable,
   campaignPricingTable,
   platformRevenueTable,
+  discountCodesTable,
+  discountCodeUsesTable,
 } from "@workspace/db";
 import { eq, and, desc, sql, gt, gte, lte, count } from "drizzle-orm";
+import { computeDiscountedCents } from "./discountCodes";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth";
 import { requireAdmin } from "../middlewares/requireAdmin";
 import { getUncachableStripeClient, getStripePublishableKey } from "../lib/stripe";
@@ -405,6 +408,51 @@ router.get("/campaigns/my-campaigns", requireAuth, async (req, res) => {
   }
 });
 
+async function resolveDiscountCode(
+  code: string,
+  userId: string,
+  originalCents: number,
+): Promise<
+  | { discountCodeId: number; finalCents: number; savedCents: number }
+  | { error: string; status: number }
+> {
+  const now = new Date();
+  const [dc] = await db
+    .select()
+    .from(discountCodesTable)
+    .where(
+      and(
+        eq(discountCodesTable.code, code.trim().toUpperCase()),
+        eq(discountCodesTable.isActive, true),
+        gt(discountCodesTable.expiresAt, now),
+      ),
+    );
+  if (!dc) return { error: "Codice sconto non valido o scaduto", status: 400 };
+  if (dc.maxUses !== null && dc.useCount >= dc.maxUses) {
+    return { error: "Codice sconto esaurito", status: 400 };
+  }
+  const userKey = `user:${userId}`;
+  const [alreadyUsed] = await db
+    .select()
+    .from(discountCodeUsesTable)
+    .where(and(eq(discountCodeUsesTable.discountCodeId, dc.id), eq(discountCodeUsesTable.userKey, userKey)));
+  if (alreadyUsed) return { error: "Hai già utilizzato questo codice sconto", status: 400 };
+
+  const finalCents = computeDiscountedCents(originalCents, dc.discountType, dc.discountValue);
+  return { discountCodeId: dc.id, finalCents, savedCents: originalCents - finalCents };
+}
+
+async function recordDiscountUse(discountCodeId: number, userId: string, campaignId: number) {
+  try {
+    const userKey = `user:${userId}`;
+    await db.insert(discountCodeUsesTable).values({ discountCodeId, userKey, campaignId });
+    await db
+      .update(discountCodesTable)
+      .set({ useCount: sql`${discountCodesTable.useCount} + 1` })
+      .where(eq(discountCodesTable.id, discountCodeId));
+  } catch {}
+}
+
 router.post("/campaigns/initiate-payment", requireAuth, async (req, res) => {
   const userId = (req as AuthenticatedRequest).userId;
   try {
@@ -418,7 +466,7 @@ router.post("/campaigns/initiate-payment", requireAuth, async (req, res) => {
       return;
     }
 
-    const { title, description, photos, pricingId } = req.body;
+    const { title, description, photos, pricingId, discountCode } = req.body;
     if (!title || !description) {
       res.status(400).json({ error: "Title and description required" });
       return;
@@ -456,15 +504,32 @@ router.post("/campaigns/initiate-payment", requireAuth, async (req, res) => {
       return;
     }
 
+    let finalPriceCents = pricing.priceCents;
+    let appliedDiscountCodeId: number | null = null;
+    let discountAppliedCents = 0;
+
+    if (discountCode && typeof discountCode === "string" && discountCode.trim()) {
+      const discountResult = await resolveDiscountCode(discountCode, userId, pricing.priceCents);
+      if ("error" in discountResult) {
+        res.status(discountResult.status).json({ error: discountResult.error });
+        return;
+      }
+      finalPriceCents = discountResult.finalCents;
+      appliedDiscountCodeId = discountResult.discountCodeId;
+      discountAppliedCents = discountResult.savedCents;
+    }
+
     const stripe = await getUncachableStripeClient();
     const paymentIntent = await stripe.paymentIntents.create({
-      amount: pricing.priceCents,
+      amount: Math.max(50, finalPriceCents),
       currency: "eur",
       metadata: {
         userId,
         pricingId: String(pricing.id),
         durationDays: String(pricing.durationDays),
         priceCents: String(pricing.priceCents),
+        finalPriceCents: String(finalPriceCents),
+        discountCodeId: appliedDiscountCodeId ? String(appliedDiscountCodeId) : "",
         type: "campaign_publication",
       },
     });
@@ -480,7 +545,9 @@ router.post("/campaigns/initiate-payment", requireAuth, async (req, res) => {
         paymentStatus: "pending",
         stripePaymentIntentId: paymentIntent.id,
         durationDays: pricing.durationDays,
-        pricePaidCents: pricing.priceCents,
+        pricePaidCents: finalPriceCents,
+        discountCodeId: appliedDiscountCodeId,
+        discountAppliedCents: discountAppliedCents > 0 ? discountAppliedCents : null,
       })
       .returning();
 
@@ -488,7 +555,9 @@ router.post("/campaigns/initiate-payment", requireAuth, async (req, res) => {
       clientSecret: paymentIntent.client_secret,
       paymentIntentId: paymentIntent.id,
       campaignId: pendingCampaign.id,
-      priceCents: pricing.priceCents,
+      priceCents: finalPriceCents,
+      originalPriceCents: pricing.priceCents,
+      savedCents: discountAppliedCents,
       durationDays: pricing.durationDays,
       label: pricing.label,
     });
@@ -537,6 +606,10 @@ router.post("/campaigns/confirm-payment", requireAuth, async (req, res) => {
       return;
     }
 
+    if (campaign.discountCodeId) {
+      await recordDiscountUse(campaign.discountCodeId, userId, campaign.id);
+    }
+
     res.json(result);
   } catch (err) {
     console.error("[campaigns] confirm-payment error:", err);
@@ -562,7 +635,7 @@ router.post("/campaigns/initiate-payment-paypal", requireAuth, async (req, res) 
       return;
     }
 
-    const { title, description, photos, pricingId } = req.body;
+    const { title, description, photos, pricingId, discountCode } = req.body;
     if (!title || !description) {
       res.status(400).json({ error: "Title and description required" });
       return;
@@ -595,9 +668,24 @@ router.post("/campaigns/initiate-payment-paypal", requireAuth, async (req, res) 
       return;
     }
 
+    let finalPriceCents = pricing.priceCents;
+    let appliedDiscountCodeId: number | null = null;
+    let discountAppliedCents = 0;
+
+    if (discountCode && typeof discountCode === "string" && discountCode.trim()) {
+      const discountResult = await resolveDiscountCode(discountCode, userId, pricing.priceCents);
+      if ("error" in discountResult) {
+        res.status(discountResult.status).json({ error: discountResult.error });
+        return;
+      }
+      finalPriceCents = discountResult.finalCents;
+      appliedDiscountCodeId = discountResult.discountCodeId;
+      discountAppliedCents = discountResult.savedCents;
+    }
+
     const customId = `campaign_pub_${userId}_${Date.now()}`;
     const { orderId } = await createPayPalOrder(
-      pricing.priceCents,
+      Math.max(1, finalPriceCents),
       "EUR",
       customId,
       title.trim(),
@@ -614,14 +702,18 @@ router.post("/campaigns/initiate-payment-paypal", requireAuth, async (req, res) 
         paymentStatus: "pending",
         paypalOrderId: orderId,
         durationDays: pricing.durationDays,
-        pricePaidCents: pricing.priceCents,
+        pricePaidCents: finalPriceCents,
+        discountCodeId: appliedDiscountCodeId,
+        discountAppliedCents: discountAppliedCents > 0 ? discountAppliedCents : null,
       })
       .returning();
 
     res.json({
       orderId,
       campaignId: pendingCampaign.id,
-      priceCents: pricing.priceCents,
+      priceCents: finalPriceCents,
+      originalPriceCents: pricing.priceCents,
+      savedCents: discountAppliedCents,
       durationDays: pricing.durationDays,
       label: pricing.label,
     });
@@ -673,6 +765,10 @@ router.post("/campaigns/confirm-payment-paypal", requireAuth, async (req, res) =
     if ((result as any).error) {
       res.status(404).json(result);
       return;
+    }
+
+    if (campaign.discountCodeId) {
+      await recordDiscountUse(campaign.discountCodeId, userId, campaign.id);
     }
 
     res.json(result);

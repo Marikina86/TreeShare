@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { useLang } from "@/lib/i18n";
 import { useToast } from "@/hooks/use-toast";
+import AdminDiscountSection from "@/components/AdminDiscountSection";
 
 interface AdminUser {
   id: number;
@@ -120,7 +121,7 @@ interface AdminAlertItem {
   updatedAt: string;
 }
 
-type Tab = "users" | "reports" | "trees" | "problems" | "pending_events" | "pending_photos" | "pending_updates" | "alerts" | "tips" | "finance";
+type Tab = "users" | "reports" | "trees" | "problems" | "pending_events" | "pending_photos" | "pending_updates" | "alerts" | "tips" | "finance" | "discounts";
 type UserFilter = "all" | "active" | "blocked";
 type ReportFilter = "all" | "pending" | "reviewed" | "dismissed";
 
@@ -242,7 +243,7 @@ export default function AdminPage() {
   const T = {
     it: {
       title: "Pannello di controllo", subtitle: "Gestione utenti e contenuti",
-      tabs: { users: "Utenti", reports: "Segnalazioni", trees: "Contenuti", problems: "Problemi", alerts: "Avvisi", tips: "Consigli", finance: "Finanza" },
+      tabs: { users: "Utenti", reports: "Segnalazioni", trees: "Contenuti", problems: "Problemi", alerts: "Avvisi", tips: "Consigli", finance: "Finanza", discounts: "Sconti" },
       stats: { users: "Utenti totali", trees: "Alberi piantati", blocked: "Utenti bloccati" },
       search: "Cerca utente...", searchTrees: "Cerca contenuto...",
       filters: { all: "Tutti", active: "Attivi", blocked: "Bloccati", pending: "In attesa", reviewed: "Esaminati", dismissed: "Archiviati" },
@@ -265,7 +266,7 @@ export default function AdminPage() {
     },
     en: {
       title: "Admin Panel", subtitle: "User and content management",
-      tabs: { users: "Users", reports: "Reports", trees: "Content", problems: "Problems", alerts: "Alerts", tips: "Tips", finance: "Finance" },
+      tabs: { users: "Users", reports: "Reports", trees: "Content", problems: "Problems", alerts: "Alerts", tips: "Tips", finance: "Finance", discounts: "Discounts" },
       stats: { users: "Total users", trees: "Trees planted", blocked: "Blocked users" },
       search: "Search user...", searchTrees: "Search content...",
       filters: { all: "All", active: "Active", blocked: "Blocked", pending: "Pending", reviewed: "Reviewed", dismissed: "Dismissed" },
@@ -919,6 +920,13 @@ export default function AdminPage() {
           >
             <svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6" strokeLinecap="round" strokeLinejoin="round"/></svg>
             {T.tabs.finance}
+          </button>
+          <button
+            onClick={() => setActiveTab("discounts")}
+            className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors ${activeTab === "discounts" ? "bg-violet-600 text-white" : "text-muted-foreground hover:bg-muted"}`}
+          >
+            <svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A2 2 0 013 12V7a4 4 0 014-4z" strokeLinecap="round" strokeLinejoin="round"/></svg>
+            {T.tabs.discounts}
           </button>
         </div>
       </header>
@@ -2377,6 +2385,10 @@ export default function AdminPage() {
             )}
           </>
         )}
+
+        {/* ── DISCOUNTS TAB ── */}
+        {activeTab === "discounts" && <AdminDiscountSection />}
+
       </div>
 
       {/* Delete user modal */}

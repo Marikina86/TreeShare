@@ -19,6 +19,7 @@ import policiesRouter from "./policies";
 import consentsRouter from "./consents";
 import cookieConsentRouter from "./cookieConsent";
 import donationsRouter from "./donations";
+import discountCodesRouter from "./discountCodes";
 
 const router: IRouter = Router();
 
@@ -42,5 +43,6 @@ router.use(policiesRouter);
 router.use(consentsRouter);
 router.use(cookieConsentRouter);
 router.use("/donations", donationsRouter);
+router.use(discountCodesRouter);
 
 export default router;

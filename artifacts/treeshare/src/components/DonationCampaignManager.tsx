@@ -84,6 +84,13 @@ const t = {
     payPalNotAvailable: "PayPal non configurato",
     payPalCancelled: "Pagamento PayPal annullato",
     payPalError: "Errore PayPal",
+    discountCode: "Codice sconto",
+    discountCodePlaceholder: "Inserisci codice sconto",
+    applyCode: "Applica",
+    discountApplied: "Sconto applicato",
+    removeDiscount: "Rimuovi",
+    discountCodeError: "Codice sconto non valido",
+    youSave: "Risparmi",
   },
   en: {
     title: "My campaigns",
@@ -134,6 +141,13 @@ const t = {
     payPalNotAvailable: "PayPal not available",
     payPalCancelled: "PayPal payment cancelled",
     payPalError: "PayPal error",
+    discountCode: "Discount code",
+    discountCodePlaceholder: "Enter discount code",
+    applyCode: "Apply",
+    discountApplied: "Discount applied",
+    removeDiscount: "Remove",
+    discountCodeError: "Invalid discount code",
+    youSave: "You save",
   },
 };
 
@@ -274,6 +288,16 @@ export default function DonationCampaignManager({ accountType }: {
   const [renewPaypalOrderId, setRenewPaypalOrderId] = useState<string | null>(null);
   const [renewPaymentMethod, setRenewPaymentMethod] = useState<"stripe" | "paypal">("stripe");
   const [renewSaving, setRenewSaving] = useState(false);
+  const [discountCodeInput, setDiscountCodeInput] = useState("");
+  const [discountInfo, setDiscountInfo] = useState<{
+    discountCodeId: number;
+    code: string;
+    discountType: string;
+    discountValue: number;
+    discountedCents: number;
+    savedCents: number;
+  } | null>(null);
+  const [discountLoading, setDiscountLoading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   async function authFetch(url: string, opts?: RequestInit) {
@@ -437,6 +461,36 @@ export default function DonationCampaignManager({ accountType }: {
     }
   }
 
+  async function handleApplyDiscount() {
+    if (!discountCodeInput.trim()) return;
+    const selectedPlan = pricing.find((p) => p.id === selectedPricing);
+    setDiscountLoading(true);
+    try {
+      const res = await authFetch("/api/discount-codes/validate", {
+        method: "POST",
+        body: JSON.stringify({
+          code: discountCodeInput.trim(),
+          priceCents: selectedPlan?.priceCents,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.valid) {
+        toast({ title: data.error || l.discountCodeError, variant: "destructive" });
+        return;
+      }
+      setDiscountInfo(data);
+    } catch {
+      toast({ title: l.discountCodeError, variant: "destructive" });
+    } finally {
+      setDiscountLoading(false);
+    }
+  }
+
+  function handleRemoveDiscount() {
+    setDiscountInfo(null);
+    setDiscountCodeInput("");
+  }
+
   async function handlePayPalCreateOrder(): Promise<string> {
     const res = await authFetch("/api/donations/campaigns/initiate-payment-paypal", {
       method: "POST",
@@ -445,6 +499,7 @@ export default function DonationCampaignManager({ accountType }: {
         description: formDesc.trim(),
         photos: formPhotos,
         pricingId: selectedPricing,
+        discountCode: discountInfo ? discountInfo.code : undefined,
       }),
     });
     if (!res.ok) {
@@ -652,6 +707,7 @@ export default function DonationCampaignManager({ accountType }: {
           description: formDesc.trim(),
           photos: formPhotos,
           pricingId: selectedPricing,
+          discountCode: discountInfo ? discountInfo.code : undefined,
         }),
       });
 
@@ -702,6 +758,8 @@ export default function DonationCampaignManager({ accountType }: {
     setPaymentIntentId(null);
     setPaymentMethod("stripe");
     setPaypalCampaignId(null);
+    setDiscountCodeInput("");
+    setDiscountInfo(null);
   }
 
   function statusBadge(c: Campaign) {
@@ -1080,23 +1138,77 @@ export default function DonationCampaignManager({ accountType }: {
               <div className="space-y-3">
                 <h3 className="text-sm font-semibold text-foreground">{l.selectDuration}</h3>
                 <div className="space-y-2">
-                  {pricing.map((p) => (
-                    <button
-                      key={p.id}
-                      onClick={() => setSelectedPricing(p.id)}
-                      className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border text-sm transition-colors ${
-                        selectedPricing === p.id
-                          ? "border-emerald-500 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300"
-                          : "border-border hover:bg-muted text-foreground"
-                      }`}
-                    >
-                      <span className="font-medium">{p.label} ({p.durationDays} {l.days})</span>
-                      <span className="font-bold">€{(p.priceCents / 100).toFixed(2)}</span>
-                    </button>
-                  ))}
+                  {pricing.map((p) => {
+                    const discounted = discountInfo && selectedPricing === p.id
+                      ? discountInfo.discountedCents
+                      : null;
+                    return (
+                      <button
+                        key={p.id}
+                        onClick={() => { setSelectedPricing(p.id); setDiscountInfo(null); setDiscountCodeInput(""); }}
+                        className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border text-sm transition-colors ${
+                          selectedPricing === p.id
+                            ? "border-emerald-500 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300"
+                            : "border-border hover:bg-muted text-foreground"
+                        }`}
+                      >
+                        <span className="font-medium">{p.label} ({p.durationDays} {l.days})</span>
+                        <span className="font-bold flex items-center gap-1.5">
+                          {discounted !== null ? (
+                            <>
+                              <span className="line-through text-muted-foreground text-xs font-normal">€{(p.priceCents / 100).toFixed(2)}</span>
+                              <span className="text-emerald-600">€{(discounted / 100).toFixed(2)}</span>
+                            </>
+                          ) : (
+                            `€${(p.priceCents / 100).toFixed(2)}`
+                          )}
+                        </span>
+                      </button>
+                    );
+                  })}
                 </div>
                 {pricing.length === 0 && (
                   <p className="text-sm text-muted-foreground text-center py-4">{l.noPricing}</p>
+                )}
+
+                {/* Discount code input */}
+                {selectedPricing && !discountInfo && (
+                  <div className="flex gap-2 items-center">
+                    <input
+                      type="text"
+                      value={discountCodeInput}
+                      onChange={(e) => setDiscountCodeInput(e.target.value.toUpperCase())}
+                      onKeyDown={(e) => e.key === "Enter" && handleApplyDiscount()}
+                      placeholder={l.discountCodePlaceholder}
+                      className="flex-1 px-3 py-2 text-sm border border-border rounded-lg bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                      maxLength={32}
+                    />
+                    <button
+                      type="button"
+                      onClick={handleApplyDiscount}
+                      disabled={!discountCodeInput.trim() || discountLoading}
+                      className="px-3 py-2 text-sm font-medium bg-muted border border-border rounded-lg hover:bg-muted/80 disabled:opacity-50"
+                    >
+                      {discountLoading ? "..." : l.applyCode}
+                    </button>
+                  </div>
+                )}
+
+                {/* Applied discount badge */}
+                {discountInfo && selectedPricing && (
+                  <div className="flex items-center justify-between px-3 py-2 bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-300 dark:border-emerald-700 rounded-lg text-sm">
+                    <span className="text-emerald-700 dark:text-emerald-300 font-medium">
+                      {l.discountApplied}: <strong>{discountInfo.code}</strong>
+                      {" · "}{l.youSave} <strong>€{(discountInfo.savedCents / 100).toFixed(2)}</strong>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleRemoveDiscount}
+                      className="text-xs text-muted-foreground hover:text-foreground underline ml-2"
+                    >
+                      {l.removeDiscount}
+                    </button>
+                  </div>
                 )}
                 <div className="flex gap-2 pt-1">
                   <button

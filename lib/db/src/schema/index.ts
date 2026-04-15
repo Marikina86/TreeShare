@@ -256,6 +256,8 @@ export const donationCampaignsTable = pgTable("donation_campaigns", {
   renewalDurationDays: integer("renewal_duration_days"),
   renewalPriceCents: integer("renewal_price_cents"),
   pricePaidCents: integer("price_paid_cents"),
+  discountCodeId: integer("discount_code_id"),
+  discountAppliedCents: integer("discount_applied_cents"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 }, (table) => [
@@ -275,6 +277,46 @@ export const platformRevenueTable = pgTable("platform_revenue", {
   transactionCount: integer("transaction_count").notNull().default(0),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
+
+// ── Discount codes ────────────────────────────────────────────────────────────
+
+export const discountCodesTable = pgTable("discount_codes", {
+  id: serial("id").primaryKey(),
+  code: text("code").notNull().unique(),
+  discountType: text("discount_type").notNull(), // "percentage" | "fixed"
+  discountValue: integer("discount_value").notNull(), // 1-100 for %, or cents for fixed
+  durationDays: integer("duration_days").notNull(),
+  expiresAt: timestamp("expires_at").notNull(), // 23:59 Europe/Rome on last valid day
+  maxUses: integer("max_uses"), // null = unlimited
+  useCount: integer("use_count").notNull().default(0),
+  campaignId: integer("campaign_id"), // null = global, otherwise campaign-specific
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (table) => [
+  index("discount_codes_code_idx").on(table.code),
+  index("discount_codes_expires_at_idx").on(table.expiresAt),
+]);
+
+export const discountCodeUsesTable = pgTable("discount_code_uses", {
+  id: serial("id").primaryKey(),
+  discountCodeId: integer("discount_code_id").notNull(),
+  userKey: text("user_key").notNull(), // "user:{clerkId}" or "org:{orgId}"
+  campaignId: integer("campaign_id"),
+  usedAt: timestamp("used_at").notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("discount_code_uses_uniq_idx").on(table.discountCodeId, table.userKey),
+]);
+
+export const discountCodeNotificationsTable = pgTable("discount_code_notifications", {
+  id: serial("id").primaryKey(),
+  discountCodeId: integer("discount_code_id").notNull(),
+  target: text("target").notNull(), // "all" | "business" | "private"
+  notificationType: text("notification_type").notNull(), // "in-app" | "email" | "both"
+  recipientCount: integer("recipient_count").notNull().default(0),
+  sentAt: timestamp("sent_at").notNull().defaultNow(),
+}, (table) => [
+  index("discount_code_notif_code_idx").on(table.discountCodeId),
+]);
 
 export const insertUserSchema = createInsertSchema(usersTable).omit({ id: true, createdAt: true });
 export type InsertUser = z.infer<typeof insertUserSchema>;
