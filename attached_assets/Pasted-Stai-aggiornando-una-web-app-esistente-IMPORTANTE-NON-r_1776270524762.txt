@@ -1,0 +1,275 @@
+Stai aggiornando una web app esistente.
+
+IMPORTANTE
+
+- NON rompere la struttura esistente del progetto
+- NON modificare naming, routing o architettura se non necessario
+- NON creare nuovo sistema ledger (esiste già)
+- NON implementare invio email lato backend
+- NON salvare dati di spedizione utenti
+- Effettuare modifiche minime e modulari
+
+---
+
+FUNZIONALITÀ: ADOZIONE ALBERI
+
+---
+
+RUOLI UTENTE (CRITICO)
+
+- Solo utenti con ruolo:
+  - "ente"
+  - "azienda"
+  - "organizzazione"
+
+possono:
+
+- creare alberi
+- mettere alberi in adozione
+
+---
+
+- Gli utenti con ruolo "user" (privati):
+
+possono SOLO:
+
+- visualizzare alberi
+- adottare alberi
+
+---
+
+VALIDAZIONE ACCESSI
+
+- Bloccare lato backend la creazione alberi se:
+  
+  - role NON è tra: ente / azienda / organizzazione
+
+- Non affidarsi solo a controlli frontend
+
+---
+
+REGOLA PRINCIPALE
+
+- Ogni albero può essere adottato da massimo 10 utenti contemporaneamente
+
+- Dopo raggiungimento limite:
+  
+  - stato → "full"
+  - NON più adottabile
+
+- Alla scadenza:
+  
+  - l’adozione termina
+  - lo slot si libera
+  - l’albero torna disponibile
+  - NESSUN rinnovo automatico
+
+---
+
+MODELLO DATI
+
+Trees
+
+- id
+- title
+- description
+- species_name
+- latitude
+- longitude
+- image_url
+- thumbnail_url
+- max_adoptions (default: 10)
+- current_adoptions
+- product_description
+- owner_email
+- owner_id
+- status (active, full)
+
+---
+
+Adoptions
+
+- id (ID univoco)
+- user_id
+- tree_id
+- tree_name
+- duration_days
+- start_date
+- end_date
+- amount
+- platform_fee
+- net_to_entity
+- stripe_payment_intent_id
+- status (active, expired)
+
+---
+
+GESTIONE IMMAGINI
+
+Upload
+
+- Solo enti possono caricare immagini
+- Validare formato (jpg, png, webp)
+- Limitare dimensione file
+- Salvare su storage esistente
+
+---
+
+Thumbnail
+
+- Generare automaticamente (es. 300x300)
+- Salvare in "thumbnail_url"
+
+---
+
+Visualizzazione
+
+Lista alberi
+
+- Mostrare SOLO thumbnail
+- Lazy loading
+
+Dettaglio albero
+
+- Mostrare immagine completa
+- Click → apertura immagine full (modal o pagina)
+
+---
+
+CREAZIONE ADOZIONE (CRITICO)
+
+- NON creare record prima del pagamento
+- Creare record SOLO dopo:
+  - "payment_intent.succeeded"
+
+---
+
+PAGAMENTO
+
+- Utilizzare Stripe Connect
+- Pagamento diretto all’ente
+- Fee piattaforma: 20% ("application_fee_amount")
+- Pagamento one-time
+
+---
+
+WEBHOOK STRIPE
+
+Nel webhook:
+
+1. Recuperare metadata:
+   
+   - user_id
+   - tree_id
+   - duration_days
+   - tree_name
+
+2. Verificare:
+   
+   - current_adoptions < max_adoptions
+
+3. Creare record Adoption
+
+4. Aggiornare:
+   
+   - current_adoptions +1
+   - Se raggiunto limite:
+     - status → "full"
+
+5. Salvare nel ledger esistente
+
+---
+
+COMUNICAZIONE UTENTE → ENTE
+
+IMPORTANTE
+
+- La piattaforma NON gestisce spedizioni
+- La piattaforma NON raccoglie dati utente
+- L’ente gestisce direttamente la spedizione
+
+---
+
+CTA EMAIL (MAILTO)
+
+Mostrare bottone:
+
+👉 "Invia i tuoi dati per ricevere i frutti"
+
+mailto:{owner_email}?subject=Adozione%20TreeShare&body=Ho%20adottato%20l'albero%20"{tree_name}".%0AID%20adozione:%20{adoption_id}%0AInvio%20i%20miei%20dati%20per%20la%20spedizione:
+
+---
+
+UI (IMPORTANTE)
+
+Mostrare:
+
+👉 "La piattaforma non gestisce la spedizione. I dati devono essere inviati direttamente al promotore."
+
+---
+
+REMINDER
+
+- Notifica in-app 24h prima della scadenza
+
+---
+
+SCADENZA
+
+- Job backend giornaliero (23:59)
+
+Logica:
+
+- trovare adozioni attive scadute
+- status → expired
+- decrementare current_adoptions
+- Se < max_adoptions:
+  - status → active
+
+---
+
+VALIDAZIONE
+
+- Impedire overbooking
+- Verificare pagamento prima creazione
+
+---
+
+LEDGER (ESISTENTE)
+
+Registrare:
+
+- type: tree_adoption
+- amount
+- platform_fee
+- net_to_entity
+- stripe_payment_intent_id
+
+---
+
+IMMAGINI PERFORMANCE
+
+- Lazy loading
+- CDN/storage esistente
+- Evitare immagini pesanti in lista
+
+---
+
+TOPBAR
+
+- Icona 🌳
+- Label: "Adotta un albero"
+- Link a lista alberi
+
+---
+
+OBIETTIVO FINALE
+
+- Solo enti possono pubblicare alberi
+- Utenti privati possono adottare
+- Pagamenti diretti agli enti
+- Fee automatica 20%
+- Nessuna gestione dati spedizione
+- Nessun invio email backend
+- Responsabilità spedizione all’ente
+- Sistema semplice, scalabile e conforme
