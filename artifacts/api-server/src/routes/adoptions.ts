@@ -372,10 +372,18 @@ router.get("/adopt/connect/status", requireAuth, async (req, res) => {
     if (!account.charges_enabled) {
       const appOrigin = process.env.APP_ORIGIN
         || (process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : "http://localhost:19256");
+      const rawReturnPath: unknown = req.query.returnPath;
+      const safePath =
+        typeof rawReturnPath === "string" &&
+        rawReturnPath.startsWith("/") &&
+        !rawReturnPath.includes("//") &&
+        !rawReturnPath.includes(":")
+          ? rawReturnPath
+          : "/adopt";
       const link = await stripe.accountLinks.create({
         account: user.stripeAccountId,
-        refresh_url: `${appOrigin}/adopt?stripe_connect=refresh`,
-        return_url: `${appOrigin}/adopt?stripe_connect=success`,
+        refresh_url: `${appOrigin}${safePath}?stripe_connect=refresh`,
+        return_url: `${appOrigin}${safePath}?stripe_connect=success`,
         type: "account_onboarding",
       });
       onboardingUrl = link.url;

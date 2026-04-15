@@ -221,10 +221,13 @@ function StripeConnectPanel({ treeId, t }: { treeId: number; t: typeof T.it }) {
   const [error, setError] = useState<string | null>(null);
 
   const statusQuery = useQuery<ConnectStatus>({
-    queryKey: ["adopt-connect-status"],
+    queryKey: ["adopt-connect-status", treeId],
     queryFn: async () => {
       const token = await getToken();
-      const res = await fetch("/api/adopt/connect/status", { headers: { Authorization: `Bearer ${token}` } });
+      const returnPath = encodeURIComponent(`/adopt/${treeId}`);
+      const res = await fetch(`/api/adopt/connect/status?returnPath=${returnPath}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
       if (!res.ok) throw new Error("failed");
       return res.json();
     },
