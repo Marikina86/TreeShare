@@ -60,7 +60,6 @@ const T = {
 function TreeCard({ tree, lang }: { tree: AdoptableTree; lang: "it" | "en" }) {
   const t = T[lang] ?? T.it;
   const isFull = tree.status === "full" || tree.currentAdoptions >= tree.maxAdoptions;
-  const slotsLeft = tree.maxAdoptions - tree.currentAdoptions;
 
   return (
     <Link href={`/adopt/${tree.id}`}>
@@ -79,11 +78,6 @@ function TreeCard({ tree, lang }: { tree: AdoptableTree; lang: "it" | "en" }) {
           {isFull && (
             <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
               <span className="bg-black/70 text-white text-xs font-bold px-3 py-1 rounded-full">{t.full}</span>
-            </div>
-          )}
-          {!isFull && (
-            <div className="absolute bottom-2 right-2 bg-black/60 text-white text-[10px] font-semibold px-2 py-0.5 rounded-full">
-              {slotsLeft} {t.slotsLeft}
             </div>
           )}
         </div>
