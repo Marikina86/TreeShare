@@ -38,6 +38,7 @@ interface MyAdoption {
 interface ConnectStatus {
   connected: boolean;
   chargesEnabled: boolean;
+  onboardingUrl?: string;
   detailsSubmitted?: boolean;
   accountId?: string;
 }
@@ -214,7 +215,7 @@ function PaymentForm({
 }
 
 function StripeConnectPanel({ treeId, t }: { treeId: number; t: typeof T.it }) {
-  const { getToken } = useAuth() as any;
+  const { getToken } = useAuth();
   const [refreshing, setRefreshing] = useState(false);
   const [connecting, setConnecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -243,6 +244,10 @@ function StripeConnectPanel({ treeId, t }: { treeId: number; t: typeof T.it }) {
     setConnecting(true);
     setError(null);
     try {
+      if (status?.onboardingUrl) {
+        window.location.href = status.onboardingUrl;
+        return;
+      }
       const token = await getToken();
       const res = await fetch("/api/adopt/connect/onboard", {
         method: "POST",

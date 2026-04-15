@@ -303,9 +303,16 @@ router.post("/adopt/connect/onboard", requireAuth, async (req, res) => {
     const appOrigin = process.env.APP_ORIGIN
       || (process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : "http://localhost:19256");
 
-    const { returnPath } = req.body;
-    const returnUrl = `${appOrigin}${returnPath || "/adopt"}?stripe_connect=success`;
-    const refreshUrl = `${appOrigin}${returnPath || "/adopt"}?stripe_connect=refresh`;
+    const rawReturnPath: unknown = req.body.returnPath;
+    const safePath =
+      typeof rawReturnPath === "string" &&
+      rawReturnPath.startsWith("/") &&
+      !rawReturnPath.includes("//") &&
+      !rawReturnPath.includes(":")
+        ? rawReturnPath
+        : "/adopt";
+    const returnUrl = `${appOrigin}${safePath}?stripe_connect=success`;
+    const refreshUrl = `${appOrigin}${safePath}?stripe_connect=refresh`;
 
     const [user] = await db
       .select({ stripeAccountId: usersTable.stripeAccountId })
@@ -361,9 +368,23 @@ router.get("/adopt/connect/status", requireAuth, async (req, res) => {
     const stripe = await getUncachableStripeClient();
     const account = await stripe.accounts.retrieve(user.stripeAccountId);
 
+    let onboardingUrl: string | undefined;
+    if (!account.charges_enabled) {
+      const appOrigin = process.env.APP_ORIGIN
+        || (process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : "http://localhost:19256");
+      const link = await stripe.accountLinks.create({
+        account: user.stripeAccountId,
+        refresh_url: `${appOrigin}/adopt?stripe_connect=refresh`,
+        return_url: `${appOrigin}/adopt?stripe_connect=success`,
+        type: "account_onboarding",
+      });
+      onboardingUrl = link.url;
+    }
+
     res.json({
       connected: true,
       chargesEnabled: account.charges_enabled,
+      onboardingUrl,
       accountId: user.stripeAccountId,
       detailsSubmitted: account.details_submitted,
     });
