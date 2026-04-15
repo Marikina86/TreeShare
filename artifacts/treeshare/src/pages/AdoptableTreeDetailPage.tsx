@@ -771,6 +771,36 @@ export default function AdoptableTreeDetailPage() {
           <p className="text-red-500 text-sm mb-3">{initError}</p>
         )}
 
+        {/* Duration selector — visible to all visitors on non-full, non-owned trees */}
+        {!isOwner && !adopted && !activeAdoption && !isFull && !showPayment && (
+          <div className="mb-4">
+            <p className="text-sm font-medium text-foreground mb-2">{t.selectDuration}</p>
+            <div className="grid grid-cols-4 gap-2">
+              {DURATION_OPTIONS.map((opt) => {
+                const price = Math.max(50, Math.round((tree.priceCents / tree.durationDays) * opt.days));
+                const isSelected = safeDuration === opt.days;
+                return (
+                  <button
+                    key={opt.days}
+                    type="button"
+                    onClick={() => setSelectedDurationDays(opt.days)}
+                    className={`py-2 px-1 rounded-xl border text-center transition-colors ${
+                      isSelected
+                        ? "bg-primary text-primary-foreground border-primary"
+                        : "bg-background text-foreground border-border hover:border-primary/50"
+                    }`}
+                  >
+                    <p className="text-xs font-semibold">{lang === "it" ? opt.labelIt : opt.labelEn}</p>
+                    <p className={`text-[11px] mt-0.5 ${isSelected ? "text-primary-foreground/80" : "text-muted-foreground"}`}>
+                      €{(price / 100).toFixed(2)}
+                    </p>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         {!isOwner && !adopted && !activeAdoption && (
           <>
             {!user && (
@@ -787,37 +817,6 @@ export default function AdoptableTreeDetailPage() {
                     ⚠ {t.stripeNotReadyAdopt}
                   </p>
                 )}
-
-                {/* Duration selector */}
-                {tree.ownerStripeReady && !isFull && (
-                  <div className="mb-4">
-                    <p className="text-sm font-medium text-foreground mb-2">{t.selectDuration}</p>
-                    <div className="grid grid-cols-4 gap-2">
-                      {DURATION_OPTIONS.map((opt) => {
-                        const price = Math.max(50, Math.round((tree.priceCents / tree.durationDays) * opt.days));
-                        const isSelected = safeDuration === opt.days;
-                        return (
-                          <button
-                            key={opt.days}
-                            type="button"
-                            onClick={() => setSelectedDurationDays(opt.days)}
-                            className={`py-2 px-1 rounded-xl border text-center transition-colors ${
-                              isSelected
-                                ? "bg-primary text-primary-foreground border-primary"
-                                : "bg-background text-foreground border-border hover:border-primary/50"
-                            }`}
-                          >
-                            <p className="text-xs font-semibold">{lang === "it" ? opt.labelIt : opt.labelEn}</p>
-                            <p className={`text-[11px] mt-0.5 ${isSelected ? "text-primary-foreground/80" : "text-muted-foreground"}`}>
-                              €{(price / 100).toFixed(2)}
-                            </p>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-
                 <button
                   onClick={handleAdoptClick}
                   disabled={isFull || initiating || !tree.ownerStripeReady}
