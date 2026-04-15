@@ -1,16 +1,19 @@
 import { useQuery } from "@tanstack/react-query";
 import { useLang } from "@/lib/i18n";
 import { useShare } from "@/hooks/useShare";
-import { CampaignPhotoGridCompact } from "@/components/PhotoLightbox";
+import { CampaignPhotoGridCompact, type CampaignPhoto } from "@/components/PhotoLightbox";
 
 interface Campaign {
   id: number;
   title: string;
   description: string;
   isActive: boolean;
-  photos: string[];
+  photos: CampaignPhoto[];
   durationDays: number | null;
   expiresAt: string | null;
+  archivedAt?: string | null;
+  treesPlanted?: number;
+  co2Kg?: number;
 }
 
 const labels = {

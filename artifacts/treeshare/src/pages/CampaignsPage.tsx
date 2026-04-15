@@ -4,16 +4,18 @@ import { useAuth } from "@/lib/auth";
 import Layout from "@/components/Layout";
 import { useLang } from "@/lib/i18n";
 import { useShare } from "@/hooks/useShare";
-import { CampaignPhotoGrid } from "@/components/PhotoLightbox";
+import { CampaignPhotoGrid, type CampaignPhoto } from "@/components/PhotoLightbox";
 
 interface Campaign {
   id: number;
   userId: string;
   title: string;
   description: string;
-  photos: string[];
+  photos: CampaignPhoto[];
   durationDays: number | null;
   expiresAt: string | null;
+  treesPlanted?: number;
+  co2Kg?: number;
   createdAt: string;
   orgUsername: string;
   orgPhotoUrl: string | null;

@@ -3,7 +3,7 @@ import { useAuth } from "@/lib/auth";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLang } from "@/lib/i18n";
 import { useToast } from "@/hooks/use-toast";
-import { ManagerPhotoThumbnails } from "@/components/PhotoLightbox";
+import { ManagerPhotoThumbnails, type CampaignPhoto } from "@/components/PhotoLightbox";
 import { loadStripe } from "@stripe/stripe-js";
 import { Elements, PaymentElement, useStripe, useElements } from "@stripe/react-stripe-js";
 
@@ -12,11 +12,15 @@ interface Campaign {
   title: string;
   description: string;
   isActive: boolean;
-  photos: string[];
+  photos: CampaignPhoto[];
   durationDays: number | null;
   expiresAt: string | null;
+  archivedAt?: string | null;
+  storageTier?: "hot" | "cold";
   paymentStatus: string;
   pricePaidCents: number | null;
+  treesPlanted?: number;
+  co2Kg?: number;
   createdAt: string;
 }
 
@@ -27,7 +31,7 @@ interface PricingOption {
   label: string;
 }
 
-const MAX_CAMPAIGN_PHOTOS = 3;
+const MAX_CAMPAIGN_PHOTOS = 10;
 
 const t = {
   it: {
@@ -38,12 +42,13 @@ const t = {
     cancel: "Annulla",
     active: "Attiva",
     expired: "Scaduta",
+    archived: "Archiviata",
     updated: "Campagna aggiornata",
     deleted: "Campagna eliminata",
     noData: "Nessuna campagna creata",
     addPhotos: "Aggiungi foto",
     photoUploading: "Caricamento...",
-    maxPhotos: "Max 3 foto",
+    maxPhotos: "Max 10 foto",
     edit: "Modifica",
     save: "Salva",
     delete: "Elimina",
@@ -66,6 +71,13 @@ const t = {
     step2: "Seleziona piano",
     step3: "Pagamento",
     next: "Avanti",
+    renew: "Rinnova",
+    renewSuccess: "Rinnovo completato! La campagna è stata estesa.",
+    renewError: "Errore nel rinnovo",
+    environmentalImpact: "Impatto ambientale",
+    treesPlanted: "Alberi piantati",
+    co2Offset: "CO₂ compensata",
+    renewCampaign: "Rinnova campagna",
   },
   en: {
     title: "My campaigns",
@@ -75,12 +87,13 @@ const t = {
     cancel: "Cancel",
     active: "Active",
     expired: "Expired",
+    archived: "Archived",
     updated: "Campaign updated",
     deleted: "Campaign deleted",
     noData: "No campaigns created",
     addPhotos: "Add photos",
     photoUploading: "Uploading...",
-    maxPhotos: "Max 3 photos",
+    maxPhotos: "Max 10 photos",
     edit: "Edit",
     save: "Save",
     delete: "Delete",
@@ -103,6 +116,13 @@ const t = {
     step2: "Select plan",
     step3: "Payment",
     next: "Next",
+    renew: "Renew",
+    renewSuccess: "Renewal completed! Campaign has been extended.",
+    renewError: "Renewal error",
+    environmentalImpact: "Environmental impact",
+    treesPlanted: "Trees planted",
+    co2Offset: "CO₂ offset",
+    renewCampaign: "Renew campaign",
   },
 };
 
@@ -191,6 +211,12 @@ export default function DonationCampaignManager({ accountType }: {
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [paymentIntentId, setPaymentIntentId] = useState<string | null>(null);
   const [stripeReady, setStripeReady] = useState(!!stripePromise);
+  const [renewingId, setRenewingId] = useState<number | null>(null);
+  const [renewStep, setRenewStep] = useState<1 | 2>(1);
+  const [renewSelectedPricing, setRenewSelectedPricing] = useState<number | null>(null);
+  const [renewClientSecret, setRenewClientSecret] = useState<string | null>(null);
+  const [renewPaymentIntentId, setRenewPaymentIntentId] = useState<string | null>(null);
+  const [renewSaving, setRenewSaving] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   async function authFetch(url: string, opts?: RequestInit) {
@@ -269,7 +295,7 @@ export default function DonationCampaignManager({ accountType }: {
     }
   }
 
-  async function handleCampaignPhotoUpload(campaignId: number, currentPhotos: string[], e: React.ChangeEvent<HTMLInputElement>) {
+  async function handleCampaignPhotoUpload(campaignId: number, currentPhotos: CampaignPhoto[], e: React.ChangeEvent<HTMLInputElement>) {
     const files = e.target.files;
     if (!files?.length) return;
     const remaining = MAX_CAMPAIGN_PHOTOS - currentPhotos.length;
@@ -302,7 +328,7 @@ export default function DonationCampaignManager({ accountType }: {
     }
   }
 
-  async function handleRemovePhoto(campaignId: number, currentPhotos: string[], photoIndex: number) {
+  async function handleRemovePhoto(campaignId: number, currentPhotos: CampaignPhoto[], photoIndex: number) {
     const newPhotos = currentPhotos.filter((_, i) => i !== photoIndex);
     const res = await authFetch(`/api/donations/campaigns/${campaignId}`, {
       method: "PATCH",
@@ -315,6 +341,66 @@ export default function DonationCampaignManager({ accountType }: {
       const data = await res.json().catch(() => ({}));
       toast({ title: data.error || "Error", variant: "destructive" });
     }
+  }
+
+  async function handleInitiateRenewal(campaignId: number, pricingId: number) {
+    setRenewSaving(true);
+    try {
+      if (!stripePromise) {
+        const configRes = await fetch("/api/donations/campaigns/stripe-config");
+        if (configRes.ok) {
+          const { publishableKey } = await configRes.json();
+          stripePromise = loadStripe(publishableKey);
+          setStripeReady(true);
+        } else {
+          toast({ title: l.renewError, variant: "destructive" });
+          return;
+        }
+      }
+      const res = await authFetch(`/api/donations/campaigns/${campaignId}/initiate-renewal`, {
+        method: "POST",
+        body: JSON.stringify({ pricingId }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setRenewClientSecret(data.clientSecret);
+        setRenewPaymentIntentId(data.paymentIntentId);
+        setRenewStep(2);
+      } else {
+        const err = await res.json().catch(() => ({}));
+        toast({ title: err.error || l.renewError, variant: "destructive" });
+      }
+    } finally {
+      setRenewSaving(false);
+    }
+  }
+
+  const handleRenewalSuccess = useCallback(async () => {
+    if (!renewPaymentIntentId || !renewingId) return;
+    try {
+      const res = await authFetch(`/api/donations/campaigns/${renewingId}/confirm-renewal`, {
+        method: "POST",
+        body: JSON.stringify({ paymentIntentId: renewPaymentIntentId }),
+      });
+      if (res.ok) {
+        toast({ title: l.renewSuccess });
+        resetRenew();
+        queryClient.invalidateQueries({ queryKey: ["my-campaigns"] });
+      } else {
+        const data = await res.json().catch(() => ({}));
+        toast({ title: data.error || l.renewError, variant: "destructive" });
+      }
+    } catch {
+      toast({ title: l.renewError, variant: "destructive" });
+    }
+  }, [renewPaymentIntentId, renewingId, queryClient, toast, l.renewSuccess, l.renewError]);
+
+  function resetRenew() {
+    setRenewingId(null);
+    setRenewStep(1);
+    setRenewSelectedPricing(null);
+    setRenewClientSecret(null);
+    setRenewPaymentIntentId(null);
   }
 
   function startEdit(c: Campaign) {
@@ -439,9 +525,12 @@ export default function DonationCampaignManager({ accountType }: {
   function statusBadge(c: Campaign) {
     const now = new Date();
     if (c.paymentStatus === "paid" && c.isActive && c.expiresAt && new Date(c.expiresAt) > now) {
-      return { label: l.active, cls: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400" };
+      return { label: l.active, cls: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400", isActive: true };
     }
-    return { label: l.expired, cls: "bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400" };
+    if (c.archivedAt) {
+      return { label: l.archived, cls: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400", isActive: false };
+    }
+    return { label: l.expired, cls: "bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400", isActive: false };
   }
 
   if (!isOrg) return null;
@@ -513,6 +602,57 @@ export default function DonationCampaignManager({ accountType }: {
                 </div>
               ) : (
                 <>
+                  {renewingId === c.id ? (
+                    <div className="space-y-3 pt-1">
+                      <p className="text-sm font-semibold text-foreground">{l.renewCampaign}: {c.title}</p>
+                      {renewStep === 1 ? (
+                        <>
+                          <h3 className="text-xs font-medium text-muted-foreground">{l.selectDuration}</h3>
+                          <div className="space-y-2">
+                            {pricing.map((p) => (
+                              <button
+                                key={p.id}
+                                onClick={() => setRenewSelectedPricing(p.id)}
+                                className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border text-sm transition-colors ${
+                                  renewSelectedPricing === p.id
+                                    ? "border-emerald-500 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300"
+                                    : "border-border hover:bg-muted text-foreground"
+                                }`}
+                              >
+                                <span className="font-medium">{p.label} ({p.durationDays} {l.days})</span>
+                                <span className="font-bold">€{(p.priceCents / 100).toFixed(2)}</span>
+                              </button>
+                            ))}
+                          </div>
+                          <div className="flex gap-2 pt-1">
+                            <button type="button" onClick={resetRenew} className="flex-1 py-2 border border-border rounded-xl text-sm font-medium text-foreground hover:bg-muted">
+                              {l.cancel}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => renewSelectedPricing && handleInitiateRenewal(c.id, renewSelectedPricing)}
+                              disabled={!renewSelectedPricing || renewSaving}
+                              className="flex-1 py-2.5 bg-emerald-600 text-white rounded-xl text-sm font-bold hover:bg-emerald-700 disabled:opacity-50"
+                            >
+                              {renewSaving ? l.processing : l.proceedPayment}
+                            </button>
+                          </div>
+                        </>
+                      ) : (renewClientSecret && stripeReady && stripePromise && (
+                        <div className="space-y-4">
+                          <Elements stripe={stripePromise} options={{ clientSecret: renewClientSecret, appearance: { theme: "stripe" } }}>
+                            <PaymentForm
+                              clientSecret={renewClientSecret}
+                              onSuccess={handleRenewalSuccess}
+                              onCancel={resetRenew}
+                              l={l}
+                            />
+                          </Elements>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                  <>
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-medium text-foreground truncate">{c.title}</p>
@@ -529,6 +669,17 @@ export default function DonationCampaignManager({ accountType }: {
                           <span>{l.expiresOn}: {new Date(c.expiresAt).toLocaleDateString(lang === "it" ? "it-IT" : "en-US", { day: "2-digit", month: "short", year: "numeric" })}</span>
                         )}
                       </div>
+                      {((c.treesPlanted ?? 0) > 0 || (c.co2Kg ?? 0) > 0) && (
+                        <div className="flex items-center gap-3 mt-2 text-xs text-emerald-700 dark:text-emerald-400 flex-wrap">
+                          <span className="font-medium">{l.environmentalImpact}:</span>
+                          {(c.treesPlanted ?? 0) > 0 && (
+                            <span>🌳 {c.treesPlanted} {l.treesPlanted}</span>
+                          )}
+                          {(c.co2Kg ?? 0) > 0 && (
+                            <span>🌿 {c.co2Kg} kg {l.co2Offset}</span>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
 
@@ -562,6 +713,18 @@ export default function DonationCampaignManager({ accountType }: {
                       </>
                     )}
 
+                    {!badge.isActive && (
+                      <button
+                        onClick={() => { setRenewingId(c.id); setRenewStep(1); setRenewSelectedPricing(null); }}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-emerald-300 text-emerald-600 hover:bg-emerald-50 dark:border-emerald-700 dark:text-emerald-400 dark:hover:bg-emerald-900/30"
+                      >
+                        <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                          <path d="M1 4v6h6M23 20v-6h-6"/><path d="M20.49 9A9 9 0 005.64 5.64L1 10M23 14l-4.64 4.36A9 9 0 013.51 15"/>
+                        </svg>
+                        {l.renew}
+                      </button>
+                    )}
+
                     <button
                       onClick={() => startEdit(c)}
                       className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-blue-300 text-blue-600 hover:bg-blue-50 dark:border-blue-700 dark:text-blue-400 dark:hover:bg-blue-900/30"
@@ -582,6 +745,8 @@ export default function DonationCampaignManager({ accountType }: {
                       {l.delete}
                     </button>
                   </div>
+                  </>
+                  )}
                 </>
               )}
             </div>
