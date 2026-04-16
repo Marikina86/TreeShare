@@ -103,13 +103,15 @@ function HomeRedirect() {
 }
 
 function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
+  const [location] = useLocation();
+  const next = encodeURIComponent(location);
   return (
     <>
       <Show when="signed-in">
         <Component />
       </Show>
       <Show when="signed-out">
-        <Redirect to="/" />
+        <Redirect to={`/sign-in?next=${next}`} />
       </Show>
     </>
   );

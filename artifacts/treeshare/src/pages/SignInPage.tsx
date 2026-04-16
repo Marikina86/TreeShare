@@ -7,6 +7,8 @@ import { useLang } from "@/lib/i18n";
 export default function SignInPage() {
   const { lang } = useLang();
   const [, setLocation] = useLocation();
+  const rawNext = new URLSearchParams(window.location.search).get("next") ?? "";
+  const nextPath = rawNext.startsWith("/") && !rawNext.startsWith("/sign-in") ? rawNext : "/feed";
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -47,7 +49,7 @@ export default function SignInPage() {
         }
         return;
       }
-      setLocation("/feed");
+      setLocation(nextPath);
     } catch {
       setError(L("Errore durante l'accesso. Riprova.", "Login error. Try again."));
     } finally {
