@@ -18,6 +18,7 @@ interface AdoptableTree {
   title: string;
   description: string;
   speciesName: string | null;
+  locationName: string | null;
   imageUrl: string | null;
   thumbnailUrl: string | null;
   productDescription: string | null;
@@ -769,6 +770,9 @@ export default function AdoptableTreeDetailPage() {
           <h1 className="text-2xl font-bold text-foreground">{tree.title}</h1>
           {tree.speciesName && (
             <p className="text-muted-foreground text-sm italic">{tree.speciesName}</p>
+          )}
+          {tree.locationName && (
+            <p className="text-muted-foreground text-sm">📍 {tree.locationName}</p>
           )}
           {tree.ownerUsername && (
             <Link href={`/profile/${tree.ownerId}`}>

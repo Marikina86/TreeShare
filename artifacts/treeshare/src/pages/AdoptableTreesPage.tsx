@@ -5,6 +5,7 @@ import Layout from "@/components/Layout";
 import { useLang } from "@/lib/i18n";
 import { resolveImg } from "@/lib/imageUtils";
 import { useAuth } from "@/lib/auth";
+import { useState, useMemo } from "react";
 
 interface AdoptableTree {
   id: number;
@@ -15,6 +16,7 @@ interface AdoptableTree {
   title: string;
   description: string;
   speciesName: string | null;
+  locationName: string | null;
   imageUrl: string | null;
   thumbnailUrl: string | null;
   productDescription: string | null;
@@ -32,6 +34,7 @@ const T = {
     title: "Adotta un albero",
     subtitle: "Sostieni un albero reale e ricevi i suoi frutti direttamente a casa.",
     empty: "Nessun albero disponibile per l'adozione al momento.",
+    emptyFiltered: "Nessun risultato con questi filtri.",
     available: "disponibili",
     full: "Esaurito",
     paused: "In pausa",
@@ -44,11 +47,15 @@ const T = {
     slotsLeft: "posti rimasti",
     manageBtn: "Gestisci i tuoi alberi",
     createBtn: "Aggiungi albero",
+    filterSpeciesAll: "Tutte le specie",
+    filterLocationPlaceholder: "Cerca per luogo…",
+    filterLabel: "Filtra",
   },
   en: {
     title: "Adopt a Tree",
     subtitle: "Support a real tree and receive its fruits directly at home.",
     empty: "No trees available for adoption at the moment.",
+    emptyFiltered: "No results with these filters.",
     available: "available",
     full: "Full",
     paused: "Paused",
@@ -61,6 +68,9 @@ const T = {
     slotsLeft: "slots left",
     manageBtn: "Manage your trees",
     createBtn: "Add tree",
+    filterSpeciesAll: "All species",
+    filterLocationPlaceholder: "Search by location…",
+    filterLabel: "Filter",
   },
 };
 
@@ -117,6 +127,9 @@ function TreeCard({ tree, lang, currentUserId }: { tree: AdoptableTree; lang: "i
         {tree.speciesName && (
           <p className="text-xs text-muted-foreground mt-0.5 truncate">{tree.speciesName}</p>
         )}
+        {tree.locationName && (
+          <p className="text-xs text-muted-foreground mt-0.5 truncate">📍 {tree.locationName}</p>
+        )}
         {tree.ownerUsername && (
           <span
             className="block text-[11px] text-muted-foreground hover:text-primary mt-0.5 truncate transition-colors cursor-pointer"
@@ -149,6 +162,9 @@ export default function AdoptableTreesPage() {
   const isOrg = (profile.data as any)?.accountType === "organization";
   const { userId } = useAuth() as any;
 
+  const [speciesFilter, setSpeciesFilter] = useState("");
+  const [locationFilter, setLocationFilter] = useState("");
+
   const treesQuery = useQuery<AdoptableTree[]>({
     queryKey: ["adoptable-trees"],
     queryFn: async () => {
@@ -161,10 +177,27 @@ export default function AdoptableTreesPage() {
 
   const trees = treesQuery.data ?? [];
 
+  const speciesOptions = useMemo(() => {
+    const set = new Set<string>();
+    trees.forEach((tree) => { if (tree.speciesName) set.add(tree.speciesName); });
+    return Array.from(set).sort();
+  }, [trees]);
+
+  const filteredTrees = useMemo(() => {
+    return trees.filter((tree) => {
+      const matchSpecies = !speciesFilter || tree.speciesName === speciesFilter;
+      const matchLocation = !locationFilter ||
+        (tree.locationName ?? "").toLowerCase().includes(locationFilter.toLowerCase());
+      return matchSpecies && matchLocation;
+    });
+  }, [trees, speciesFilter, locationFilter]);
+
+  const hasFilters = !!speciesFilter || !!locationFilter;
+
   return (
     <Layout>
       <div className="max-w-4xl mx-auto px-4 py-6">
-        <div className="flex items-start justify-between mb-6">
+        <div className="flex items-start justify-between mb-4">
           <div>
             <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
               🌳 {t.title}
@@ -182,6 +215,40 @@ export default function AdoptableTreesPage() {
             </Link>
           )}
         </div>
+
+        {/* ── Filters ─────────────────────────────────────────────── */}
+        {!treesQuery.isLoading && trees.length > 0 && (
+          <div className="flex flex-col sm:flex-row gap-2 mb-5">
+            {speciesOptions.length > 0 && (
+              <select
+                value={speciesFilter}
+                onChange={(e) => setSpeciesFilter(e.target.value)}
+                className="flex-1 border border-border rounded-lg px-3 py-2 text-sm bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
+              >
+                <option value="">{t.filterSpeciesAll}</option>
+                {speciesOptions.map((s) => (
+                  <option key={s} value={s}>{s}</option>
+                ))}
+              </select>
+            )}
+            <input
+              type="text"
+              value={locationFilter}
+              onChange={(e) => setLocationFilter(e.target.value)}
+              placeholder={t.filterLocationPlaceholder}
+              className="flex-1 border border-border rounded-lg px-3 py-2 text-sm bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
+            />
+            {hasFilters && (
+              <button
+                type="button"
+                onClick={() => { setSpeciesFilter(""); setLocationFilter(""); }}
+                className="px-3 py-2 rounded-lg border border-border text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+        )}
 
         {treesQuery.isLoading && (
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
@@ -204,9 +271,16 @@ export default function AdoptableTreesPage() {
           </div>
         )}
 
-        {!treesQuery.isLoading && trees.length > 0 && (
+        {!treesQuery.isLoading && trees.length > 0 && filteredTrees.length === 0 && (
+          <div className="text-center py-12 text-muted-foreground">
+            <div className="text-4xl mb-3">🔍</div>
+            <p>{t.emptyFiltered}</p>
+          </div>
+        )}
+
+        {!treesQuery.isLoading && filteredTrees.length > 0 && (
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-            {trees.map((tree) => (
+            {filteredTrees.map((tree) => (
               <TreeCard key={tree.id} tree={tree} lang={lang as "it" | "en"} currentUserId={userId} />
             ))}
           </div>

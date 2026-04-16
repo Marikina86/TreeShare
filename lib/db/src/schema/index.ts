@@ -327,6 +327,7 @@ export const adoptableTreesTable = pgTable("adoptable_trees", {
   title: text("title").notNull(),
   description: text("description").notNull(),
   speciesName: text("species_name"),
+  locationName: text("location_name"),
   latitude: real("latitude").notNull(),
   longitude: real("longitude").notNull(),
   imageUrl: text("image_url"),

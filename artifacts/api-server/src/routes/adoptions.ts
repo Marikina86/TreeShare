@@ -65,6 +65,7 @@ router.get("/adopt/trees", async (req, res) => {
         title: adoptableTreesTable.title,
         description: adoptableTreesTable.description,
         speciesName: adoptableTreesTable.speciesName,
+        locationName: adoptableTreesTable.locationName,
         latitude: adoptableTreesTable.latitude,
         longitude: adoptableTreesTable.longitude,
         imageUrl: adoptableTreesTable.imageUrl,
@@ -135,6 +136,7 @@ router.get("/adopt/trees/:id", async (req, res) => {
         title: adoptableTreesTable.title,
         description: adoptableTreesTable.description,
         speciesName: adoptableTreesTable.speciesName,
+        locationName: adoptableTreesTable.locationName,
         latitude: adoptableTreesTable.latitude,
         longitude: adoptableTreesTable.longitude,
         imageUrl: adoptableTreesTable.imageUrl,
@@ -186,7 +188,7 @@ router.post("/adopt/trees", requireAuth, async (req, res) => {
     }
 
     const {
-      title, description, speciesName, latitude, longitude,
+      title, description, speciesName, locationName, latitude, longitude,
       imageUrl, thumbnailUrl, productDescription,
       priceCents, durationDays, maxAdoptions, ownerEmail,
     } = req.body;
@@ -226,6 +228,7 @@ router.post("/adopt/trees", requireAuth, async (req, res) => {
         title: title.trim(),
         description: description.trim(),
         speciesName: speciesName?.trim() || null,
+        locationName: locationName?.trim() || null,
         latitude: lat,
         longitude: lng,
         imageUrl: imageUrl?.trim() || null,
@@ -264,6 +267,7 @@ router.patch("/adopt/trees/:id", requireAuth, async (req, res) => {
     if (req.body.title !== undefined) updates.title = String(req.body.title).trim();
     if (req.body.description !== undefined) updates.description = String(req.body.description).trim();
     if (req.body.speciesName !== undefined) updates.speciesName = req.body.speciesName ? String(req.body.speciesName).trim() : null;
+    if (req.body.locationName !== undefined) updates.locationName = req.body.locationName ? String(req.body.locationName).trim() : null;
     if (req.body.imageUrl !== undefined) updates.imageUrl = req.body.imageUrl || null;
     if (req.body.thumbnailUrl !== undefined) updates.thumbnailUrl = req.body.thumbnailUrl || null;
     if (req.body.productDescription !== undefined) updates.productDescription = req.body.productDescription?.trim() || null;

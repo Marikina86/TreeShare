@@ -33,6 +33,8 @@ const T = {
     durationDays: [30, 90, 180, 365, 0],
     fieldCustomDays: "Giorni personalizzati",
     fieldMaxAdoptions: "Max adozioni simultanee",
+    fieldLocation: "Luogo",
+    fieldLocationPlaceholder: "es. Sicilia, Catania",
     fieldLatitude: "Latitudine",
     fieldLongitude: "Longitudine",
     fieldLatPlaceholder: "es. 37.5024",
@@ -82,6 +84,8 @@ const T = {
     durationDays: [30, 90, 180, 365, 0],
     fieldCustomDays: "Custom days",
     fieldMaxAdoptions: "Max simultaneous adoptions",
+    fieldLocation: "Location",
+    fieldLocationPlaceholder: "e.g. Sicily, Catania",
     fieldLatitude: "Latitude",
     fieldLongitude: "Longitude",
     fieldLatPlaceholder: "e.g. 37.5024",
@@ -145,6 +149,7 @@ export default function CreateAdoptableTreePage() {
 
   const [title, setTitle] = useState("");
   const [speciesName, setSpeciesName] = useState("");
+  const [locationName, setLocationName] = useState("");
   const [description, setDescription] = useState("");
   const [productDescription, setProductDescription] = useState("");
   const [priceEur, setPriceEur] = useState("");
@@ -238,6 +243,7 @@ export default function CreateAdoptableTreePage() {
           title: title.trim(),
           description: description.trim(),
           speciesName: speciesName.trim(),
+          locationName: locationName.trim() || null,
           productDescription: productDescription.trim() || null,
           priceCents,
           durationDays,
@@ -448,6 +454,18 @@ export default function CreateAdoptableTreePage() {
           {/* ── Posizione ─────────────────────────────────────────────── */}
           <section className="bg-card border border-border rounded-2xl p-4 space-y-4">
             <h2 className="font-semibold text-sm uppercase tracking-wide text-muted-foreground">{t.sectionLocation}</h2>
+
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-1">{t.fieldLocation}</label>
+              <input
+                type="text"
+                value={locationName}
+                onChange={(e) => setLocationName(e.target.value)}
+                placeholder={t.fieldLocationPlaceholder}
+                className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
+              />
+            </div>
+
             <p className="text-xs text-muted-foreground">{t.locationHelp}</p>
 
             <button
