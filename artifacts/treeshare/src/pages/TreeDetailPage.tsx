@@ -104,9 +104,13 @@ export default function TreeDetailPage() {
       if (editLatitude) body.latitude = lat;
       if (editLongitude) body.longitude = lng;
 
+      const token = await getToken();
       const res = await fetch(`/api/trees/${treeId}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify(body),
       });
       if (!res.ok) throw new Error("Errore nel salvataggio");
@@ -310,55 +314,57 @@ export default function TreeDetailPage() {
         </button>
 
         {/* Header */}
-        <div className="flex items-start justify-between mb-4">
-          <div className="min-w-0 flex-1 mr-3">
-            {((t as typeof t & { plantName?: string | null }).plantName) && (
-              <h1 className="text-xl font-bold text-foreground mb-1">
-                🌱 {(t as typeof t & { plantName?: string | null }).plantName}
-              </h1>
-            )}
-            <div className="flex flex-wrap gap-1.5 mb-1">
-              {t.species && (
-                <div className="inline-flex items-center gap-1 bg-primary/10 text-primary text-xs font-medium px-2 py-0.5 rounded-full">
-                  {t.species}
-                </div>
+        <div className="mb-4">
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0 flex-1">
+              {((t as typeof t & { plantName?: string | null }).plantName) && (
+                <h1 className="text-xl font-bold text-foreground mb-1">
+                  🌱 {(t as typeof t & { plantName?: string | null }).plantName}
+                </h1>
               )}
-              {(t as typeof t & { plantedAt?: string | null }).plantedAt && (
-                <div className="inline-flex items-center gap-1.5 bg-muted text-muted-foreground text-xs font-medium px-2 py-0.5 rounded-full">
-                  <svg width="11" height="11" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                    <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+              <div className="flex flex-wrap gap-1.5 mb-1">
+                {t.species && (
+                  <div className="inline-flex items-center gap-1 bg-primary/10 text-primary text-xs font-medium px-2 py-0.5 rounded-full">
+                    {t.species}
+                  </div>
+                )}
+                {(t as typeof t & { plantedAt?: string | null }).plantedAt && (
+                  <div className="inline-flex items-center gap-1.5 bg-muted text-muted-foreground text-xs font-medium px-2 py-0.5 rounded-full">
+                    <svg width="11" height="11" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                      <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+                    </svg>
+                    Piantata il {new Date((t as typeof t & { plantedAt?: string | null }).plantedAt!).toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" })}
+                  </div>
+                )}
+              </div>
+              {!(t as typeof t & { plantName?: string | null }).plantName && (
+                <h1 className="text-xl font-bold text-foreground">{t.species ?? "Pianta"}</h1>
+              )}
+              {(t.locationName || t.country) && (
+                <div className="flex items-center gap-2 mt-1 text-sm text-muted-foreground">
+                  <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                    <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/>
                   </svg>
-                  Piantata il {new Date((t as typeof t & { plantedAt?: string | null }).plantedAt!).toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" })}
+                  {t.locationName ?? t.country}
                 </div>
               )}
             </div>
-            {!(t as typeof t & { plantName?: string | null }).plantName && (
-              <h1 className="text-xl font-bold text-foreground">{t.species ?? "Pianta"}</h1>
-            )}
-            {(t.locationName || t.country) && (
-              <div className="flex items-center gap-2 mt-1 text-sm text-muted-foreground">
+            {canReport && (
+              <button
+                onClick={() => setShowReport(true)}
+                title="Segnala"
+                className="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 border border-border text-muted-foreground rounded-lg text-sm font-medium hover:text-destructive hover:border-destructive hover:bg-destructive/5 transition-colors"
+              >
                 <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                  <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/>
+                  <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z" strokeLinecap="round" strokeLinejoin="round"/>
+                  <line x1="4" y1="22" x2="4" y2="15" strokeLinecap="round"/>
                 </svg>
-                {t.locationName ?? t.country}
-              </div>
+                Segnala
+              </button>
             )}
           </div>
-          {canReport && (
-            <button
-              onClick={() => setShowReport(true)}
-              title="Segnala"
-              className="flex items-center gap-1.5 px-3 py-1.5 border border-border text-muted-foreground rounded-lg text-sm font-medium hover:text-destructive hover:border-destructive hover:bg-destructive/5 transition-colors"
-            >
-              <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z" strokeLinecap="round" strokeLinejoin="round"/>
-                <line x1="4" y1="22" x2="4" y2="15" strokeLinecap="round"/>
-              </svg>
-              Segnala
-            </button>
-          )}
           {isOwner && (
-            <div className="flex gap-2 flex-wrap justify-end">
+            <div className="flex gap-2 flex-wrap mt-3">
               <button
                 onClick={openEditModal}
                 className="px-3 py-1.5 border border-border text-foreground rounded-lg text-sm font-medium hover:bg-muted transition-colors flex items-center gap-1.5"
