@@ -479,9 +479,29 @@ export default function CreateAdoptableTreePage() {
                 }
                 setGpsLoading(true);
                 navigator.geolocation.getCurrentPosition(
-                  (pos) => {
-                    setLatitude(pos.coords.latitude.toFixed(6));
-                    setLongitude(pos.coords.longitude.toFixed(6));
+                  async (pos) => {
+                    const lat = pos.coords.latitude.toFixed(6);
+                    const lng = pos.coords.longitude.toFixed(6);
+                    setLatitude(lat);
+                    setLongitude(lng);
+                    try {
+                      const r = await fetch(
+                        `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&accept-language=it`,
+                        { headers: { "Accept-Language": "it" } },
+                      );
+                      if (r.ok) {
+                        const data = await r.json();
+                        const a = data.address ?? {};
+                        const parts = [
+                          a.city || a.town || a.village || a.municipality || a.county || "",
+                          a.state || a.region || "",
+                          a.country || "",
+                        ].filter(Boolean);
+                        const name = parts.join(", ");
+                        if (name) setLocationName(name);
+                      }
+                    } catch {
+                    }
                     setGpsLoading(false);
                   },
                   () => {
