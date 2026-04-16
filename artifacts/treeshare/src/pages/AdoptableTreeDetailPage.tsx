@@ -567,6 +567,7 @@ export default function AdoptableTreeDetailPage() {
   const searchParams = new URLSearchParams(search);
   const stripeConnectResult = searchParams.get("stripe_connect");
 
+  const [lightboxOpen, setLightboxOpen] = useState(false);
   const [selectedDurationDays, setSelectedDurationDays] = useState<number | null>(null);
   const [showPayment, setShowPayment] = useState(false);
   const [clientSecret, setClientSecret] = useState<string | null>(null);
@@ -721,9 +722,42 @@ export default function AdoptableTreeDetailPage() {
         )}
 
         {tree.imageUrl && (
-          <div className="rounded-2xl overflow-hidden mb-4 bg-muted max-h-72">
-            <img src={resolveImg(tree.imageUrl)} alt={tree.title} className="w-full h-72 object-cover" />
-          </div>
+          <>
+            <div
+              className="rounded-2xl overflow-hidden mb-4 bg-muted max-h-72 cursor-zoom-in relative group"
+              onClick={() => setLightboxOpen(true)}
+            >
+              <img src={resolveImg(tree.imageUrl)} alt={tree.title} className="w-full h-72 object-cover" />
+              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
+                <span className="opacity-0 group-hover:opacity-100 transition-opacity bg-black/60 text-white rounded-full p-2 text-lg leading-none">
+                  🔍
+                </span>
+              </div>
+            </div>
+
+            {lightboxOpen && (
+              <div
+                className="fixed inset-0 z-50 bg-black/95 flex items-center justify-center"
+                onClick={() => setLightboxOpen(false)}
+              >
+                <button
+                  className="absolute top-4 right-4 text-white bg-white/10 hover:bg-white/20 rounded-full p-2 leading-none transition-colors"
+                  onClick={(e) => { e.stopPropagation(); setLightboxOpen(false); }}
+                  aria-label="Chiudi"
+                >
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                    <path d="M18 6L6 18M6 6l12 12" />
+                  </svg>
+                </button>
+                <img
+                  src={resolveImg(tree.imageUrl)}
+                  alt={tree.title}
+                  className="max-w-full max-h-full object-contain select-none"
+                  onClick={(e) => e.stopPropagation()}
+                />
+              </div>
+            )}
+          </>
         )}
         {!tree.imageUrl && (
           <div className="rounded-2xl overflow-hidden mb-4 bg-muted h-40 flex items-center justify-center">
