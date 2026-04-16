@@ -15,7 +15,7 @@ interface LayoutProps {
 }
 
 export default function Layout({ children }: LayoutProps) {
-  const [location] = useLocation();
+  const [location, setLocation] = useLocation();
   const { user } = useUser();
   const { signOut } = useClerk();
   const { getToken } = useAuth();
@@ -287,6 +287,7 @@ export default function Layout({ children }: LayoutProps) {
     setSigningOut(true);
     try {
       await signOut();
+      setLocation("/sign-in");
     } finally {
       setSigningOut(false);
       setShowLogoutModal(false);
