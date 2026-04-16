@@ -624,8 +624,8 @@ export default function TreeDetailPage() {
 
       {/* Edit tree modal */}
       {showEditModal && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-sm">
-          <div className="bg-background rounded-t-2xl sm:rounded-2xl shadow-2xl w-full sm:max-w-lg flex flex-col max-h-[92dvh]">
+        <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center p-0 pb-20 sm:pb-0 sm:p-4 bg-black/60 backdrop-blur-sm">
+          <div className="bg-background rounded-t-2xl sm:rounded-2xl shadow-2xl w-full sm:max-w-lg flex flex-col max-h-[calc(92dvh-5rem)] sm:max-h-[90vh]">
             {/* Modal header */}
             <div className="flex items-center justify-between px-5 py-4 border-b border-border flex-shrink-0">
               <h2 className="font-semibold text-foreground text-lg">Modifica pianta</h2>

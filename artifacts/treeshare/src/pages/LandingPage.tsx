@@ -128,12 +128,12 @@ export default function LandingPage() {
     it: [
       { title: "Documenta ogni pianta", desc: "Condividi foto degli alberi che pianti con specie, posizione e note. Guarda come crescono nel tempo." },
       { title: "Mappa mondiale", desc: "Vedi ogni albero su una mappa interattiva mondiale con coordinate GPS verificate nel tempo." },
-      { title: "Community", desc: "Connettiti con piantatori da tutto il mondo. Segui la crescita, condividi scoperte, costruisci un pianeta più verde." },
+      { title: "Community", desc: "Connettiti con piantatori da tutto il mondo. Segui la crescita, condividi scoperte, costruisci un pianeta più verde. Contribuisci concretamente alla riduzione del CO2." },
     ],
     en: [
       { title: "Document every tree", desc: "Share photos of trees you plant with species, location, and notes. Watch them grow over time." },
       { title: "World map", desc: "See every tree on an interactive world map with GPS-precise coordinates verified over time." },
-      { title: "Community", desc: "Connect with planters around the world. Follow growth, share discoveries, build a greener planet." },
+      { title: "Community", desc: "Connect with planters around the world. Follow growth, share discoveries, build a greener planet. Contribute concretely to reducing CO2." },
     ],
     fr: [
       { title: "Documentez chaque plante", desc: "Partagez des photos des arbres que vous plantez avec espèce, position et notes. Regardez-les pousser dans le temps." },
