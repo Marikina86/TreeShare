@@ -19,7 +19,7 @@ function generateAdoptionCode(): string {
 
 const router = Router();
 
-const PLATFORM_FEE_PCT = 20;
+const PLATFORM_FEE_PCT = 30;
 
 function computeFees(amountCents: number) {
   const platformFeeCents = Math.round(amountCents * PLATFORM_FEE_PCT / 100);
