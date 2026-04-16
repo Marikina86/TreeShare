@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLang } from "@/lib/i18n";
 import { useToast } from "@/hooks/use-toast";
 import { ManagerPhotoThumbnails, type CampaignPhoto } from "@/components/PhotoLightbox";
+import { resizeToCampaignBlob } from "@/lib/imageUtils";
 import { loadStripe } from "@stripe/stripe-js";
 import { Elements, PaymentElement, useStripe, useElements } from "@stripe/react-stripe-js";
 import { PayPalScriptProvider, PayPalButtons } from "@paypal/react-paypal-js";
@@ -338,17 +339,20 @@ export default function DonationCampaignManager({ accountType }: {
   });
 
   async function uploadFile(file: File): Promise<string> {
+    const compressed = await resizeToCampaignBlob(file);
+    const ext = compressed.type === "image/webp" ? "webp" : "jpg";
+    const baseName = file.name.replace(/\.[^.]+$/, "") || "photo";
     const urlRes = await fetch("/api/storage/uploads/request-url", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: file.name, size: file.size, contentType: file.type || "image/jpeg" }),
+      body: JSON.stringify({ name: `${baseName}.${ext}`, size: compressed.size, contentType: compressed.type }),
     });
     if (!urlRes.ok) throw new Error("Failed to get upload URL");
     const { uploadURL } = await urlRes.json();
     const uploadRes = await fetch(uploadURL, {
       method: "PUT",
-      headers: { "Content-Type": file.type || "image/jpeg" },
-      body: file,
+      headers: { "Content-Type": compressed.type },
+      body: compressed,
     });
     if (!uploadRes.ok) throw new Error("Upload failed");
     const data = await uploadRes.json();
@@ -369,7 +373,7 @@ export default function DonationCampaignManager({ accountType }: {
       }
       setFormPhotos((prev) => [...prev, ...paths].slice(0, MAX_CAMPAIGN_PHOTOS));
     } catch {
-      toast({ title: "Upload error", variant: "destructive" });
+      toast({ title: lang === "it" ? "Errore upload" : "Upload error", description: lang === "it" ? "Impossibile caricare la foto. Riprova." : "Could not upload photo. Please try again.", variant: "destructive" });
     } finally {
       setUploadingPhoto(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
@@ -401,7 +405,7 @@ export default function DonationCampaignManager({ accountType }: {
         toast({ title: data.error || "Error", variant: "destructive" });
       }
     } catch {
-      toast({ title: "Upload error", variant: "destructive" });
+      toast({ title: lang === "it" ? "Errore upload" : "Upload error", description: lang === "it" ? "Impossibile caricare la foto. Riprova." : "Could not upload photo. Please try again.", variant: "destructive" });
     } finally {
       setUploadingForCampaign(null);
       const input = document.getElementById(`campaign-photo-${campaignId}`) as HTMLInputElement;
@@ -978,6 +982,7 @@ export default function DonationCampaignManager({ accountType }: {
                           onChange={(e) => handleCampaignPhotoUpload(c.id, photos, e)}
                         />
                         <button
+                          type="button"
                           onClick={() => document.getElementById(`campaign-photo-${c.id}`)?.click()}
                           disabled={uploadingForCampaign === c.id}
                           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-emerald-300 text-emerald-600 hover:bg-emerald-50 dark:border-emerald-700 dark:text-emerald-400 dark:hover:bg-emerald-900/30 disabled:opacity-50"

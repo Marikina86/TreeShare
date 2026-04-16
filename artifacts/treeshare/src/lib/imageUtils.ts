@@ -95,6 +95,16 @@ export async function resizeToBlob(file: File, maxPx = 1080): Promise<Blob> {
 }
 
 /**
+ * Foto campagna donazione.
+ * Max 1400px — WebP con qualità dinamica → target ≤ 400 KB.
+ * Tutti i metadati rimossi automaticamente (EXIF, GPS).
+ */
+export async function resizeToCampaignBlob(file: File): Promise<Blob> {
+  const canvas = buildCanvas(await loadImage(file), 1400);
+  return smartEncode(canvas, 400 * 1024);
+}
+
+/**
  * Thumbnail per griglia/feed.
  * Max 300px — WebP con qualità dinamica → target ≤ 40 KB.
  */
