@@ -54,16 +54,20 @@ export default function PostPage() {
   }, [gpsPermission]);
 
   async function uploadBlob(blob: Blob, name: string): Promise<string> {
+    const mime = blob.type || "image/jpeg";
+    const ext = mime === "image/webp" ? "webp" : "jpg";
+    const baseName = name.replace(/\.[^.]+$/, "");
+    const finalName = `${baseName}.${ext}`;
     const res = await fetch("/api/storage/uploads/request-url", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, size: blob.size, contentType: "image/jpeg" }),
+      body: JSON.stringify({ name: finalName, size: blob.size, contentType: mime }),
     });
     if (!res.ok) throw new Error("Failed to get upload URL");
     const { uploadURL } = await res.json();
     const uploadRes = await fetch(uploadURL, {
       method: "PUT",
-      headers: { "Content-Type": "image/jpeg" },
+      headers: { "Content-Type": mime },
       body: blob,
     });
     if (!uploadRes.ok) throw new Error("Failed to upload photo");
