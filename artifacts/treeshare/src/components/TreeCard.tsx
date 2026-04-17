@@ -78,7 +78,7 @@ export default function TreeCard({ tree, qualitySettings }: TreeCardProps) {
               thumbnailSrc={photoSrc(tree.photoThumbnailUrl ?? tree.photoUrl)}
               fullSrc={photoSrc(tree.photoUrl)}
               alt={tree.species ?? "Tree"}
-              className="w-full h-full object-contain hover:scale-105 transition-transform duration-300"
+              className="w-full h-full object-cover hover:scale-105 transition-transform duration-300"
               quality={qualitySettings?.image_quality ?? "thumbnail"}
               upgradeOnPause={qualitySettings?.upgrade_on_pause ?? false}
             />
