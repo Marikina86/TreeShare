@@ -567,7 +567,7 @@ export default function TreeDetailPage() {
                   <div className={`rounded-xl overflow-hidden border ${!photo.isMain && photo.photoStatus === "pending" ? "border-amber-300 dark:border-amber-700" : "border-border"}`}>
                     {!photo.isMain && photo.photoStatus === "pending" ? (
                       <div className="relative">
-                        <img src={photoSrc(photo.photoUrl)} alt={`Foto ${index + 1}`} className="w-full aspect-video object-contain bg-black/5 dark:bg-white/5 opacity-60 blur-sm" />
+                        <img src={photoSrc(photo.photoUrl)} alt={`Foto ${index + 1}`} className="w-full aspect-video object-cover bg-black/5 dark:bg-white/5 opacity-60 blur-sm" />
                         <div className="absolute inset-0 flex items-center justify-center">
                           <span className="bg-amber-500/90 text-white text-xs font-semibold px-3 py-1.5 rounded-full">In attesa di revisione</span>
                         </div>
@@ -576,7 +576,7 @@ export default function TreeDetailPage() {
                       <img
                         src={photoSrc(photo.photoUrl)}
                         alt={`Foto ${index + 1}`}
-                        className="w-full aspect-video object-contain bg-black/5 dark:bg-white/5 cursor-zoom-in"
+                        className="w-full aspect-video object-cover bg-black/5 dark:bg-white/5 cursor-zoom-in"
                         onClick={() => setLightboxUrl(photoSrc(photo.photoUrl))}
                       />
                     )}
