@@ -72,14 +72,15 @@ export default function OnboardingPage() {
   }
 
   async function uploadPhoto(file: File): Promise<string> {
+    const mime = file.type || "image/jpeg";
     const res = await fetch("/api/storage/uploads/request-url", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: file.name, size: file.size, contentType: file.type }),
+      body: JSON.stringify({ name: file.name, size: file.size, contentType: mime }),
     });
     if (!res.ok) throw new Error("Failed to get upload URL");
     const { uploadURL } = await res.json();
-    const putRes = await fetch(uploadURL, { method: "PUT", headers: { "Content-Type": "image/jpeg" }, body: file });
+    const putRes = await fetch(uploadURL, { method: "PUT", headers: { "Content-Type": mime }, body: file });
     if (!putRes.ok) throw new Error("Failed to upload photo");
     const putData = await putRes.json();
     return putData.finalObjectPath as string;

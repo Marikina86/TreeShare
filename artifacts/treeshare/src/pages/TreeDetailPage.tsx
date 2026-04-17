@@ -126,20 +126,21 @@ export default function TreeDetailPage() {
   }
 
   async function uploadPhoto(file: File): Promise<string> {
-    // 1. Ridimensiona l'immagine prima dell'upload (come PostPage)
     const resized = await resizeToBlob(file, 1200);
-    // 2. Richiedi l'URL di upload firmato
+    const mime = resized.type || "image/jpeg";
+    const ext = mime === "image/webp" ? "webp" : "jpg";
+    const baseName = file.name.replace(/\.[^.]+$/, "");
+    const finalName = `${baseName}.${ext}`;
     const res = await fetch("/api/storage/uploads/request-url", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: file.name, size: resized.size, contentType: "image/jpeg" }),
+      body: JSON.stringify({ name: finalName, size: resized.size, contentType: mime }),
     });
     if (!res.ok) throw new Error("Failed to get upload URL");
     const { uploadURL } = await res.json();
-    // 3. Carica il file — il percorso finale arriva nella risposta del PUT
     const uploadRes = await fetch(uploadURL, {
       method: "PUT",
-      headers: { "Content-Type": "image/jpeg" },
+      headers: { "Content-Type": mime },
       body: resized,
     });
     if (!uploadRes.ok) throw new Error("Upload failed");

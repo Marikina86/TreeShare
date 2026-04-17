@@ -50,6 +50,7 @@ const T = {
     success: "🌳 Albero creato con successo!",
     errorGeneric: "Errore durante la creazione. Riprova.",
     validationTitle: "Il nome è obbligatorio",
+    validationDesc: "La descrizione è obbligatoria",
     validationSpecies: "La specie è obbligatoria",
     validationPrice: "Il prezzo deve essere maggiore di 0",
     validationMaxAdoptions: "Le adozioni massime devono essere almeno 1",
@@ -101,6 +102,7 @@ const T = {
     success: "🌳 Tree created successfully!",
     errorGeneric: "Error creating tree. Please try again.",
     validationTitle: "Name is required",
+    validationDesc: "Description is required",
     validationSpecies: "Species is required",
     validationPrice: "Price must be greater than 0",
     validationMaxAdoptions: "Max adoptions must be at least 1",
@@ -117,17 +119,21 @@ const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"];
 const MAX_SIZE_BYTES = 10 * 1024 * 1024;
 
 async function uploadBlob(blob: Blob, name: string, token: string): Promise<string> {
+  const mime = blob.type || "image/jpeg";
+  const ext = mime === "image/webp" ? "webp" : "jpg";
+  const baseName = name.replace(/\.[^.]+$/, "");
+  const finalName = `${baseName}.${ext}`;
   const res = await fetch("/api/storage/uploads/request-url", {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-    body: JSON.stringify({ name, size: blob.size, contentType: "image/jpeg" }),
+    body: JSON.stringify({ name: finalName, size: blob.size, contentType: mime }),
   });
   if (!res.ok) throw new Error("Failed to get upload URL");
   const { uploadURL } = await res.json();
   const uploadRes = await fetch(uploadURL, {
     method: "PUT",
     body: blob,
-    headers: { "Content-Type": "image/jpeg" },
+    headers: { "Content-Type": mime },
   });
   if (!uploadRes.ok) throw new Error("Failed to upload image");
   const data = await uploadRes.json();
@@ -197,6 +203,7 @@ export default function CreateAdoptableTreePage() {
 
   function validate(): string | null {
     if (!title.trim()) return t.validationTitle;
+    if (!description.trim()) return t.validationDesc;
     if (!speciesName.trim()) return t.validationSpecies;
     const price = parseFloat(priceEur);
     if (isNaN(price) || price <= 0) return t.validationPrice;
@@ -356,12 +363,15 @@ export default function CreateAdoptableTreePage() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1">{t.fieldDesc}</label>
+              <label className="block text-sm font-medium text-foreground mb-1">
+                {t.fieldDesc} <span className="text-red-500">*</span>
+              </label>
               <textarea
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder={t.fieldDescPlaceholder}
                 rows={4}
+                required
                 className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background text-foreground resize-none focus:outline-none focus:ring-2 focus:ring-primary/40"
               />
             </div>
