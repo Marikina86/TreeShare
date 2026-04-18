@@ -48,7 +48,7 @@ const T = {
     manageBtn: "Gestisci i tuoi alberi",
     createBtn: "Aggiungi albero",
     filterSpeciesAll: "Tutte le specie",
-    filterLocationPlaceholder: "Cerca per luogo…",
+    filterLocationAll: "Tutti i luoghi",
     filterLabel: "Filtra",
   },
   en: {
@@ -69,7 +69,7 @@ const T = {
     manageBtn: "Manage your trees",
     createBtn: "Add tree",
     filterSpeciesAll: "All species",
-    filterLocationPlaceholder: "Search by location…",
+    filterLocationAll: "All locations",
     filterLabel: "Filter",
   },
 };
@@ -183,11 +183,16 @@ export default function AdoptableTreesPage() {
     return Array.from(set).sort();
   }, [trees]);
 
+  const locationOptions = useMemo(() => {
+    const set = new Set<string>();
+    trees.forEach((tree) => { if (tree.locationName) set.add(tree.locationName); });
+    return Array.from(set).sort();
+  }, [trees]);
+
   const filteredTrees = useMemo(() => {
     return trees.filter((tree) => {
       const matchSpecies = !speciesFilter || tree.speciesName === speciesFilter;
-      const matchLocation = !locationFilter ||
-        (tree.locationName ?? "").toLowerCase().includes(locationFilter.toLowerCase());
+      const matchLocation = !locationFilter || tree.locationName === locationFilter;
       return matchSpecies && matchLocation;
     });
   }, [trees, speciesFilter, locationFilter]);
@@ -217,7 +222,7 @@ export default function AdoptableTreesPage() {
         </div>
 
         {/* ── Filters ─────────────────────────────────────────────── */}
-        {!treesQuery.isLoading && trees.length > 0 && (
+        {!treesQuery.isLoading && trees.length > 0 && (speciesOptions.length > 0 || locationOptions.length > 0) && (
           <div className="flex flex-col sm:flex-row gap-2 mb-5">
             {speciesOptions.length > 0 && (
               <select
@@ -231,13 +236,18 @@ export default function AdoptableTreesPage() {
                 ))}
               </select>
             )}
-            <input
-              type="text"
-              value={locationFilter}
-              onChange={(e) => setLocationFilter(e.target.value)}
-              placeholder={t.filterLocationPlaceholder}
-              className="flex-1 border border-border rounded-lg px-3 py-2 text-sm bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
-            />
+            {locationOptions.length > 0 && (
+              <select
+                value={locationFilter}
+                onChange={(e) => setLocationFilter(e.target.value)}
+                className="flex-1 border border-border rounded-lg px-3 py-2 text-sm bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
+              >
+                <option value="">{t.filterLocationAll}</option>
+                {locationOptions.map((l) => (
+                  <option key={l} value={l}>{l}</option>
+                ))}
+              </select>
+            )}
             {hasFilters && (
               <button
                 type="button"
