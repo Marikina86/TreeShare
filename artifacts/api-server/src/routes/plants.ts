@@ -9,18 +9,32 @@ const MODELS_FALLBACK = [
 
 const PROMPT = `Analizza l'immagine fornita.
 
-Obiettivo: verificare se l'immagine ha una pianta o un albero come soggetto principale o ben visibile.
+Obiettivo: verificare se l'immagine mostra una pianta o un albero da esterno (in natura, giardino o spazio aperto) come soggetto principale o chiaramente visibile.
 
-Regole:
-- ACCETTA se c'è una pianta, albero, arbusto, fiore, vegetazione o pianta in vaso come soggetto riconoscibile, anche se ci sono sfondi come pareti, piastrelle, pavimenti, vasi, terra o altri elementi.
-- ACCETTA anche se la pianta non occupa l'intera immagine, purché sia il soggetto principale o in primo piano.
-- RIFIUTA solo se nell'immagine non è presente alcuna pianta o vegetazione, oppure se il soggetto principale è chiaramente una persona, un animale, un documento, uno schermo o un oggetto completamente privo di vegetazione.
+Regole di ACCETTAZIONE:
+- ACCETTA alberi, arbusti e cespugli in natura, giardini o spazi aperti.
+- ACCETTA piante da giardino, anche se in vaso ma collocate all'aperto o in contesti naturali.
+- ACCETTA piante in fiore (alberi in fiore, cespugli fioriti, piante da giardino fiorite) — i fiori che crescono sulla pianta sono ammessi.
+- ACCETTA piante con frutti o bacche naturali che crescono sull'albero o cespuglio.
+- ACCETTA anche se ci sono sfondi come cielo, terra, erba, muri, recinzioni o altri elementi tipici di esterni.
+
+Regole di RIFIUTO:
+- RIFIUTA fiori recisi, mazzi di fiori, composizioni floreali o fiori in vaso da appartamento senza pianta visibile (soggetto: solo il fiore, non la pianta).
+- RIFIUTA piante orticole, verdure e colture alimentari: ortaggi, insalate, pomodori, peperoni, zucchine, carote, erbe aromatiche in vaso da cucina, piante da orto.
+- RIFIUTA immagini in cui il soggetto principale non è una pianta o un albero (persone, animali, oggetti, documenti, schermi, veicoli).
+- RIFIUTA immagini di sola terra, erba senza piante riconoscibili, o vegetazione del tutto irriconoscibile.
+
+Casi limite:
+- Piante succulente o cactus in giardino esterno → ACCETTA.
+- Rosa in giardino con gambo e foglie visibili → ACCETTA (pianta in fiore).
+- Bouquet di rose recise → RIFIUTA.
+- Pomodori su pianta in orto → RIFIUTA.
 - In caso di dubbio, ACCETTA.
 
 Output richiesto (OBBLIGATORIO in JSON):
 {
   "valid": true | false,
-  "reason": "breve spiegazione"
+  "reason": "breve spiegazione in italiano"
 }
 
 Importante:
@@ -110,7 +124,7 @@ router.post("/plants/verify", async (req, res) => {
       if (parsed.valid === true) {
         res.json({ isPlant: true, label: "Valido", reason: parsed.reason ?? "", model });
       } else {
-        res.json({ isPlant: false, label: "Non valido", reason: parsed.reason ?? "Contenuto non vegetale rilevato.", model });
+        res.json({ isPlant: false, label: "Non valido", reason: parsed.reason ?? "Contenuto non vegetale o non ammesso rilevato.", model });
       }
       return;
 
