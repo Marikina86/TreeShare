@@ -8,6 +8,7 @@ import {
   platformRevenueTable,
   discountCodesTable,
   discountCodeUsesTable,
+  paymentLedgerTable,
 } from "@workspace/db";
 import { eq, and, desc, sql, gt, gte, lte, count } from "drizzle-orm";
 import { computeDiscountedCents } from "./discountCodes";
@@ -156,6 +157,16 @@ async function activateCampaign(
       })
       .where(eq(platformRevenueTable.id, 1));
 
+    await tx.insert(paymentLedgerTable).values({
+      type: "campaign_activation",
+      amountCents: pricePaid,
+      paymentMethod: "stripe",
+      stripePaymentIntentId: piId,
+      userId: campaign.userId,
+      campaignId: campaign.id,
+      description: `Attivazione campagna: ${campaign.title}`,
+    });
+
     return { success: true, campaignId: campaign.id, expiresAt: expiresAt.toISOString(), durationDays };
   });
 }
@@ -206,6 +217,16 @@ async function renewCampaign(campaignId: number, piId: string) {
         updatedAt: new Date(),
       })
       .where(eq(platformRevenueTable.id, 1));
+
+    await tx.insert(paymentLedgerTable).values({
+      type: "campaign_renewal",
+      amountCents: pricePaid,
+      paymentMethod: "stripe",
+      stripePaymentIntentId: piId,
+      userId: campaign.userId,
+      campaignId: campaign.id,
+      description: `Rinnovo campagna: ${campaign.title}`,
+    });
 
     return { success: true, campaignId: campaign.id, expiresAt: expiresAt.toISOString(), durationDays };
   });
@@ -279,6 +300,16 @@ async function activateCampaignByPayPalOrder(
       })
       .where(eq(platformRevenueTable.id, 1));
 
+    await tx.insert(paymentLedgerTable).values({
+      type: "campaign_activation",
+      amountCents: pricePaid,
+      paymentMethod: "paypal",
+      paypalOrderId: orderId,
+      userId: campaign.userId,
+      campaignId: campaign.id,
+      description: `Attivazione campagna (PayPal): ${campaign.title}`,
+    });
+
     return { success: true, campaignId: campaign.id, expiresAt: expiresAt.toISOString(), durationDays };
   });
 }
@@ -330,6 +361,16 @@ async function renewCampaignByPayPalOrder(campaignId: number, orderId: string) {
         updatedAt: new Date(),
       })
       .where(eq(platformRevenueTable.id, 1));
+
+    await tx.insert(paymentLedgerTable).values({
+      type: "campaign_renewal",
+      amountCents: pricePaid,
+      paymentMethod: "paypal",
+      paypalOrderId: orderId,
+      userId: campaign.userId,
+      campaignId: campaign.id,
+      description: `Rinnovo campagna (PayPal): ${campaign.title}`,
+    });
 
     return { success: true, campaignId: campaign.id, expiresAt: expiresAt.toISOString(), durationDays };
   });

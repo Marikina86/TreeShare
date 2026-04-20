@@ -6,6 +6,7 @@ import {
   treeAdoptionsTable,
   usersTable,
   userNotificationsTable,
+  paymentLedgerTable,
 } from "@workspace/db";
 import { eq, and, desc, lt, lte, gte, isNull, inArray } from "drizzle-orm";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth";
@@ -694,6 +695,29 @@ router.post("/adopt/confirm", requireAuth, async (req, res) => {
         .update(adoptableTreesTable)
         .set({ currentAdoptions: newCount, status: newStatus, updatedAt: new Date() })
         .where(eq(adoptableTreesTable.id, treeId));
+
+      await tx.insert(paymentLedgerTable).values([
+        {
+          type: "adoption_payment",
+          amountCents,
+          paymentMethod: "stripe",
+          stripePaymentIntentId: paymentIntentId,
+          userId,
+          entityUserId: tree.ownerId,
+          adoptionId: adoption.id,
+          description: `Adozione albero: ${treeName}`,
+        },
+        {
+          type: "platform_commission",
+          amountCents: platformFeeCents,
+          paymentMethod: "stripe",
+          stripePaymentIntentId: paymentIntentId,
+          userId,
+          entityUserId: tree.ownerId,
+          adoptionId: adoption.id,
+          description: `Commissione piattaforma 30%: ${treeName}`,
+        },
+      ]);
 
       return { success: true, adoptionId: adoption.id, adoptionCode, endDate: endDate.toISOString(), treeName: tree.title, ownerEmail: tree.ownerEmail };
     });

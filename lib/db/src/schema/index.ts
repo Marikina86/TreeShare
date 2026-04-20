@@ -373,6 +373,33 @@ export const treeAdoptionsTable = pgTable("tree_adoptions", {
   index("tree_adoptions_end_date_idx").on(table.endDate),
 ]);
 
+// ── Payment Ledger ─────────────────────────────────────────────────────────────
+// Immutable audit trail for every settled payment. Admin-only soft delete — no
+// automatic cleanup. Two rows per adoption: one for the full amount, one for
+// the platform commission.
+
+export const paymentLedgerTable = pgTable("payment_ledger", {
+  id: serial("id").primaryKey(),
+  type: text("type").notNull(), // 'campaign_activation' | 'campaign_renewal' | 'adoption_payment' | 'platform_commission'
+  amountCents: integer("amount_cents").notNull(),
+  currency: text("currency").notNull().default("eur"),
+  paymentMethod: text("payment_method").notNull(), // 'stripe' | 'paypal'
+  stripePaymentIntentId: text("stripe_payment_intent_id"),
+  paypalOrderId: text("paypal_order_id"),
+  userId: text("user_id").notNull(),
+  entityUserId: text("entity_user_id"),
+  campaignId: integer("campaign_id"),
+  adoptionId: integer("adoption_id"),
+  description: text("description").notNull(),
+  deletedAt: timestamp("deleted_at"),
+  deletedBy: text("deleted_by"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (table) => [
+  index("payment_ledger_user_id_idx").on(table.userId),
+  index("payment_ledger_type_idx").on(table.type),
+  index("payment_ledger_created_at_idx").on(table.createdAt),
+]);
+
 export const insertUserSchema = createInsertSchema(usersTable).omit({ id: true, createdAt: true });
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof usersTable.$inferSelect;

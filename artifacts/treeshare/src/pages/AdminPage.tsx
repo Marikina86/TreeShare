@@ -121,7 +121,7 @@ interface AdminAlertItem {
   updatedAt: string;
 }
 
-type Tab = "users" | "reports" | "trees" | "problems" | "pending_events" | "pending_photos" | "pending_updates" | "alerts" | "tips" | "finance" | "discounts";
+type Tab = "users" | "reports" | "trees" | "problems" | "pending_events" | "pending_photos" | "pending_updates" | "alerts" | "tips" | "finance" | "discounts" | "ledger";
 type UserFilter = "all" | "active" | "blocked";
 type ReportFilter = "all" | "pending" | "reviewed" | "dismissed";
 
@@ -240,10 +240,26 @@ export default function AdminPage() {
     refetchInterval: false,
   });
 
+  interface LedgerEntry {
+    id: number; type: string; amountCents: number; currency: string;
+    paymentMethod: string; stripePaymentIntentId: string | null; paypalOrderId: string | null;
+    userId: string; entityUserId: string | null; campaignId: number | null; adoptionId: number | null;
+    description: string; deletedAt: string | null; deletedBy: string | null; createdAt: string;
+  }
+  interface LedgerData {
+    entries: LedgerEntry[];
+    summary: { totalCents: number; commissionCents: number; campaignCents: number; adoptionCents: number; count: number };
+  }
+  const [ledgerData, setLedgerData] = useState<LedgerData | null>(null);
+  const [ledgerLoading, setLedgerLoading] = useState(false);
+  const [ledgerTypeFilter, setLedgerTypeFilter] = useState<string>("all");
+  const [deletingLedgerId, setDeletingLedgerId] = useState<number | null>(null);
+  const [confirmDeleteLedgerId, setConfirmDeleteLedgerId] = useState<number | null>(null);
+
   const T = {
     it: {
       title: "Pannello di controllo", subtitle: "Gestione utenti e contenuti",
-      tabs: { users: "Utenti", reports: "Segnalazioni", trees: "Contenuti", problems: "Problemi", alerts: "Avvisi", tips: "Consigli", finance: "Finanza", discounts: "Sconti" },
+      tabs: { users: "Utenti", reports: "Segnalazioni", trees: "Contenuti", problems: "Problemi", alerts: "Avvisi", tips: "Consigli", finance: "Finanza", discounts: "Sconti", ledger: "Ledger" },
       stats: { users: "Utenti totali", trees: "Alberi piantati", blocked: "Utenti bloccati" },
       search: "Cerca utente...", searchTrees: "Cerca contenuto...",
       filters: { all: "Tutti", active: "Attivi", blocked: "Bloccati", pending: "In attesa", reviewed: "Esaminati", dismissed: "Archiviati" },
@@ -266,7 +282,7 @@ export default function AdminPage() {
     },
     en: {
       title: "Admin Panel", subtitle: "User and content management",
-      tabs: { users: "Users", reports: "Reports", trees: "Content", problems: "Problems", alerts: "Alerts", tips: "Tips", finance: "Finance", discounts: "Discounts" },
+      tabs: { users: "Users", reports: "Reports", trees: "Content", problems: "Problems", alerts: "Alerts", tips: "Tips", finance: "Finance", discounts: "Discounts", ledger: "Ledger" },
       stats: { users: "Total users", trees: "Trees planted", blocked: "Blocked users" },
       search: "Search user...", searchTrees: "Search content...",
       filters: { all: "All", active: "Active", blocked: "Blocked", pending: "Pending", reviewed: "Reviewed", dismissed: "Dismissed" },
@@ -669,6 +685,34 @@ export default function AdminPage() {
     finally { setActionLoading(null); }
   }
 
+  async function loadLedger() {
+    setLedgerLoading(true);
+    try {
+      const res = await authFetch("/api/admin/payment-ledger");
+      if (res.ok) setLedgerData(await res.json());
+    } catch { toast({ title: T.errors.load, variant: "destructive" }); }
+    finally { setLedgerLoading(false); }
+  }
+
+  async function handleDeleteLedgerEntry(id: number) {
+    setDeletingLedgerId(id);
+    try {
+      const res = await authFetch(`/api/admin/payment-ledger/${id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error();
+      setLedgerData((prev) => prev ? {
+        ...prev,
+        entries: prev.entries.filter((e) => e.id !== id),
+        summary: {
+          ...prev.summary,
+          count: prev.summary.count - 1,
+        },
+      } : null);
+      setConfirmDeleteLedgerId(null);
+      toast({ title: lang === "it" ? "Voce eliminata dal ledger" : "Ledger entry deleted" });
+    } catch { toast({ title: lang === "it" ? "Errore eliminazione voce" : "Error deleting entry", variant: "destructive" }); }
+    finally { setDeletingLedgerId(null); }
+  }
+
   useEffect(() => { loadUsers(); }, [search]);
   useEffect(() => { if (activeTab === "reports") loadReports(); }, [activeTab]);
   useEffect(() => { if (activeTab === "trees") loadTrees(1, treeSearch); }, [activeTab]);
@@ -679,6 +723,7 @@ export default function AdminPage() {
   useEffect(() => { if (activeTab === "pending_updates") loadPendingUpdates(1); }, [activeTab]);
   useEffect(() => { if (activeTab === "alerts") loadAdminAlerts(); }, [activeTab]);
   useEffect(() => { if (activeTab === "tips") loadAdminTips(); }, [activeTab]);
+  useEffect(() => { if (activeTab === "ledger") loadLedger(); }, [activeTab]);
   useEffect(() => { loadProblemReports(); }, []);
   useEffect(() => { loadPendingCounts(); }, []);
 
@@ -927,6 +972,14 @@ export default function AdminPage() {
           >
             <svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A2 2 0 013 12V7a4 4 0 014-4z" strokeLinecap="round" strokeLinejoin="round"/></svg>
             {T.tabs.discounts}
+          </button>
+          <button
+            onClick={() => setActiveTab("ledger")}
+            className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors ${activeTab === "ledger" ? "bg-cyan-600 text-white" : "text-muted-foreground hover:bg-muted"}`}
+          >
+            <svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" strokeLinecap="round" strokeLinejoin="round"/><path d="M9 12h6M9 16h4" strokeLinecap="round"/></svg>
+            {T.tabs.ledger}
+            {ledgerData && <span className="text-xs opacity-75">({ledgerData.summary.count})</span>}
           </button>
         </div>
       </header>
@@ -2388,6 +2441,149 @@ export default function AdminPage() {
 
         {/* ── DISCOUNTS TAB ── */}
         {activeTab === "discounts" && <AdminDiscountSection />}
+
+        {/* ── LEDGER TAB ── */}
+        {activeTab === "ledger" && (
+          <>
+            {ledgerLoading ? (
+              <div className="text-center py-12 text-muted-foreground">{lang === "it" ? "Caricamento ledger..." : "Loading ledger..."}</div>
+            ) : ledgerData ? (
+              <>
+                {/* Riepilogo */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  {[
+                    { label: lang === "it" ? "Totale" : "Total", value: (ledgerData.summary.totalCents / 100).toFixed(2) + " €", color: "text-foreground" },
+                    { label: lang === "it" ? "Campagne" : "Campaigns", value: (ledgerData.summary.campaignCents / 100).toFixed(2) + " €", color: "text-emerald-600" },
+                    { label: lang === "it" ? "Adozioni" : "Adoptions", value: (ledgerData.summary.adoptionCents / 100).toFixed(2) + " €", color: "text-blue-600" },
+                    { label: lang === "it" ? "Commissioni" : "Commissions", value: (ledgerData.summary.commissionCents / 100).toFixed(2) + " €", color: "text-amber-600" },
+                  ].map((stat) => (
+                    <div key={stat.label} className="bg-card border border-border rounded-2xl p-4 text-center">
+                      <div className={`text-xl font-bold ${stat.color}`}>{stat.value}</div>
+                      <div className="text-xs text-muted-foreground mt-1">{stat.label}</div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Filtro tipo */}
+                <div className="flex flex-wrap gap-2">
+                  {[
+                    { key: "all", label: lang === "it" ? "Tutti" : "All" },
+                    { key: "campaign_activation", label: lang === "it" ? "Attivazione campagna" : "Campaign activation" },
+                    { key: "campaign_renewal", label: lang === "it" ? "Rinnovo campagna" : "Campaign renewal" },
+                    { key: "adoption_payment", label: lang === "it" ? "Pagamento adozione" : "Adoption payment" },
+                    { key: "platform_commission", label: lang === "it" ? "Commissione piattaforma" : "Platform commission" },
+                  ].map((f) => (
+                    <button key={f.key} onClick={() => setLedgerTypeFilter(f.key)}
+                      className={`px-3 py-1 rounded-full text-xs font-semibold border transition-colors ${ledgerTypeFilter === f.key ? "bg-cyan-600 text-white border-cyan-600" : "border-border text-muted-foreground hover:bg-muted"}`}>
+                      {f.label}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Tabella voci */}
+                {(() => {
+                  const filtered = ledgerTypeFilter === "all"
+                    ? ledgerData.entries
+                    : ledgerData.entries.filter((e) => e.type === ledgerTypeFilter);
+
+                  const TYPE_LABELS: Record<string, string> = {
+                    campaign_activation: lang === "it" ? "Attivazione" : "Activation",
+                    campaign_renewal: lang === "it" ? "Rinnovo" : "Renewal",
+                    adoption_payment: lang === "it" ? "Adozione" : "Adoption",
+                    platform_commission: lang === "it" ? "Commissione" : "Commission",
+                  };
+                  const TYPE_COLORS: Record<string, string> = {
+                    campaign_activation: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400",
+                    campaign_renewal: "bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400",
+                    adoption_payment: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
+                    platform_commission: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
+                  };
+
+                  if (filtered.length === 0) {
+                    return <div className="text-center py-10 text-muted-foreground">{lang === "it" ? "Nessuna voce trovata" : "No entries found"}</div>;
+                  }
+
+                  return (
+                    <div className="bg-card border border-border rounded-2xl overflow-hidden">
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="border-b border-border bg-muted/30">
+                              <th className="text-left px-4 py-3 font-semibold text-muted-foreground">ID</th>
+                              <th className="text-left px-4 py-3 font-semibold text-muted-foreground">{lang === "it" ? "Tipo" : "Type"}</th>
+                              <th className="text-left px-4 py-3 font-semibold text-muted-foreground">{lang === "it" ? "Descrizione" : "Description"}</th>
+                              <th className="text-right px-4 py-3 font-semibold text-muted-foreground">{lang === "it" ? "Importo" : "Amount"}</th>
+                              <th className="text-left px-4 py-3 font-semibold text-muted-foreground">{lang === "it" ? "Metodo" : "Method"}</th>
+                              <th className="text-left px-4 py-3 font-semibold text-muted-foreground">{lang === "it" ? "Data" : "Date"}</th>
+                              <th className="px-4 py-3"></th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {filtered.map((entry) => (
+                              <tr key={entry.id} className="border-b border-border last:border-0 hover:bg-muted/20 transition-colors">
+                                <td className="px-4 py-3 text-muted-foreground font-mono text-xs">{entry.id}</td>
+                                <td className="px-4 py-3">
+                                  <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${TYPE_COLORS[entry.type] ?? "bg-muted text-muted-foreground"}`}>
+                                    {TYPE_LABELS[entry.type] ?? entry.type}
+                                  </span>
+                                </td>
+                                <td className="px-4 py-3 max-w-[220px]">
+                                  <div className="truncate text-foreground">{entry.description}</div>
+                                  {entry.adoptionId && <div className="text-xs text-muted-foreground">Adoz. #{entry.adoptionId}</div>}
+                                  {entry.campaignId && <div className="text-xs text-muted-foreground">Camp. #{entry.campaignId}</div>}
+                                </td>
+                                <td className="px-4 py-3 text-right font-semibold tabular-nums">
+                                  {(entry.amountCents / 100).toFixed(2)} €
+                                </td>
+                                <td className="px-4 py-3">
+                                  <span className={`inline-flex items-center gap-1 text-xs font-medium ${entry.paymentMethod === "stripe" ? "text-violet-600" : "text-blue-600"}`}>
+                                    {entry.paymentMethod === "stripe" ? "Stripe" : "PayPal"}
+                                  </span>
+                                </td>
+                                <td className="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap">
+                                  {new Date(entry.createdAt).toLocaleDateString("it-IT", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" })}
+                                </td>
+                                <td className="px-4 py-3">
+                                  {confirmDeleteLedgerId === entry.id ? (
+                                    <div className="flex items-center gap-1.5">
+                                      <button
+                                        onClick={() => handleDeleteLedgerEntry(entry.id)}
+                                        disabled={deletingLedgerId === entry.id}
+                                        className="px-2 py-1 bg-destructive text-white text-xs rounded-lg font-semibold disabled:opacity-50"
+                                      >
+                                        {deletingLedgerId === entry.id ? "..." : lang === "it" ? "Conferma" : "Confirm"}
+                                      </button>
+                                      <button
+                                        onClick={() => setConfirmDeleteLedgerId(null)}
+                                        className="px-2 py-1 border border-border text-xs rounded-lg text-muted-foreground hover:bg-muted"
+                                      >
+                                        {lang === "it" ? "Annulla" : "Cancel"}
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <button
+                                      onClick={() => setConfirmDeleteLedgerId(entry.id)}
+                                      className="p-1.5 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg transition-colors"
+                                      title={lang === "it" ? "Elimina voce" : "Delete entry"}
+                                    >
+                                      <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                                    </button>
+                                  )}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </>
+            ) : (
+              <div className="text-center py-10 text-muted-foreground">{lang === "it" ? "Nessun dato disponibile" : "No data available"}</div>
+            )}
+          </>
+        )}
 
       </div>
 

@@ -21,6 +21,7 @@ import cookieConsentRouter from "./cookieConsent";
 import donationsRouter from "./donations";
 import discountCodesRouter from "./discountCodes";
 import adoptionsRouter from "./adoptions";
+import adminLedgerRouter from "./adminLedger";
 
 const router: IRouter = Router();
 
@@ -46,5 +47,6 @@ router.use(cookieConsentRouter);
 router.use("/donations", donationsRouter);
 router.use(discountCodesRouter);
 router.use(adoptionsRouter);
+router.use(adminLedgerRouter);
 
 export default router;
