@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { paymentLedgerTable } from "@workspace/db";
+import { paymentLedgerTable, usersTable, organizationsTable } from "@workspace/db";
 import { eq, isNull, desc } from "drizzle-orm";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth";
 import { requireAdmin } from "../middlewares/requireAdmin";
@@ -49,6 +49,66 @@ router.get("/admin/payment-ledger", requireAuth, requireAdmin, async (req, res) 
         adoptionCents,
         count: filtered.length,
       },
+    });
+  } catch (err) {
+    res.status(500).json({ error: "Errore interno" });
+  }
+});
+
+/**
+ * GET /admin/ledger/billing/:entityUserId
+ * Returns billing details for an entity user (clerkUserId).
+ * If the user is an organization, also returns full org fiscal data.
+ */
+router.get("/admin/ledger/billing/:entityUserId", requireAuth, requireAdmin, async (req, res) => {
+  const { entityUserId } = req.params;
+  if (!entityUserId) { res.status(400).json({ error: "entityUserId obbligatorio" }); return; }
+  try {
+    const [user] = await db
+      .select()
+      .from(usersTable)
+      .where(eq(usersTable.clerkUserId, entityUserId));
+
+    if (!user) { res.status(404).json({ error: "Utente non trovato" }); return; }
+
+    if (user.accountType === "organization") {
+      const [org] = await db
+        .select()
+        .from(organizationsTable)
+        .where(eq(organizationsTable.username, user.username));
+
+      if (org) {
+        res.json({
+          type: "organization",
+          username: user.username,
+          accountType: user.accountType,
+          country: user.country,
+          city: user.city,
+          ragioneSociale: org.ragioneSociale,
+          partitaIva: org.partitaIva,
+          codiceFiscale: org.codiceFiscale,
+          codiceUnivoco: org.codiceUnivoco,
+          formaGiuridica: org.formaGiuridica,
+          numeroRegistroImprese: org.numeroRegistroImprese ?? null,
+          indirizzoVia: org.indirizzoVia,
+          indirizzoCitta: org.indirizzoCitta,
+          indirizzoCap: org.indirizzoCap,
+          indirizzoStato: org.indirizzoStato,
+          emailUfficiale: org.emailUfficiale,
+          telefono: org.telefono,
+          referenteNome: org.referenteNome,
+          referenteCognome: org.referenteCognome,
+        });
+        return;
+      }
+    }
+
+    res.json({
+      type: "user",
+      username: user.username,
+      accountType: user.accountType,
+      country: user.country ?? null,
+      city: user.city ?? null,
     });
   } catch (err) {
     res.status(500).json({ error: "Errore interno" });

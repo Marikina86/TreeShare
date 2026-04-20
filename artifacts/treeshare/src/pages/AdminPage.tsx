@@ -153,6 +153,15 @@ function UserAvatar({ user }: { user: AdminUser }) {
   );
 }
 
+function BillingRow({ label, value }: { label: string; value?: string | null }) {
+  return (
+    <div className="flex items-start gap-3 px-4 py-2.5 bg-card">
+      <span className="text-xs text-muted-foreground w-36 shrink-0 pt-0.5">{label}</span>
+      <span className="text-sm font-medium text-foreground break-all">{value ?? "—"}</span>
+    </div>
+  );
+}
+
 export default function AdminPage() {
   const { getToken } = useAuth();
   const [, setLocation] = useLocation();
@@ -251,11 +260,36 @@ export default function AdminPage() {
     entries: LedgerEntry[];
     summary: { totalCents: number; commissionCents: number; campaignCents: number; adoptionCents: number; count: number };
   }
+  interface BillingData {
+    type: "organization" | "user";
+    username: string;
+    accountType: string;
+    country: string | null;
+    city: string | null;
+    ragioneSociale?: string;
+    partitaIva?: string;
+    codiceFiscale?: string;
+    codiceUnivoco?: string;
+    formaGiuridica?: string;
+    numeroRegistroImprese?: string | null;
+    indirizzoVia?: string;
+    indirizzoCitta?: string;
+    indirizzoCap?: string;
+    indirizzoStato?: string;
+    emailUfficiale?: string;
+    telefono?: string;
+    referenteNome?: string;
+    referenteCognome?: string;
+  }
+
   const [ledgerData, setLedgerData] = useState<LedgerData | null>(null);
   const [ledgerLoading, setLedgerLoading] = useState(false);
   const [ledgerTypeFilter, setLedgerTypeFilter] = useState<string>("all");
   const [deletingLedgerId, setDeletingLedgerId] = useState<number | null>(null);
   const [confirmDeleteLedgerId, setConfirmDeleteLedgerId] = useState<number | null>(null);
+  const [billingModal, setBillingModal] = useState<{ entityUserId: string; entryLabel: string } | null>(null);
+  const [billingData, setBillingData] = useState<BillingData | null>(null);
+  const [billingLoading, setBillingLoading] = useState(false);
 
   const T = {
     it: {
@@ -712,6 +746,17 @@ export default function AdminPage() {
       toast({ title: lang === "it" ? "Voce eliminata dal ledger" : "Ledger entry deleted" });
     } catch { toast({ title: lang === "it" ? "Errore eliminazione voce" : "Error deleting entry", variant: "destructive" }); }
     finally { setDeletingLedgerId(null); }
+  }
+
+  async function openBillingModal(entityUserId: string, entryLabel: string) {
+    setBillingModal({ entityUserId, entryLabel });
+    setBillingData(null);
+    setBillingLoading(true);
+    try {
+      const res = await authFetch(`/api/admin/ledger/billing/${encodeURIComponent(entityUserId)}`);
+      if (res.ok) setBillingData(await res.json());
+    } catch { /* non-critical, modal shows loading state */ }
+    finally { setBillingLoading(false); }
   }
 
   useEffect(() => { loadUsers(); }, [search]);
@@ -2535,8 +2580,19 @@ export default function AdminPage() {
                                   {entry.campaignId && <div className="text-xs text-muted-foreground">Camp. #{entry.campaignId}</div>}
                                 </td>
                                 <td className="px-4 py-3 max-w-[160px]">
-                                  {entry.entityUserName ? (
-                                    <span className="font-medium text-foreground truncate block">{entry.entityUserName}</span>
+                                  {entry.entityUserId ? (
+                                    <button
+                                      onClick={() => openBillingModal(entry.entityUserId!, entry.entityUserName ?? entry.entityUserId!)}
+                                      className="flex items-center gap-1.5 group text-left"
+                                      title={lang === "it" ? "Visualizza dati fatturazione" : "View billing details"}
+                                    >
+                                      <span className="font-medium text-cyan-600 dark:text-cyan-400 truncate group-hover:underline">
+                                        {entry.entityUserName ?? entry.entityUserId}
+                                      </span>
+                                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="flex-shrink-0 opacity-60 group-hover:opacity-100">
+                                        <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+                                      </svg>
+                                    </button>
                                   ) : (
                                     <span className="text-muted-foreground text-xs">—</span>
                                   )}
@@ -2595,6 +2651,80 @@ export default function AdminPage() {
         )}
 
       </div>
+
+      {/* Billing details modal */}
+      {billingModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setBillingModal(null)}>
+          <div className="bg-background rounded-2xl shadow-2xl max-w-md w-full p-6 flex flex-col gap-4" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-full bg-cyan-100 dark:bg-cyan-900/30 flex items-center justify-center">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-cyan-600 dark:text-cyan-400">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/>
+                  </svg>
+                </div>
+                <h2 className="font-semibold text-foreground text-base">
+                  {lang === "it" ? "Dati fatturazione" : "Billing details"}
+                </h2>
+              </div>
+              <button onClick={() => setBillingModal(null)} className="text-muted-foreground hover:text-foreground p-1 rounded-lg hover:bg-muted transition-colors">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              </button>
+            </div>
+
+            <p className="text-xs text-muted-foreground font-mono truncate">{billingModal.entryLabel}</p>
+
+            {billingLoading ? (
+              <div className="flex items-center justify-center py-8 text-muted-foreground text-sm">
+                {lang === "it" ? "Caricamento..." : "Loading..."}
+              </div>
+            ) : billingData ? (
+              <div className="flex flex-col gap-0 divide-y divide-border rounded-xl border border-border overflow-hidden text-sm">
+                {billingData.type === "organization" ? (
+                  <>
+                    <BillingRow label={lang === "it" ? "Ragione sociale" : "Company name"} value={billingData.ragioneSociale} />
+                    <BillingRow label={lang === "it" ? "Forma giuridica" : "Legal form"} value={billingData.formaGiuridica} />
+                    <BillingRow label="Partita IVA" value={billingData.partitaIva} />
+                    <BillingRow label={lang === "it" ? "Codice fiscale" : "Fiscal code"} value={billingData.codiceFiscale} />
+                    <BillingRow label={lang === "it" ? "Codice univoco (SDI)" : "SDI code"} value={billingData.codiceUnivoco} />
+                    {billingData.numeroRegistroImprese && (
+                      <BillingRow label={lang === "it" ? "N. registro imprese" : "Business registry n."} value={billingData.numeroRegistroImprese} />
+                    )}
+                    <BillingRow label={lang === "it" ? "Indirizzo" : "Address"} value={`${billingData.indirizzoVia}, ${billingData.indirizzoCap} ${billingData.indirizzoCitta} (${billingData.indirizzoStato})`} />
+                    <BillingRow label="Email" value={billingData.emailUfficiale} />
+                    <BillingRow label={lang === "it" ? "Telefono" : "Phone"} value={billingData.telefono} />
+                    <BillingRow label={lang === "it" ? "Referente" : "Contact"} value={`${billingData.referenteNome} ${billingData.referenteCognome}`} />
+                    <BillingRow label="Username" value={`@${billingData.username}`} />
+                  </>
+                ) : (
+                  <>
+                    <BillingRow label="Username" value={`@${billingData.username}`} />
+                    <BillingRow label={lang === "it" ? "Tipo account" : "Account type"} value={billingData.accountType} />
+                    {billingData.city && <BillingRow label={lang === "it" ? "Città" : "City"} value={billingData.city} />}
+                    {billingData.country && <BillingRow label={lang === "it" ? "Paese" : "Country"} value={billingData.country} />}
+                    <div className="px-4 py-3 bg-amber-50 dark:bg-amber-900/10 text-amber-700 dark:text-amber-400 text-xs">
+                      {lang === "it"
+                        ? "Utente non-organizzazione: nessun dato fiscale disponibile."
+                        : "Non-organization user: no fiscal data available."}
+                    </div>
+                  </>
+                )}
+              </div>
+            ) : (
+              <div className="text-center py-6 text-muted-foreground text-sm">
+                {lang === "it" ? "Dati non disponibili" : "Data not available"}
+              </div>
+            )}
+
+            <button
+              onClick={() => setBillingModal(null)}
+              className="mt-1 w-full py-2.5 rounded-xl border border-border text-sm font-medium hover:bg-muted transition-colors"
+            >
+              {lang === "it" ? "Chiudi" : "Close"}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Delete user modal */}
       {showDeleteModal && (
