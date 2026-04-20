@@ -126,7 +126,7 @@ router.get("/admin/ledger/billing/:entityUserId", requireAuth, requireAdmin, asy
  */
 router.post("/admin/payment-ledger/refund", requireAuth, requireAdmin, async (req, res) => {
   const adminId = (req as AuthenticatedRequest).userId;
-  const { amountCents, paymentMethod, description, linkedLedgerId } = req.body;
+  const { amountCents, paymentMethod, description, linkedLedgerId, refundIntestatario, refundDate } = req.body;
 
   if (!amountCents || typeof amountCents !== "number" || amountCents <= 0) {
     res.status(400).json({ error: "amountCents deve essere un numero positivo" });
@@ -137,6 +137,7 @@ router.post("/admin/payment-ledger/refund", requireAuth, requireAdmin, async (re
     return;
   }
   const method = paymentMethod || "manual";
+  const parsedRefundDate = refundDate ? new Date(refundDate) : new Date();
 
   try {
     let linkedEntry: { id: number; entityUserId: string | null; entityUserName: string | null; entityDenominazione: string | null; entityIndirizzo: string | null; entityPartitaIva: string | null; entityCodiceFiscale: string | null; entityCodiceUnivoco: string | null; entityEmail: string | null; entityTelefono: string | null; entityReferente: string | null } | undefined;
@@ -178,6 +179,8 @@ router.post("/admin/payment-ledger/refund", requireAuth, requireAdmin, async (re
         entityEmail: linkedEntry?.entityEmail ?? null,
         entityTelefono: linkedEntry?.entityTelefono ?? null,
         entityReferente: linkedEntry?.entityReferente ?? null,
+        refundIntestatario: refundIntestatario?.trim() || null,
+        refundDate: parsedRefundDate,
         linkedLedgerId: linkedLedgerId ?? null,
         description: description.trim(),
       })

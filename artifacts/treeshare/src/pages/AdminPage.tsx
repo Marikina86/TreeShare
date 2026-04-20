@@ -257,6 +257,7 @@ export default function AdminPage() {
     entityPartitaIva: string | null; entityCodiceFiscale: string | null;
     entityCodiceUnivoco: string | null; entityEmail: string | null;
     entityTelefono: string | null; entityReferente: string | null;
+    refundIntestatario: string | null; refundDate: string | null;
     linkedLedgerId: number | null;
     campaignId: number | null; adoptionId: number | null;
     description: string; deletedAt: string | null; deletedBy: string | null; createdAt: string;
@@ -296,7 +297,7 @@ export default function AdminPage() {
   const [billingData, setBillingData] = useState<BillingData | null>(null);
   const [billingLoading, setBillingLoading] = useState(false);
   const [refundModal, setRefundModal] = useState<LedgerEntry | null>(null);
-  const [refundForm, setRefundForm] = useState({ amountCents: "", description: "", paymentMethod: "manual" });
+  const [refundForm, setRefundForm] = useState({ amountCents: "", description: "", paymentMethod: "manual", refundIntestatario: "", refundDate: new Date().toISOString().slice(0, 10) });
   const [refundLoading, setRefundLoading] = useState(false);
 
   const T = {
@@ -791,6 +792,8 @@ export default function AdminPage() {
           paymentMethod: refundForm.paymentMethod,
           description: refundForm.description.trim() || (lang === "it" ? "Rimborso" : "Refund"),
           linkedLedgerId: refundModal.id,
+          refundIntestatario: refundForm.refundIntestatario.trim() || null,
+          refundDate: refundForm.refundDate || new Date().toISOString().slice(0, 10),
         }),
       });
       if (!res.ok) throw new Error();
@@ -801,7 +804,7 @@ export default function AdminPage() {
         summary: { ...prev.summary, count: prev.summary.count + 1, refundCents: (prev.summary.refundCents ?? 0) + amountCents },
       } : null);
       setRefundModal(null);
-      setRefundForm({ amountCents: "", description: "", paymentMethod: "manual" });
+      setRefundForm({ amountCents: "", description: "", paymentMethod: "manual", refundIntestatario: "", refundDate: new Date().toISOString().slice(0, 10) });
       toast({ title: lang === "it" ? "Rimborso registrato" : "Refund recorded" });
     } catch {
       toast({ title: lang === "it" ? "Errore registrazione rimborso" : "Error recording refund", variant: "destructive" });
@@ -2629,8 +2632,17 @@ export default function AdminPage() {
                                 </td>
                                 <td className="px-4 py-3 max-w-[220px]">
                                   <div className="truncate text-foreground">{entry.description}</div>
+                                  {entry.refundIntestatario && (
+                                    <div className="text-xs text-amber-600 dark:text-amber-400 truncate">{entry.refundIntestatario}</div>
+                                  )}
+                                  {entry.refundDate && (
+                                    <div className="text-xs text-muted-foreground">
+                                      {new Date(entry.refundDate).toLocaleDateString("it-IT", { day: "2-digit", month: "2-digit", year: "2-digit" })}
+                                    </div>
+                                  )}
                                   {entry.adoptionId && <div className="text-xs text-muted-foreground">Adoz. #{entry.adoptionId}</div>}
                                   {entry.campaignId && <div className="text-xs text-muted-foreground">Camp. #{entry.campaignId}</div>}
+                                  {entry.linkedLedgerId && <div className="text-xs text-muted-foreground">↩ #{entry.linkedLedgerId}</div>}
                                 </td>
                                 <td className="px-4 py-3 max-w-[180px]">
                                   {(entry.entityUserId || entry.entityDenominazione) ? (
@@ -2682,7 +2694,7 @@ export default function AdminPage() {
                                     <div className="flex items-center gap-1">
                                       {entry.type !== "refund" && (
                                         <button
-                                          onClick={() => { setRefundModal(entry); setRefundForm({ amountCents: (entry.amountCents / 100).toFixed(2), description: lang === "it" ? `Rimborso: ${entry.description}` : `Refund: ${entry.description}`, paymentMethod: entry.paymentMethod === "manual" ? "manual" : entry.paymentMethod }); }}
+                                          onClick={() => { setRefundModal(entry); setRefundForm({ amountCents: (entry.amountCents / 100).toFixed(2), description: lang === "it" ? `Rimborso: ${entry.description}` : `Refund: ${entry.description}`, paymentMethod: entry.paymentMethod === "manual" ? "manual" : entry.paymentMethod, refundIntestatario: entry.entityDenominazione ?? entry.entityUserName ?? "", refundDate: new Date().toISOString().slice(0, 10) }); }}
                                           className="p-1.5 text-muted-foreground hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20 rounded-lg transition-colors"
                                           title={lang === "it" ? "Registra rimborso" : "Record refund"}
                                         >
@@ -2739,6 +2751,17 @@ export default function AdminPage() {
             <p className="text-xs text-muted-foreground font-mono truncate">
               {lang === "it" ? "Voce ledger" : "Ledger entry"} #{billingModal.id} — {billingModal.description}
             </p>
+            {billingModal.type === "refund" && (billingModal.refundIntestatario || billingModal.refundDate) && (
+              <div className="flex flex-col gap-0 divide-y divide-border rounded-xl border border-border overflow-hidden text-sm">
+                <div className="px-4 py-2 bg-amber-50 dark:bg-amber-900/10 text-amber-700 dark:text-amber-400 text-xs font-medium">
+                  {lang === "it" ? "Dati rimborso" : "Refund details"}
+                </div>
+                {billingModal.refundIntestatario && <BillingRow label={lang === "it" ? "Intestatario" : "Recipient"} value={billingModal.refundIntestatario} />}
+                {billingModal.refundDate && <BillingRow label={lang === "it" ? "Data rimborso" : "Refund date"} value={new Date(billingModal.refundDate).toLocaleDateString("it-IT", { day: "2-digit", month: "long", year: "numeric" })} />}
+                <BillingRow label={lang === "it" ? "Somma rimborsata" : "Amount refunded"} value={`${(billingModal.amountCents / 100).toFixed(2)} €`} />
+                {billingModal.linkedLedgerId && <BillingRow label={lang === "it" ? "Voce originale" : "Original entry"} value={`#${billingModal.linkedLedgerId}`} />}
+              </div>
+            )}
             {(billingModal.entityDenominazione || billingModal.entityPartitaIva) ? (
               <div className="flex flex-col gap-0 divide-y divide-border rounded-xl border border-border overflow-hidden text-sm">
                 <div className="px-4 py-2 bg-emerald-50 dark:bg-emerald-900/10 text-emerald-700 dark:text-emerald-400 text-xs font-medium">
@@ -2835,17 +2858,43 @@ export default function AdminPage() {
             <div className="flex flex-col gap-3">
               <div className="flex flex-col gap-1.5">
                 <label className="text-sm font-medium text-foreground">
-                  {lang === "it" ? "Importo da rimborsare (€)" : "Refund amount (€)"}
+                  {lang === "it" ? "Intestatario rimborso" : "Refund recipient"}
+                  <span className="text-xs text-muted-foreground font-normal ml-1">({lang === "it" ? "nome / ragione sociale" : "name / company name"})</span>
                 </label>
                 <input
-                  type="number"
-                  min="0.01"
-                  step="0.01"
-                  value={refundForm.amountCents}
-                  onChange={(e) => setRefundForm((f) => ({ ...f, amountCents: e.target.value }))}
+                  type="text"
+                  value={refundForm.refundIntestatario}
+                  onChange={(e) => setRefundForm((f) => ({ ...f, refundIntestatario: e.target.value }))}
                   className="w-full px-3 py-2 rounded-xl border border-border bg-muted text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
-                  placeholder="0.00"
+                  placeholder={lang === "it" ? "Es. Mario Rossi / Associazione XYZ" : "E.g. John Doe / Association XYZ"}
                 />
+              </div>
+              <div className="flex gap-3">
+                <div className="flex flex-col gap-1.5 flex-1">
+                  <label className="text-sm font-medium text-foreground">
+                    {lang === "it" ? "Data rimborso" : "Refund date"}
+                  </label>
+                  <input
+                    type="date"
+                    value={refundForm.refundDate}
+                    onChange={(e) => setRefundForm((f) => ({ ...f, refundDate: e.target.value }))}
+                    className="w-full px-3 py-2 rounded-xl border border-border bg-muted text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5 flex-1">
+                  <label className="text-sm font-medium text-foreground">
+                    {lang === "it" ? "Somma rimborsata (€)" : "Refund amount (€)"}
+                  </label>
+                  <input
+                    type="number"
+                    min="0.01"
+                    step="0.01"
+                    value={refundForm.amountCents}
+                    onChange={(e) => setRefundForm((f) => ({ ...f, amountCents: e.target.value }))}
+                    className="w-full px-3 py-2 rounded-xl border border-border bg-muted text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                    placeholder="0.00"
+                  />
+                </div>
               </div>
               <div className="flex flex-col gap-1.5">
                 <label className="text-sm font-medium text-foreground">
@@ -2864,14 +2913,14 @@ export default function AdminPage() {
               </div>
               <div className="flex flex-col gap-1.5">
                 <label className="text-sm font-medium text-foreground">
-                  {lang === "it" ? "Descrizione" : "Description"}
+                  {lang === "it" ? "Descrizione / causale" : "Description / reason"}
                 </label>
                 <input
                   type="text"
                   value={refundForm.description}
                   onChange={(e) => setRefundForm((f) => ({ ...f, description: e.target.value }))}
                   className="w-full px-3 py-2 rounded-xl border border-border bg-muted text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
-                  placeholder={lang === "it" ? "Motivazione rimborso..." : "Refund reason..."}
+                  placeholder={lang === "it" ? "Causale rimborso..." : "Refund reason..."}
                 />
               </div>
             </div>

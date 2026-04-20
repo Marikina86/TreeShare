@@ -398,6 +398,9 @@ export const paymentLedgerTable = pgTable("payment_ledger", {
   entityEmail: text("entity_email"),
   entityTelefono: text("entity_telefono"),
   entityReferente: text("entity_referente"),
+  // Refund specific fields
+  refundIntestatario: text("refund_intestatario"),   // nome/ragione sociale del destinatario del rimborso
+  refundDate: timestamp("refund_date"),               // data effettiva del rimborso (può differire da createdAt)
   // Refund linking
   linkedLedgerId: integer("linked_ledger_id"),
   campaignId: integer("campaign_id"),
