@@ -380,15 +380,26 @@ export const treeAdoptionsTable = pgTable("tree_adoptions", {
 
 export const paymentLedgerTable = pgTable("payment_ledger", {
   id: serial("id").primaryKey(),
-  type: text("type").notNull(), // 'campaign_activation' | 'campaign_renewal' | 'adoption_payment' | 'platform_commission'
+  type: text("type").notNull(), // 'campaign_activation' | 'campaign_renewal' | 'adoption_payment' | 'platform_commission' | 'refund'
   amountCents: integer("amount_cents").notNull(),
   currency: text("currency").notNull().default("eur"),
-  paymentMethod: text("payment_method").notNull(), // 'stripe' | 'paypal'
+  paymentMethod: text("payment_method").notNull(), // 'stripe' | 'paypal' | 'manual'
   stripePaymentIntentId: text("stripe_payment_intent_id"),
   paypalOrderId: text("paypal_order_id"),
   userId: text("user_id").notNull(),
   entityUserId: text("entity_user_id"),
   entityUserName: text("entity_user_name"),
+  // Fiscal data snapshot (frozen at payment time)
+  entityDenominazione: text("entity_denominazione"),
+  entityIndirizzo: text("entity_indirizzo"),
+  entityPartitaIva: text("entity_partita_iva"),
+  entityCodiceFiscale: text("entity_codice_fiscale"),
+  entityCodiceUnivoco: text("entity_codice_univoco"),
+  entityEmail: text("entity_email"),
+  entityTelefono: text("entity_telefono"),
+  entityReferente: text("entity_referente"),
+  // Refund linking
+  linkedLedgerId: integer("linked_ledger_id"),
   campaignId: integer("campaign_id"),
   adoptionId: integer("adoption_id"),
   description: text("description").notNull(),

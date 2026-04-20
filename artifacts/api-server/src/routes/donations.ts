@@ -11,6 +11,7 @@ import {
   paymentLedgerTable,
 } from "@workspace/db";
 import { eq, and, desc, sql, gt, gte, lte, count } from "drizzle-orm";
+import { fetchFiscalSnapshot } from "../lib/fiscalSnapshot";
 import { computeDiscountedCents } from "./discountCodes";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth";
 import { requireAdmin } from "../middlewares/requireAdmin";
@@ -157,10 +158,7 @@ async function activateCampaign(
       })
       .where(eq(platformRevenueTable.id, 1));
 
-    const [creator] = await tx
-      .select({ username: usersTable.username })
-      .from(usersTable)
-      .where(eq(usersTable.clerkUserId, campaign.userId));
+    const fiscalActivation = await fetchFiscalSnapshot(campaign.userId, tx);
 
     await tx.insert(paymentLedgerTable).values({
       type: "campaign_activation",
@@ -168,8 +166,7 @@ async function activateCampaign(
       paymentMethod: "stripe",
       stripePaymentIntentId: piId,
       userId: campaign.userId,
-      entityUserId: campaign.userId,
-      entityUserName: creator?.username ?? null,
+      ...fiscalActivation,
       campaignId: campaign.id,
       description: `Attivazione campagna: ${campaign.title}`,
     });
@@ -225,10 +222,7 @@ async function renewCampaign(campaignId: number, piId: string) {
       })
       .where(eq(platformRevenueTable.id, 1));
 
-    const [renewCreator] = await tx
-      .select({ username: usersTable.username })
-      .from(usersTable)
-      .where(eq(usersTable.clerkUserId, campaign.userId));
+    const fiscalRenewal = await fetchFiscalSnapshot(campaign.userId, tx);
 
     await tx.insert(paymentLedgerTable).values({
       type: "campaign_renewal",
@@ -236,8 +230,7 @@ async function renewCampaign(campaignId: number, piId: string) {
       paymentMethod: "stripe",
       stripePaymentIntentId: piId,
       userId: campaign.userId,
-      entityUserId: campaign.userId,
-      entityUserName: renewCreator?.username ?? null,
+      ...fiscalRenewal,
       campaignId: campaign.id,
       description: `Rinnovo campagna: ${campaign.title}`,
     });
@@ -314,10 +307,7 @@ async function activateCampaignByPayPalOrder(
       })
       .where(eq(platformRevenueTable.id, 1));
 
-    const [ppCreator] = await tx
-      .select({ username: usersTable.username })
-      .from(usersTable)
-      .where(eq(usersTable.clerkUserId, campaign.userId));
+    const fiscalPpActivation = await fetchFiscalSnapshot(campaign.userId, tx);
 
     await tx.insert(paymentLedgerTable).values({
       type: "campaign_activation",
@@ -325,8 +315,7 @@ async function activateCampaignByPayPalOrder(
       paymentMethod: "paypal",
       paypalOrderId: orderId,
       userId: campaign.userId,
-      entityUserId: campaign.userId,
-      entityUserName: ppCreator?.username ?? null,
+      ...fiscalPpActivation,
       campaignId: campaign.id,
       description: `Attivazione campagna (PayPal): ${campaign.title}`,
     });
@@ -383,10 +372,7 @@ async function renewCampaignByPayPalOrder(campaignId: number, orderId: string) {
       })
       .where(eq(platformRevenueTable.id, 1));
 
-    const [ppRenewCreator] = await tx
-      .select({ username: usersTable.username })
-      .from(usersTable)
-      .where(eq(usersTable.clerkUserId, campaign.userId));
+    const fiscalPpRenewal = await fetchFiscalSnapshot(campaign.userId, tx);
 
     await tx.insert(paymentLedgerTable).values({
       type: "campaign_renewal",
@@ -394,8 +380,7 @@ async function renewCampaignByPayPalOrder(campaignId: number, orderId: string) {
       paymentMethod: "paypal",
       paypalOrderId: orderId,
       userId: campaign.userId,
-      entityUserId: campaign.userId,
-      entityUserName: ppRenewCreator?.username ?? null,
+      ...fiscalPpRenewal,
       campaignId: campaign.id,
       description: `Rinnovo campagna (PayPal): ${campaign.title}`,
     });

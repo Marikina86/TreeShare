@@ -86,11 +86,15 @@ A plant/tree sharing social app. Community members document trees/plants they pl
 - **Auto-deletion**: Expired campaigns (`expiresAt < now`) are automatically deleted every 60s by `eventCleaner.ts` scheduler
 - **Amounts**: All stored in cents (integer) — `pricePaidCents` on campaigns, `priceCents` on pricing tiers
 - **Revenue tracking**: `platform_revenue` table: `total_commissions` (cumulative campaign payments), `transaction_count`
-- **Payment Ledger**: `payment_ledger` table — immutable audit trail for all settled payments. Types: `campaign_activation`, `campaign_renewal`, `adoption_payment`, `platform_commission`. Inserted inside the same DB transaction as activation/adoption confirm. Soft-delete only (admin sets `deletedAt`+`deletedBy`); no automatic cleanup.
-  - `GET /api/admin/payment-ledger` — returns all active entries + summary stats (totalCents, commissionCents, campaignCents, adoptionCents)
+- **Payment Ledger**: `payment_ledger` table — immutable audit trail for all settled payments. Types: `campaign_activation`, `campaign_renewal`, `adoption_payment`, `platform_commission`, `refund`. Inserted inside the same DB transaction as activation/adoption confirm. Soft-delete only (admin sets `deletedAt`+`deletedBy`); no automatic cleanup.
+  - `GET /api/admin/payment-ledger` — returns all active entries + summary stats (totalCents, commissionCents, campaignCents, adoptionCents, refundCents)
+  - `POST /api/admin/payment-ledger/refund` — creates a refund entry manually, optionally linked to an existing entry via `linkedLedgerId`; copies fiscal snapshot from linked entry
   - `DELETE /api/admin/payment-ledger/:id` — soft-delete; sets `deletedAt` + `deletedBy` (admin userId)
+  - `GET /api/admin/ledger/billing/:entityUserId` — returns current billing data for an entity user (fallback for old entries)
   - Per ogni adozione: 2 righe ledger (pagamento utente + commissione piattaforma 30%)
-  - Admin UI: tab "Ledger" nel pannello admin — tabella con filtro per tipo, badge contatore, eliminazione a 2 step
+  - **Fiscal snapshot**: 8 columns embedded at payment time (entityDenominazione, entityIndirizzo, entityPartitaIva, entityCodiceFiscale, entityCodiceUnivoco, entityEmail, entityTelefono, entityReferente) via `fetchFiscalSnapshot()` helper. Refunds inherit snapshot from linked entry.
+  - **`linkedLedgerId`**: foreign key on `payment_ledger.id` for refund→original link
+  - Admin UI: tab "Ledger" nel pannello admin — 5 summary cards (totale/campagne/adozioni/commissioni/rimborsi), filtro per tipo incl. rimborsi, billing modal mostra dati congelati, bottone rimborso per ogni voce (apre modal con form)
 - **Webhook**: `payment_intent.succeeded` activates campaign + records revenue; `payment_intent.payment_failed` marks campaign failed; mounted at `/api/campaigns/webhook` and `/api/donations/webhook`
 - **Idempotency**: Unique index on `stripePaymentIntentId`; `activateCampaign()` shared helper checks `paymentStatus !== 'paid'` — no double-crediting
 - **Admin endpoints**: CRUD for campaign pricing (`POST/PATCH/DELETE /api/donations/admin/campaign-pricing`); `GET /api/donations/admin/finance` (revenue overview + pricing tiers)

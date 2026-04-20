@@ -253,12 +253,17 @@ export default function AdminPage() {
     id: number; type: string; amountCents: number; currency: string;
     paymentMethod: string; stripePaymentIntentId: string | null; paypalOrderId: string | null;
     userId: string; entityUserId: string | null; entityUserName: string | null;
+    entityDenominazione: string | null; entityIndirizzo: string | null;
+    entityPartitaIva: string | null; entityCodiceFiscale: string | null;
+    entityCodiceUnivoco: string | null; entityEmail: string | null;
+    entityTelefono: string | null; entityReferente: string | null;
+    linkedLedgerId: number | null;
     campaignId: number | null; adoptionId: number | null;
     description: string; deletedAt: string | null; deletedBy: string | null; createdAt: string;
   }
   interface LedgerData {
     entries: LedgerEntry[];
-    summary: { totalCents: number; commissionCents: number; campaignCents: number; adoptionCents: number; count: number };
+    summary: { totalCents: number; commissionCents: number; campaignCents: number; adoptionCents: number; refundCents: number; count: number };
   }
   interface BillingData {
     type: "organization" | "user";
@@ -287,9 +292,12 @@ export default function AdminPage() {
   const [ledgerTypeFilter, setLedgerTypeFilter] = useState<string>("all");
   const [deletingLedgerId, setDeletingLedgerId] = useState<number | null>(null);
   const [confirmDeleteLedgerId, setConfirmDeleteLedgerId] = useState<number | null>(null);
-  const [billingModal, setBillingModal] = useState<{ entityUserId: string; entryLabel: string } | null>(null);
+  const [billingModal, setBillingModal] = useState<LedgerEntry | null>(null);
   const [billingData, setBillingData] = useState<BillingData | null>(null);
   const [billingLoading, setBillingLoading] = useState(false);
+  const [refundModal, setRefundModal] = useState<LedgerEntry | null>(null);
+  const [refundForm, setRefundForm] = useState({ amountCents: "", description: "", paymentMethod: "manual" });
+  const [refundLoading, setRefundLoading] = useState(false);
 
   const T = {
     it: {
@@ -748,15 +756,56 @@ export default function AdminPage() {
     finally { setDeletingLedgerId(null); }
   }
 
-  async function openBillingModal(entityUserId: string, entryLabel: string) {
-    setBillingModal({ entityUserId, entryLabel });
+  async function openBillingModal(entry: LedgerEntry) {
+    setBillingModal(entry);
     setBillingData(null);
+    // If fiscal data is embedded in the entry, no API call needed
+    if (entry.entityDenominazione || entry.entityPartitaIva) {
+      setBillingLoading(false);
+      return;
+    }
+    // Fallback: fetch current data from API (for older entries without snapshot)
+    if (!entry.entityUserId) return;
     setBillingLoading(true);
     try {
-      const res = await authFetch(`/api/admin/ledger/billing/${encodeURIComponent(entityUserId)}`);
+      const res = await authFetch(`/api/admin/ledger/billing/${encodeURIComponent(entry.entityUserId)}`);
       if (res.ok) setBillingData(await res.json());
-    } catch { /* non-critical, modal shows loading state */ }
+    } catch { /* non-critical */ }
     finally { setBillingLoading(false); }
+  }
+
+  async function handleCreateRefund() {
+    if (!refundModal) return;
+    const amountCents = Math.round(parseFloat(refundForm.amountCents) * 100);
+    if (isNaN(amountCents) || amountCents <= 0) {
+      toast({ title: lang === "it" ? "Importo non valido" : "Invalid amount", variant: "destructive" });
+      return;
+    }
+    setRefundLoading(true);
+    try {
+      const res = await authFetch("/api/admin/payment-ledger/refund", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          amountCents,
+          paymentMethod: refundForm.paymentMethod,
+          description: refundForm.description.trim() || (lang === "it" ? "Rimborso" : "Refund"),
+          linkedLedgerId: refundModal.id,
+        }),
+      });
+      if (!res.ok) throw new Error();
+      const { entry } = await res.json();
+      setLedgerData((prev) => prev ? {
+        ...prev,
+        entries: [entry, ...prev.entries],
+        summary: { ...prev.summary, count: prev.summary.count + 1, refundCents: (prev.summary.refundCents ?? 0) + amountCents },
+      } : null);
+      setRefundModal(null);
+      setRefundForm({ amountCents: "", description: "", paymentMethod: "manual" });
+      toast({ title: lang === "it" ? "Rimborso registrato" : "Refund recorded" });
+    } catch {
+      toast({ title: lang === "it" ? "Errore registrazione rimborso" : "Error recording refund", variant: "destructive" });
+    } finally { setRefundLoading(false); }
   }
 
   useEffect(() => { loadUsers(); }, [search]);
@@ -2496,12 +2545,13 @@ export default function AdminPage() {
             ) : ledgerData ? (
               <>
                 {/* Riepilogo */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
                   {[
                     { label: lang === "it" ? "Totale" : "Total", value: (ledgerData.summary.totalCents / 100).toFixed(2) + " €", color: "text-foreground" },
                     { label: lang === "it" ? "Campagne" : "Campaigns", value: (ledgerData.summary.campaignCents / 100).toFixed(2) + " €", color: "text-emerald-600" },
                     { label: lang === "it" ? "Adozioni" : "Adoptions", value: (ledgerData.summary.adoptionCents / 100).toFixed(2) + " €", color: "text-blue-600" },
                     { label: lang === "it" ? "Commissioni" : "Commissions", value: (ledgerData.summary.commissionCents / 100).toFixed(2) + " €", color: "text-amber-600" },
+                    { label: lang === "it" ? "Rimborsi" : "Refunds", value: ((ledgerData.summary.refundCents ?? 0) / 100).toFixed(2) + " €", color: "text-rose-600" },
                   ].map((stat) => (
                     <div key={stat.label} className="bg-card border border-border rounded-2xl p-4 text-center">
                       <div className={`text-xl font-bold ${stat.color}`}>{stat.value}</div>
@@ -2518,6 +2568,7 @@ export default function AdminPage() {
                     { key: "campaign_renewal", label: lang === "it" ? "Rinnovo campagna" : "Campaign renewal" },
                     { key: "adoption_payment", label: lang === "it" ? "Pagamento adozione" : "Adoption payment" },
                     { key: "platform_commission", label: lang === "it" ? "Commissione piattaforma" : "Platform commission" },
+                    { key: "refund", label: lang === "it" ? "Rimborsi" : "Refunds" },
                   ].map((f) => (
                     <button key={f.key} onClick={() => setLedgerTypeFilter(f.key)}
                       className={`px-3 py-1 rounded-full text-xs font-semibold border transition-colors ${ledgerTypeFilter === f.key ? "bg-cyan-600 text-white border-cyan-600" : "border-border text-muted-foreground hover:bg-muted"}`}>
@@ -2537,12 +2588,14 @@ export default function AdminPage() {
                     campaign_renewal: lang === "it" ? "Rinnovo" : "Renewal",
                     adoption_payment: lang === "it" ? "Adozione" : "Adoption",
                     platform_commission: lang === "it" ? "Commissione" : "Commission",
+                    refund: lang === "it" ? "Rimborso" : "Refund",
                   };
                   const TYPE_COLORS: Record<string, string> = {
                     campaign_activation: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400",
                     campaign_renewal: "bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400",
                     adoption_payment: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
                     platform_commission: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
+                    refund: "bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400",
                   };
 
                   if (filtered.length === 0) {
@@ -2579,15 +2632,15 @@ export default function AdminPage() {
                                   {entry.adoptionId && <div className="text-xs text-muted-foreground">Adoz. #{entry.adoptionId}</div>}
                                   {entry.campaignId && <div className="text-xs text-muted-foreground">Camp. #{entry.campaignId}</div>}
                                 </td>
-                                <td className="px-4 py-3 max-w-[160px]">
-                                  {entry.entityUserId ? (
+                                <td className="px-4 py-3 max-w-[180px]">
+                                  {(entry.entityUserId || entry.entityDenominazione) ? (
                                     <button
-                                      onClick={() => openBillingModal(entry.entityUserId!, entry.entityUserName ?? entry.entityUserId!)}
+                                      onClick={() => openBillingModal(entry)}
                                       className="flex items-center gap-1.5 group text-left"
                                       title={lang === "it" ? "Visualizza dati fatturazione" : "View billing details"}
                                     >
                                       <span className="font-medium text-cyan-600 dark:text-cyan-400 truncate group-hover:underline">
-                                        {entry.entityUserName ?? entry.entityUserId}
+                                        {entry.entityDenominazione ?? entry.entityUserName ?? entry.entityUserId}
                                       </span>
                                       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="flex-shrink-0 opacity-60 group-hover:opacity-100">
                                         <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
@@ -2626,13 +2679,24 @@ export default function AdminPage() {
                                       </button>
                                     </div>
                                   ) : (
-                                    <button
-                                      onClick={() => setConfirmDeleteLedgerId(entry.id)}
-                                      className="p-1.5 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg transition-colors"
-                                      title={lang === "it" ? "Elimina voce" : "Delete entry"}
-                                    >
-                                      <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6" strokeLinecap="round" strokeLinejoin="round"/></svg>
-                                    </button>
+                                    <div className="flex items-center gap-1">
+                                      {entry.type !== "refund" && (
+                                        <button
+                                          onClick={() => { setRefundModal(entry); setRefundForm({ amountCents: (entry.amountCents / 100).toFixed(2), description: lang === "it" ? `Rimborso: ${entry.description}` : `Refund: ${entry.description}`, paymentMethod: entry.paymentMethod === "manual" ? "manual" : entry.paymentMethod }); }}
+                                          className="p-1.5 text-muted-foreground hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20 rounded-lg transition-colors"
+                                          title={lang === "it" ? "Registra rimborso" : "Record refund"}
+                                        >
+                                          <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+                                        </button>
+                                      )}
+                                      <button
+                                        onClick={() => setConfirmDeleteLedgerId(entry.id)}
+                                        className="p-1.5 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg transition-colors"
+                                        title={lang === "it" ? "Elimina voce" : "Delete entry"}
+                                      >
+                                        <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                                      </button>
+                                    </div>
                                   )}
                                 </td>
                               </tr>
@@ -2672,14 +2736,33 @@ export default function AdminPage() {
               </button>
             </div>
 
-            <p className="text-xs text-muted-foreground font-mono truncate">{billingModal.entryLabel}</p>
-
-            {billingLoading ? (
+            <p className="text-xs text-muted-foreground font-mono truncate">
+              {lang === "it" ? "Voce ledger" : "Ledger entry"} #{billingModal.id} — {billingModal.description}
+            </p>
+            {(billingModal.entityDenominazione || billingModal.entityPartitaIva) ? (
+              <div className="flex flex-col gap-0 divide-y divide-border rounded-xl border border-border overflow-hidden text-sm">
+                <div className="px-4 py-2 bg-emerald-50 dark:bg-emerald-900/10 text-emerald-700 dark:text-emerald-400 text-xs font-medium">
+                  {lang === "it" ? "Dati fiscali congelati al momento del pagamento" : "Fiscal data frozen at payment time"}
+                </div>
+                {billingModal.entityDenominazione && <BillingRow label={lang === "it" ? "Ragione sociale" : "Company name"} value={billingModal.entityDenominazione} />}
+                {billingModal.entityPartitaIva && <BillingRow label="Partita IVA" value={billingModal.entityPartitaIva} />}
+                {billingModal.entityCodiceFiscale && <BillingRow label={lang === "it" ? "Codice fiscale" : "Fiscal code"} value={billingModal.entityCodiceFiscale} />}
+                {billingModal.entityCodiceUnivoco && <BillingRow label={lang === "it" ? "Codice univoco (SDI)" : "SDI code"} value={billingModal.entityCodiceUnivoco} />}
+                {billingModal.entityIndirizzo && <BillingRow label={lang === "it" ? "Indirizzo" : "Address"} value={billingModal.entityIndirizzo} />}
+                {billingModal.entityEmail && <BillingRow label="Email" value={billingModal.entityEmail} />}
+                {billingModal.entityTelefono && <BillingRow label={lang === "it" ? "Telefono" : "Phone"} value={billingModal.entityTelefono} />}
+                {billingModal.entityReferente && <BillingRow label={lang === "it" ? "Referente" : "Contact"} value={billingModal.entityReferente} />}
+                {billingModal.entityUserName && <BillingRow label="Username" value={`@${billingModal.entityUserName}`} />}
+              </div>
+            ) : billingLoading ? (
               <div className="flex items-center justify-center py-8 text-muted-foreground text-sm">
                 {lang === "it" ? "Caricamento..." : "Loading..."}
               </div>
             ) : billingData ? (
               <div className="flex flex-col gap-0 divide-y divide-border rounded-xl border border-border overflow-hidden text-sm">
+                <div className="px-4 py-2 bg-amber-50 dark:bg-amber-900/10 text-amber-700 dark:text-amber-400 text-xs font-medium">
+                  {lang === "it" ? "Dati attuali (voce precedente allo snapshot)" : "Current data (entry predates snapshot)"}
+                </div>
                 {billingData.type === "organization" ? (
                   <>
                     <BillingRow label={lang === "it" ? "Ragione sociale" : "Company name"} value={billingData.ragioneSociale} />
@@ -2722,6 +2805,91 @@ export default function AdminPage() {
             >
               {lang === "it" ? "Chiudi" : "Close"}
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Refund modal */}
+      {refundModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setRefundModal(null)}>
+          <div className="bg-background rounded-2xl shadow-2xl max-w-md w-full p-6 flex flex-col gap-4" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-amber-600 dark:text-amber-400">
+                    <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/>
+                  </svg>
+                </div>
+                <h2 className="font-semibold text-foreground text-base">
+                  {lang === "it" ? "Registra rimborso" : "Record refund"}
+                </h2>
+              </div>
+              <button onClick={() => setRefundModal(null)} className="text-muted-foreground hover:text-foreground p-1 rounded-lg hover:bg-muted transition-colors">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              </button>
+            </div>
+            <div className="px-4 py-3 bg-muted rounded-xl text-sm text-muted-foreground">
+              <span className="font-medium text-foreground">{lang === "it" ? "Collegato a voce" : "Linked to entry"} #{refundModal.id}:</span>{" "}
+              {refundModal.description} — {(refundModal.amountCents / 100).toFixed(2)} €
+            </div>
+            <div className="flex flex-col gap-3">
+              <div className="flex flex-col gap-1.5">
+                <label className="text-sm font-medium text-foreground">
+                  {lang === "it" ? "Importo da rimborsare (€)" : "Refund amount (€)"}
+                </label>
+                <input
+                  type="number"
+                  min="0.01"
+                  step="0.01"
+                  value={refundForm.amountCents}
+                  onChange={(e) => setRefundForm((f) => ({ ...f, amountCents: e.target.value }))}
+                  className="w-full px-3 py-2 rounded-xl border border-border bg-muted text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                  placeholder="0.00"
+                />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-sm font-medium text-foreground">
+                  {lang === "it" ? "Metodo rimborso" : "Refund method"}
+                </label>
+                <select
+                  value={refundForm.paymentMethod}
+                  onChange={(e) => setRefundForm((f) => ({ ...f, paymentMethod: e.target.value }))}
+                  className="w-full px-3 py-2 rounded-xl border border-border bg-muted text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                >
+                  <option value="manual">{lang === "it" ? "Manuale" : "Manual"}</option>
+                  <option value="stripe">Stripe</option>
+                  <option value="paypal">PayPal</option>
+                  <option value="bank_transfer">{lang === "it" ? "Bonifico" : "Bank transfer"}</option>
+                </select>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-sm font-medium text-foreground">
+                  {lang === "it" ? "Descrizione" : "Description"}
+                </label>
+                <input
+                  type="text"
+                  value={refundForm.description}
+                  onChange={(e) => setRefundForm((f) => ({ ...f, description: e.target.value }))}
+                  className="w-full px-3 py-2 rounded-xl border border-border bg-muted text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                  placeholder={lang === "it" ? "Motivazione rimborso..." : "Refund reason..."}
+                />
+              </div>
+            </div>
+            <div className="flex gap-3 mt-1">
+              <button
+                onClick={() => setRefundModal(null)}
+                className="flex-1 py-2.5 rounded-xl border border-border text-sm font-medium hover:bg-muted transition-colors"
+              >
+                {lang === "it" ? "Annulla" : "Cancel"}
+              </button>
+              <button
+                onClick={handleCreateRefund}
+                disabled={refundLoading || !refundForm.amountCents}
+                className="flex-1 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold transition-colors disabled:opacity-50"
+              >
+                {refundLoading ? "..." : lang === "it" ? "Registra rimborso" : "Record refund"}
+              </button>
+            </div>
           </div>
         </div>
       )}

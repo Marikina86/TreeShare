@@ -10,7 +10,7 @@ const router = Router();
 /**
  * GET /admin/payment-ledger
  * Returns all non-deleted ledger entries, newest first.
- * Optional query: ?type=campaign_activation|campaign_renewal|adoption_payment|platform_commission
+ * Optional query: ?type=campaign_activation|campaign_renewal|adoption_payment|platform_commission|refund
  */
 router.get("/admin/payment-ledger", requireAuth, requireAdmin, async (req, res) => {
   try {
@@ -34,6 +34,9 @@ router.get("/admin/payment-ledger", requireAuth, requireAdmin, async (req, res) 
     const adoptionCents = filtered
       .filter((r) => r.type === "adoption_payment")
       .reduce((sum, r) => sum + r.amountCents, 0);
+    const refundCents = filtered
+      .filter((r) => r.type === "refund")
+      .reduce((sum, r) => sum + r.amountCents, 0);
 
     res.setHeader("Cache-Control", "no-store");
     res.json({
@@ -47,6 +50,7 @@ router.get("/admin/payment-ledger", requireAuth, requireAdmin, async (req, res) 
         commissionCents,
         campaignCents,
         adoptionCents,
+        refundCents,
         count: filtered.length,
       },
     });
@@ -58,7 +62,7 @@ router.get("/admin/payment-ledger", requireAuth, requireAdmin, async (req, res) 
 /**
  * GET /admin/ledger/billing/:entityUserId
  * Returns billing details for an entity user (clerkUserId).
- * If the user is an organization, also returns full org fiscal data.
+ * Fallback for entries that don't have fiscal data embedded yet.
  */
 router.get("/admin/ledger/billing/:entityUserId", requireAuth, requireAdmin, async (req, res) => {
   const { entityUserId } = req.params;
@@ -110,6 +114,76 @@ router.get("/admin/ledger/billing/:entityUserId", requireAuth, requireAdmin, asy
       country: user.country ?? null,
       city: user.city ?? null,
     });
+  } catch (err) {
+    res.status(500).json({ error: "Errore interno" });
+  }
+});
+
+/**
+ * POST /admin/payment-ledger/refund
+ * Records a refund entry in the ledger (manual, admin-only).
+ * Body: { amountCents, paymentMethod, description, linkedLedgerId? }
+ */
+router.post("/admin/payment-ledger/refund", requireAuth, requireAdmin, async (req, res) => {
+  const adminId = (req as AuthenticatedRequest).userId;
+  const { amountCents, paymentMethod, description, linkedLedgerId } = req.body;
+
+  if (!amountCents || typeof amountCents !== "number" || amountCents <= 0) {
+    res.status(400).json({ error: "amountCents deve essere un numero positivo" });
+    return;
+  }
+  if (!description || typeof description !== "string" || description.trim().length === 0) {
+    res.status(400).json({ error: "description obbligatoria" });
+    return;
+  }
+  const method = paymentMethod || "manual";
+
+  try {
+    let linkedEntry: { id: number; entityUserId: string | null; entityUserName: string | null; entityDenominazione: string | null; entityIndirizzo: string | null; entityPartitaIva: string | null; entityCodiceFiscale: string | null; entityCodiceUnivoco: string | null; entityEmail: string | null; entityTelefono: string | null; entityReferente: string | null } | undefined;
+
+    if (linkedLedgerId) {
+      const [found] = await db
+        .select({
+          id: paymentLedgerTable.id,
+          entityUserId: paymentLedgerTable.entityUserId,
+          entityUserName: paymentLedgerTable.entityUserName,
+          entityDenominazione: paymentLedgerTable.entityDenominazione,
+          entityIndirizzo: paymentLedgerTable.entityIndirizzo,
+          entityPartitaIva: paymentLedgerTable.entityPartitaIva,
+          entityCodiceFiscale: paymentLedgerTable.entityCodiceFiscale,
+          entityCodiceUnivoco: paymentLedgerTable.entityCodiceUnivoco,
+          entityEmail: paymentLedgerTable.entityEmail,
+          entityTelefono: paymentLedgerTable.entityTelefono,
+          entityReferente: paymentLedgerTable.entityReferente,
+        })
+        .from(paymentLedgerTable)
+        .where(eq(paymentLedgerTable.id, linkedLedgerId));
+      linkedEntry = found;
+    }
+
+    const [inserted] = await db
+      .insert(paymentLedgerTable)
+      .values({
+        type: "refund",
+        amountCents,
+        paymentMethod: method,
+        userId: adminId,
+        entityUserId: linkedEntry?.entityUserId ?? null,
+        entityUserName: linkedEntry?.entityUserName ?? null,
+        entityDenominazione: linkedEntry?.entityDenominazione ?? null,
+        entityIndirizzo: linkedEntry?.entityIndirizzo ?? null,
+        entityPartitaIva: linkedEntry?.entityPartitaIva ?? null,
+        entityCodiceFiscale: linkedEntry?.entityCodiceFiscale ?? null,
+        entityCodiceUnivoco: linkedEntry?.entityCodiceUnivoco ?? null,
+        entityEmail: linkedEntry?.entityEmail ?? null,
+        entityTelefono: linkedEntry?.entityTelefono ?? null,
+        entityReferente: linkedEntry?.entityReferente ?? null,
+        linkedLedgerId: linkedLedgerId ?? null,
+        description: description.trim(),
+      })
+      .returning();
+
+    res.json({ success: true, entry: { ...inserted, createdAt: inserted.createdAt.toISOString() } });
   } catch (err) {
     res.status(500).json({ error: "Errore interno" });
   }

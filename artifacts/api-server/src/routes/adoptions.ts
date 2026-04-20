@@ -9,6 +9,7 @@ import {
   paymentLedgerTable,
 } from "@workspace/db";
 import { eq, and, desc, lt, lte, gte, isNull, inArray } from "drizzle-orm";
+import { fetchFiscalSnapshot } from "../lib/fiscalSnapshot";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth";
 import { getUncachableStripeClient, getStripePublishableKey } from "../lib/stripe";
 import { getRomeExpiryDate } from "../lib/eventCleaner";
@@ -696,11 +697,7 @@ router.post("/adopt/confirm", requireAuth, async (req, res) => {
         .set({ currentAdoptions: newCount, status: newStatus, updatedAt: new Date() })
         .where(eq(adoptableTreesTable.id, treeId));
 
-      const [treeOwner] = await tx
-        .select({ username: usersTable.username })
-        .from(usersTable)
-        .where(eq(usersTable.clerkUserId, tree.ownerId));
-      const ownerName = treeOwner?.username ?? null;
+      const fiscalOwner = await fetchFiscalSnapshot(tree.ownerId, tx);
 
       await tx.insert(paymentLedgerTable).values([
         {
@@ -720,8 +717,7 @@ router.post("/adopt/confirm", requireAuth, async (req, res) => {
           paymentMethod: "stripe",
           stripePaymentIntentId: paymentIntentId,
           userId,
-          entityUserId: tree.ownerId,    // il proprietario paga la commissione alla piattaforma
-          entityUserName: ownerName,
+          ...fiscalOwner,
           adoptionId: adoption.id,
           description: `Commissione piattaforma 30%: ${treeName}`,
         },
