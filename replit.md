@@ -69,7 +69,8 @@ A plant/tree sharing social app. Community members document trees/plants they pl
 - **No SSE**: `useAlertSSE` hook is a no-op — no EventSource connections, no browser Notification API
 - **No polling**: All `setInterval`-based server polling removed (inbox 30s, events 60s, map 60s)
 - **No auto-refetch**: Global `QueryClient` has `staleTime: Infinity`, all auto-refetch disabled (focus, mount, reconnect, interval)
-- **On app open**: Inbox fetched once (module-level guard `_inboxFetchedOnce`); events/profile fetched once via react-query cache
+- **On app open**: Inbox fetched once (module-level guard `_inboxFetchedOnce`); profile fetched once via react-query cache
+- **Single inbox endpoint**: `GET /api/inbox` now returns alerts + notifications + tips + events (for badge counts) — Layout no longer uses `useListEvents` separately
 - **On pull-to-refresh**: FeedPage dispatches `treeshare:refresh-inbox` event → Layout re-fetches inbox counts
 - **On navigation**: Data loaded per-page on first visit, then cached indefinitely until manual refresh
 - **Smart feed refresh**: `useFeed` hook checks lightweight `GET /api/trees/feed-meta` before full feed fetch

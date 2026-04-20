@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { useLocation, Link } from "wouter";
 import { useUser, useClerk, useAuth } from "@/lib/auth";
 import { useLang } from "@/lib/i18n";
-import { useListEvents, getListEventsQueryKey, useGetMyProfile } from "@workspace/api-client-react";
+import { useGetMyProfile } from "@workspace/api-client-react";
 import { getEventsLastSeenAt } from "@/pages/EventsPage";
 import { getAlertsLastReadAt, getNotifsLastReadAt } from "@/pages/AlertsPage";
 import { getTipsLastReadAt } from "@/pages/TipsPage";
@@ -25,22 +25,8 @@ export default function Layout({ children }: LayoutProps) {
   const profileQuery = useGetMyProfile();
   const isAdmin = (profileQuery.data as any)?.isAdmin === true;
 
-  // ── Badge nuovi eventi ────────────────────────────────────────────────────
-  const [lastSeenAt, setLastSeenAt] = useState(() => getEventsLastSeenAt());
-  const eventsQuery = useListEvents({ query: { queryKey: getListEventsQueryKey() } });
-
-  useEffect(() => {
-    const onStorage = () => setLastSeenAt(getEventsLastSeenAt());
-    window.addEventListener("storage", onStorage);
-    return () => { window.removeEventListener("storage", onStorage); };
-  }, []);
-
-  const newEventsCount = (eventsQuery.data ?? []).filter((e) => {
-    const createdMs = new Date(e.createdAt).getTime();
-    return createdMs > lastSeenAt;
-  }).length;
-
-  // ── Badge avvisi / notifiche / consigli (fetch singolo all'avvio) ──
+  // ── Badge contatori (tutti da inbox, fetch singolo all'avvio o pull-to-refresh) ──
+  const [newEventsCount, setNewEventsCount] = useState(0);
   const [newAlertsCount, setNewAlertsCount] = useState(0);
   const [newNotifsCount, setNewNotifsCount] = useState(0);
   const [latestAlertTime, setLatestAlertTime] = useState<number>(0);
@@ -49,6 +35,8 @@ export default function Layout({ children }: LayoutProps) {
   const [newTipsCount, setNewTipsCount] = useState(0);
   const [latestTipTime, setLatestTipTime] = useState<number>(0);
   const prevLatestTipTimeRef = useRef<number>(0);
+
+  const [latestEventTime, setLatestEventTime] = useState<number>(0);
 
   const fetchInbox = useRef(async () => {
     try {
@@ -60,6 +48,7 @@ export default function Layout({ children }: LayoutProps) {
         alerts: Array<{ id: number; title: string; message: string; createdAt: string }>;
         notifications: Array<{ isRead: boolean; createdAt: string }>;
         tips: Array<{ id: number; title: string; createdAt: string }>;
+        events: Array<{ id: number; createdAt: string }>;
       } = await res.json();
 
       const alertsLastRead = getAlertsLastReadAt();
@@ -87,6 +76,15 @@ export default function Layout({ children }: LayoutProps) {
         ? new Date(inbox.tips[0].createdAt).getTime() : 0;
       setLatestTipTime(latestTip);
       prevLatestTipTimeRef.current = latestTip;
+
+      const eventsLastSeen = getEventsLastSeenAt();
+      const newEvents = (inbox.events ?? []).filter(
+        (e) => new Date(e.createdAt).getTime() > eventsLastSeen
+      ).length;
+      setNewEventsCount(newEvents);
+      const latestEvent = inbox.events?.length > 0
+        ? new Date(inbox.events[0].createdAt).getTime() : 0;
+      setLatestEventTime(latestEvent);
     } catch { /* silenzioso */ }
   }).current;
 
@@ -109,10 +107,12 @@ export default function Layout({ children }: LayoutProps) {
       if (nt > 0) setNewNotifsCount(0);
       const tipsLastRead = getTipsLastReadAt();
       setNewTipsCount((prev) => (tipsLastRead >= latestTipTime ? 0 : prev));
+      const eventsLastSeen = getEventsLastSeenAt();
+      setNewEventsCount((prev) => (eventsLastSeen >= latestEventTime ? 0 : prev));
     };
     window.addEventListener("storage", onStorage);
     return () => window.removeEventListener("storage", onStorage);
-  }, [latestAlertTime, latestTipTime]);
+  }, [latestAlertTime, latestTipTime, latestEventTime]);
 
 
   // ── Prompt autorizzazione GPS ─────────────────────────────────────────────
