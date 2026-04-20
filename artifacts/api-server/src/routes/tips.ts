@@ -24,7 +24,7 @@ router.get("/tips", requireAuth, async (req, res) => {
       .from(tipsTable)
       .orderBy(desc(tipsTable.createdAt));
 
-    res.setHeader("Cache-Control", "private, max-age=300, stale-while-revalidate=3600");
+    res.setHeader("Cache-Control", "no-store");
     res.json(
       tips.map((t) => ({
         ...t,
