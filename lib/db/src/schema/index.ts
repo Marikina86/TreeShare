@@ -388,6 +388,7 @@ export const paymentLedgerTable = pgTable("payment_ledger", {
   paypalOrderId: text("paypal_order_id"),
   userId: text("user_id").notNull(),
   entityUserId: text("entity_user_id"),
+  entityUserName: text("entity_user_name"),
   campaignId: integer("campaign_id"),
   adoptionId: integer("adoption_id"),
   description: text("description").notNull(),

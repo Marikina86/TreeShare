@@ -696,6 +696,12 @@ router.post("/adopt/confirm", requireAuth, async (req, res) => {
         .set({ currentAdoptions: newCount, status: newStatus, updatedAt: new Date() })
         .where(eq(adoptableTreesTable.id, treeId));
 
+      const [treeOwner] = await tx
+        .select({ username: usersTable.username })
+        .from(usersTable)
+        .where(eq(usersTable.clerkUserId, tree.ownerId));
+      const ownerName = treeOwner?.username ?? null;
+
       await tx.insert(paymentLedgerTable).values([
         {
           type: "adoption_payment",
@@ -704,6 +710,7 @@ router.post("/adopt/confirm", requireAuth, async (req, res) => {
           stripePaymentIntentId: paymentIntentId,
           userId,
           entityUserId: tree.ownerId,
+          entityUserName: ownerName,
           adoptionId: adoption.id,
           description: `Adozione albero: ${treeName}`,
         },
@@ -714,6 +721,7 @@ router.post("/adopt/confirm", requireAuth, async (req, res) => {
           stripePaymentIntentId: paymentIntentId,
           userId,
           entityUserId: tree.ownerId,
+          entityUserName: ownerName,
           adoptionId: adoption.id,
           description: `Commissione piattaforma 30%: ${treeName}`,
         },

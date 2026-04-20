@@ -157,12 +157,18 @@ async function activateCampaign(
       })
       .where(eq(platformRevenueTable.id, 1));
 
+    const [creator] = await tx
+      .select({ username: usersTable.username })
+      .from(usersTable)
+      .where(eq(usersTable.clerkUserId, campaign.userId));
+
     await tx.insert(paymentLedgerTable).values({
       type: "campaign_activation",
       amountCents: pricePaid,
       paymentMethod: "stripe",
       stripePaymentIntentId: piId,
       userId: campaign.userId,
+      entityUserName: creator?.username ?? null,
       campaignId: campaign.id,
       description: `Attivazione campagna: ${campaign.title}`,
     });
@@ -218,12 +224,18 @@ async function renewCampaign(campaignId: number, piId: string) {
       })
       .where(eq(platformRevenueTable.id, 1));
 
+    const [renewCreator] = await tx
+      .select({ username: usersTable.username })
+      .from(usersTable)
+      .where(eq(usersTable.clerkUserId, campaign.userId));
+
     await tx.insert(paymentLedgerTable).values({
       type: "campaign_renewal",
       amountCents: pricePaid,
       paymentMethod: "stripe",
       stripePaymentIntentId: piId,
       userId: campaign.userId,
+      entityUserName: renewCreator?.username ?? null,
       campaignId: campaign.id,
       description: `Rinnovo campagna: ${campaign.title}`,
     });
@@ -300,12 +312,18 @@ async function activateCampaignByPayPalOrder(
       })
       .where(eq(platformRevenueTable.id, 1));
 
+    const [ppCreator] = await tx
+      .select({ username: usersTable.username })
+      .from(usersTable)
+      .where(eq(usersTable.clerkUserId, campaign.userId));
+
     await tx.insert(paymentLedgerTable).values({
       type: "campaign_activation",
       amountCents: pricePaid,
       paymentMethod: "paypal",
       paypalOrderId: orderId,
       userId: campaign.userId,
+      entityUserName: ppCreator?.username ?? null,
       campaignId: campaign.id,
       description: `Attivazione campagna (PayPal): ${campaign.title}`,
     });
@@ -362,12 +380,18 @@ async function renewCampaignByPayPalOrder(campaignId: number, orderId: string) {
       })
       .where(eq(platformRevenueTable.id, 1));
 
+    const [ppRenewCreator] = await tx
+      .select({ username: usersTable.username })
+      .from(usersTable)
+      .where(eq(usersTable.clerkUserId, campaign.userId));
+
     await tx.insert(paymentLedgerTable).values({
       type: "campaign_renewal",
       amountCents: pricePaid,
       paymentMethod: "paypal",
       paypalOrderId: orderId,
       userId: campaign.userId,
+      entityUserName: ppRenewCreator?.username ?? null,
       campaignId: campaign.id,
       description: `Rinnovo campagna (PayPal): ${campaign.title}`,
     });

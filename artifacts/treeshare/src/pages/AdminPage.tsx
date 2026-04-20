@@ -243,7 +243,8 @@ export default function AdminPage() {
   interface LedgerEntry {
     id: number; type: string; amountCents: number; currency: string;
     paymentMethod: string; stripePaymentIntentId: string | null; paypalOrderId: string | null;
-    userId: string; entityUserId: string | null; campaignId: number | null; adoptionId: number | null;
+    userId: string; entityUserId: string | null; entityUserName: string | null;
+    campaignId: number | null; adoptionId: number | null;
     description: string; deletedAt: string | null; deletedBy: string | null; createdAt: string;
   }
   interface LedgerData {
@@ -2512,6 +2513,7 @@ export default function AdminPage() {
                               <th className="text-left px-4 py-3 font-semibold text-muted-foreground">ID</th>
                               <th className="text-left px-4 py-3 font-semibold text-muted-foreground">{lang === "it" ? "Tipo" : "Type"}</th>
                               <th className="text-left px-4 py-3 font-semibold text-muted-foreground">{lang === "it" ? "Descrizione" : "Description"}</th>
+                              <th className="text-left px-4 py-3 font-semibold text-muted-foreground">{lang === "it" ? "Riferimento" : "Reference"}</th>
                               <th className="text-right px-4 py-3 font-semibold text-muted-foreground">{lang === "it" ? "Importo" : "Amount"}</th>
                               <th className="text-left px-4 py-3 font-semibold text-muted-foreground">{lang === "it" ? "Metodo" : "Method"}</th>
                               <th className="text-left px-4 py-3 font-semibold text-muted-foreground">{lang === "it" ? "Data" : "Date"}</th>
@@ -2531,6 +2533,13 @@ export default function AdminPage() {
                                   <div className="truncate text-foreground">{entry.description}</div>
                                   {entry.adoptionId && <div className="text-xs text-muted-foreground">Adoz. #{entry.adoptionId}</div>}
                                   {entry.campaignId && <div className="text-xs text-muted-foreground">Camp. #{entry.campaignId}</div>}
+                                </td>
+                                <td className="px-4 py-3 max-w-[160px]">
+                                  {entry.entityUserName ? (
+                                    <span className="font-medium text-foreground truncate block">{entry.entityUserName}</span>
+                                  ) : (
+                                    <span className="text-muted-foreground text-xs">—</span>
+                                  )}
                                 </td>
                                 <td className="px-4 py-3 text-right font-semibold tabular-nums">
                                   {(entry.amountCents / 100).toFixed(2)} €
