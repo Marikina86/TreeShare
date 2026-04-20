@@ -1377,9 +1377,25 @@ router.get("/admin/finance", requireAuth, requireAdmin, async (_req, res) => {
         expiresAt: donationCampaignsTable.expiresAt,
         createdAt: donationCampaignsTable.createdAt,
         orgUsername: usersTable.username,
+        // Fiscal snapshot frozen at activation time (from payment_ledger)
+        fiscalDenominazione: paymentLedgerTable.entityDenominazione,
+        fiscalIndirizzo: paymentLedgerTable.entityIndirizzo,
+        fiscalPartitaIva: paymentLedgerTable.entityPartitaIva,
+        fiscalCodiceFiscale: paymentLedgerTable.entityCodiceFiscale,
+        fiscalCodiceUnivoco: paymentLedgerTable.entityCodiceUnivoco,
+        fiscalEmail: paymentLedgerTable.entityEmail,
+        fiscalTelefono: paymentLedgerTable.entityTelefono,
+        fiscalReferente: paymentLedgerTable.entityReferente,
       })
       .from(donationCampaignsTable)
       .leftJoin(usersTable, eq(donationCampaignsTable.userId, usersTable.clerkUserId))
+      .leftJoin(
+        paymentLedgerTable,
+        and(
+          eq(paymentLedgerTable.campaignId, donationCampaignsTable.id),
+          eq(paymentLedgerTable.type, "campaign_activation"),
+        ),
+      )
       .where(eq(donationCampaignsTable.paymentStatus, "paid"))
       .orderBy(desc(donationCampaignsTable.createdAt))
       .limit(20);
