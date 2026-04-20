@@ -709,8 +709,8 @@ router.post("/adopt/confirm", requireAuth, async (req, res) => {
           paymentMethod: "stripe",
           stripePaymentIntentId: paymentIntentId,
           userId,
-          entityUserId: tree.ownerId,
-          entityUserName: ownerName,
+          // Nessun entityUserId: la transazione è tra adottante e proprietario albero,
+          // la piattaforma non è parte di questa transazione
           adoptionId: adoption.id,
           description: `Adozione albero: ${treeName}`,
         },
@@ -720,7 +720,7 @@ router.post("/adopt/confirm", requireAuth, async (req, res) => {
           paymentMethod: "stripe",
           stripePaymentIntentId: paymentIntentId,
           userId,
-          entityUserId: tree.ownerId,
+          entityUserId: tree.ownerId,    // il proprietario paga la commissione alla piattaforma
           entityUserName: ownerName,
           adoptionId: adoption.id,
           description: `Commissione piattaforma 30%: ${treeName}`,
