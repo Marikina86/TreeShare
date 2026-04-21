@@ -14,10 +14,10 @@ export function Scene4() {
     return () => timers.forEach(t => clearTimeout(t));
   }, []);
 
-  const features = [
-    { icon: '🌍', label: 'Campagne ambientali a pagamento' },
-    { icon: '📊', label: 'Impatto misurabile e trasparente' },
-    { icon: '🤝', label: 'Adozione di alberi per le aziende' },
+  const actions = [
+    { icon: '🌳', label: 'Pianta e condividi il tuo albero' },
+    { icon: '💚', label: 'Sostieni chi si prende cura del verde' },
+    { icon: '🌱', label: 'Segui la crescita della tua comunità' },
   ];
 
   return (
@@ -32,12 +32,12 @@ export function Scene4() {
 
       <div className="relative z-10 w-full max-w-2xl flex flex-col items-center text-center gap-5">
         <motion.div
-          className="inline-block px-5 py-2 bg-accent/20 border border-accent/40 rounded-full font-bold text-accent"
+          className="inline-block px-5 py-2 bg-primary/20 border border-primary/40 rounded-full font-bold text-primary"
           style={{ fontSize: 'clamp(0.75rem, 2vw, 1rem)' }}
           initial={{ opacity: 0, scale: 0.8 }}
           animate={phase >= 1 ? { opacity: 1, scale: 1 } : { opacity: 0, scale: 0.8 }}
         >
-          PER LE AZIENDE CON P.IVA
+          OGNI GESTO CONTA
         </motion.div>
 
         <motion.h2
@@ -50,8 +50,8 @@ export function Scene4() {
           animate={phase >= 2 ? { opacity: 1, y: 0 } : { opacity: 0, y: 30 }}
           transition={{ duration: 0.8 }}
         >
-          La responsabilità sociale,{' '}
-          <span className="text-accent">certificata.</span>
+          Insieme,{' '}
+          <span className="text-accent">cambiamo il pianeta.</span>
         </motion.h2>
 
         <motion.div
@@ -61,12 +61,13 @@ export function Scene4() {
           transition={{ duration: 0.8 }}
         >
           <p className="text-white font-medium leading-relaxed" style={{ fontSize: 'clamp(0.9rem, 2.5vw, 1.3rem)' }}>
-            Le organizzazioni con Partita IVA possono lanciare campagne ambientali con trasparenza totale e impatto misurabile.
+            Ogni albero piantato è un passo verso un futuro più verde.
+            Su TreeShare ogni azione è visibile, condivisa e celebrata dalla community.
           </p>
         </motion.div>
 
         <div className="flex flex-col gap-3 w-full">
-          {features.map((f, i) => (
+          {actions.map((a, i) => (
             <motion.div
               key={i}
               className="flex items-center gap-4 bg-black/50 border border-white/15 rounded-xl px-5 py-3 text-left"
@@ -74,8 +75,8 @@ export function Scene4() {
               animate={phase >= 4 ? { opacity: 1, x: 0 } : { opacity: 0, x: 40 }}
               transition={{ delay: i * 0.1, type: 'spring', bounce: 0.3 }}
             >
-              <span style={{ fontSize: 'clamp(1.4rem, 4vw, 2rem)' }}>{f.icon}</span>
-              <span className="text-white font-semibold" style={{ fontSize: 'clamp(0.85rem, 2.2vw, 1.2rem)' }}>{f.label}</span>
+              <span style={{ fontSize: 'clamp(1.4rem, 4vw, 2rem)' }}>{a.icon}</span>
+              <span className="text-white font-semibold" style={{ fontSize: 'clamp(0.85rem, 2.2vw, 1.2rem)' }}>{a.label}</span>
             </motion.div>
           ))}
         </div>
