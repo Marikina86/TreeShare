@@ -64,7 +64,7 @@ export function Scene1() {
           transition={{ duration: 0.8, ease: 'easeOut' }}
         >
           <p className="text-white font-semibold" style={{ fontSize: 'clamp(1rem, 3vw, 1.6rem)' }}>
-            La prima piattaforma sociale italiana per il verde urbano.
+            La prima piattaforma sociale italiana per il verde.
           </p>
         </motion.div>
       </div>
