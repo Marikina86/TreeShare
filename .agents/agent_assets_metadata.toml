@@ -1,0 +1,38 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "hSGs8JENDfQbs_aCz4_2i"
+uri = "file://artifacts/treeshare-video/public/images/forest-bg.jpg"
+type = "image"
+title = "lush green forest from above aerial view"
+
+[[outputs]]
+id = "PAHI1E3z-aXiVKbzZzs6U"
+uri = "file://artifacts/treeshare-video/public/images/planting.jpg"
+type = "image"
+title = "people planting a tree together outdoors hands in soil"
+
+[[outputs]]
+id = "-Akt5UrBx7_MwULNomtKr"
+uri = "file://artifacts/treeshare-video/public/images/map-trees.jpg"
+type = "image"
+title = "map with green pins and small trees representing geolocated planting nature protection"
+
+[[outputs]]
+id = "d1JZA6VxhQ1m2F6LT7d--"
+uri = "file://artifacts/treeshare-video/public/images/adoption.jpg"
+type = "image"
+title = "hands holding a small green plant sapling in soil sunlight"
+
+[[outputs]]
+id = "eJxIZMUernTb7gT-MZftE"
+uri = "file://artifacts/treeshare-video/public/images/community.jpg"
+type = "image"
+title = "group of diverse volunteers planting trees in nature smiling outdoors community"
+
+[[outputs]]
+id = "qhFyonf-73PMvc50nP6Qc"
+uri = "file://artifacts/treeshare-video/public/images/business-green.jpg"
+type = "image"
+title = "business professional shaking hands outdoors green sustainable corporate environmental campaign"

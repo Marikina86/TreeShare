@@ -1,0 +1,31 @@
+kind = "video"
+previewPath = "/treeshare-video/"
+title = "TreeShare — Video di presentazione"
+version = "1.0.0"
+id = "artifacts/treeshare-video"
+router = "path"
+
+[[integratedSkills]]
+name = "video-js"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/treeshare-video/" ]
+localPort = 23653
+
+[services.development]
+run = "pnpm --filter @workspace/treeshare-video run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/treeshare-video", "run", "build" ]
+publicDir = "artifacts/treeshare-video/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "23653"
+BASE_PATH = "/treeshare-video/"
