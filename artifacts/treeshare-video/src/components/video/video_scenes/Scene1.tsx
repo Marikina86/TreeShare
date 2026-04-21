@@ -9,7 +9,6 @@ export function Scene1() {
       setTimeout(() => setPhase(1), 200),
       setTimeout(() => setPhase(2), 800),
       setTimeout(() => setPhase(3), 1600),
-      setTimeout(() => setPhase(4), 3200),
     ];
     return () => timers.forEach(t => clearTimeout(t));
   }, []);
@@ -24,12 +23,12 @@ export function Scene1() {
     >
       <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-black/40 to-black/70" />
 
-      <div className="relative z-10 text-center flex flex-col items-center">
+      <div className="relative z-10 text-center flex flex-col items-center px-6">
         <motion.div
-          initial={{ opacity: 0, y: 50, scale: 0.8 }}
-          animate={phase >= 1 ? { opacity: 1, y: 0, scale: 1 } : { opacity: 0, y: 50, scale: 0.8 }}
+          initial={{ opacity: 0, y: 40, scale: 0.8 }}
+          animate={phase >= 1 ? { opacity: 1, y: 0, scale: 1 } : { opacity: 0, y: 40, scale: 0.8 }}
           transition={{ type: 'spring', stiffness: 200, damping: 20 }}
-          className="w-40 h-40 mb-8 rounded-[2.5rem] overflow-hidden shadow-2xl border-4 border-white/30"
+          className="w-28 h-28 sm:w-36 sm:h-36 md:w-44 md:h-44 mb-5 rounded-[1.8rem] overflow-hidden shadow-2xl border-4 border-white/30"
         >
           <img
             src={`${import.meta.env.BASE_URL}images/logo.png`}
@@ -38,14 +37,19 @@ export function Scene1() {
           />
         </motion.div>
 
-        <h1 className="text-[7vw] font-display font-black text-white leading-tight tracking-tight"
-          style={{ textShadow: '0 4px 24px rgba(0,0,0,0.8), 0 2px 8px rgba(0,0,0,0.9)' }}>
+        <h1
+          className="font-display font-black text-white leading-tight tracking-tight"
+          style={{
+            fontSize: 'clamp(2.8rem, 10vw, 7rem)',
+            textShadow: '0 4px 24px rgba(0,0,0,0.9), 0 2px 8px rgba(0,0,0,1)',
+          }}
+        >
           {'TreeShare'.split('').map((char, i) => (
             <motion.span
               key={i}
               className="inline-block"
-              initial={{ opacity: 0, y: 40, filter: 'blur(10px)' }}
-              animate={phase >= 2 ? { opacity: 1, y: 0, filter: 'blur(0px)' } : { opacity: 0, y: 40, filter: 'blur(10px)' }}
+              initial={{ opacity: 0, y: 30, filter: 'blur(8px)' }}
+              animate={phase >= 2 ? { opacity: 1, y: 0, filter: 'blur(0px)' } : { opacity: 0, y: 30, filter: 'blur(8px)' }}
               transition={{ delay: i * 0.05, type: 'spring', stiffness: 300, damping: 20 }}
             >
               {char}
@@ -54,12 +58,12 @@ export function Scene1() {
         </h1>
 
         <motion.div
-          className="mt-6 px-8 py-4 bg-black/50 backdrop-blur-md rounded-2xl border border-white/20"
+          className="mt-6 px-6 py-4 bg-black/60 backdrop-blur-md rounded-2xl border border-white/20 max-w-[90vw]"
           initial={{ opacity: 0, y: 20 }}
           animate={phase >= 3 ? { opacity: 1, y: 0 } : { opacity: 0, y: 20 }}
           transition={{ duration: 0.8, ease: 'easeOut' }}
         >
-          <p className="text-[2vw] text-white font-medium">
+          <p className="text-white font-semibold" style={{ fontSize: 'clamp(1rem, 3vw, 1.6rem)' }}>
             La prima piattaforma sociale italiana per il verde urbano.
           </p>
         </motion.div>

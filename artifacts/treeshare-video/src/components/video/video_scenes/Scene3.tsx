@@ -10,7 +10,6 @@ export function Scene3() {
       setTimeout(() => setPhase(2), 500),
       setTimeout(() => setPhase(3), 1000),
       setTimeout(() => setPhase(4), 1500),
-      setTimeout(() => setPhase(5), 3200),
     ];
     return () => timers.forEach(t => clearTimeout(t));
   }, []);
@@ -23,18 +22,21 @@ export function Scene3() {
 
   return (
     <motion.div
-      className="absolute inset-0 flex flex-col items-center justify-center"
+      className="absolute inset-0 flex flex-col items-center justify-center px-5 py-6"
       initial={{ opacity: 0, y: '100%' }}
       animate={{ opacity: 1, y: '0%' }}
       exit={{ opacity: 0, scale: 1.2, filter: 'blur(20px)' }}
       transition={{ duration: 0.8, ease: [0.76, 0, 0.24, 1] }}
     >
-      <div className="absolute inset-0 bg-gradient-to-b from-black/70 via-black/60 to-black/80" />
+      <div className="absolute inset-0 bg-gradient-to-b from-black/75 via-black/65 to-black/85" />
 
-      <div className="relative z-10 w-full px-[8vw] flex flex-col items-center text-center">
+      <div className="relative z-10 w-full max-w-2xl flex flex-col items-center text-center gap-6">
         <motion.h2
-          className="text-[5.5vw] font-display font-black leading-tight mb-10 text-white"
-          style={{ textShadow: '0 4px 20px rgba(0,0,0,0.9)' }}
+          className="font-display font-black leading-tight text-white"
+          style={{
+            fontSize: 'clamp(2rem, 8vw, 4.5rem)',
+            textShadow: '0 4px 20px rgba(0,0,0,0.95)',
+          }}
           initial={{ opacity: 0, scale: 0.9 }}
           animate={phase >= 1 ? { opacity: 1, scale: 1 } : { opacity: 0, scale: 0.9 }}
           transition={{ duration: 0.8, ease: 'easeOut' }}
@@ -42,18 +44,18 @@ export function Scene3() {
           Adotta. Partecipa. <span className="text-accent">Impatta.</span>
         </motion.h2>
 
-        <div className="grid grid-cols-3 gap-6 w-full">
+        <div className="grid grid-cols-3 gap-3 w-full">
           {cards.map((item, i) => (
             <motion.div
               key={i}
-              className="bg-black/60 border border-white/20 rounded-3xl p-8 backdrop-blur-md"
-              initial={{ opacity: 0, y: 50 }}
-              animate={phase >= i + 2 ? { opacity: 1, y: 0 } : { opacity: 0, y: 50 }}
+              className="bg-black/65 border border-white/20 rounded-2xl p-4 backdrop-blur-md flex flex-col items-center text-center"
+              initial={{ opacity: 0, y: 40 }}
+              animate={phase >= i + 2 ? { opacity: 1, y: 0 } : { opacity: 0, y: 40 }}
               transition={{ type: 'spring', bounce: 0.3 }}
             >
-              <div className="text-5xl mb-5">{item.icon}</div>
-              <h3 className="text-2xl font-bold mb-3 text-white">{item.title}</h3>
-              <p className="text-white/80 text-lg leading-snug">{item.desc}</p>
+              <div className="mb-3" style={{ fontSize: 'clamp(1.8rem, 5vw, 3rem)' }}>{item.icon}</div>
+              <h3 className="font-bold text-white mb-1" style={{ fontSize: 'clamp(0.9rem, 2.5vw, 1.4rem)' }}>{item.title}</h3>
+              <p className="text-white/80 leading-snug" style={{ fontSize: 'clamp(0.75rem, 2vw, 1rem)' }}>{item.desc}</p>
             </motion.div>
           ))}
         </div>
