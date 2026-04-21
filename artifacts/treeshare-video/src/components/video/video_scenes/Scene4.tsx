@@ -17,7 +17,7 @@ export function Scene4() {
   const features = [
     { icon: '🌍', label: 'Campagne ambientali a pagamento' },
     { icon: '📊', label: 'Impatto misurabile e trasparente' },
-    { icon: '✅', label: 'Certificazione CSR digitale' },
+    { icon: '🤝', label: 'Adozione di alberi per le aziende' },
   ];
 
   return (
