@@ -851,12 +851,17 @@ export default function AdoptableTreeDetailPage() {
             )}
 
             {adoptedCode && (
-              <a
-                href={`mailto:${tree.ownerEmail}?subject=${encodeURIComponent(`ID adozione: ${adoptedCode}`)}`}
-                className="mt-2 w-full py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:opacity-90 transition-opacity flex items-center justify-center"
-              >
-                {t.shippingBtn}
-              </a>
+              <>
+                <a
+                  href={`mailto:${tree.ownerEmail}?subject=${encodeURIComponent(`ID adozione: ${adoptedCode}`)}`}
+                  className="mt-2 w-full py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:opacity-90 transition-opacity flex items-center justify-center"
+                >
+                  {t.shippingBtn}*
+                </a>
+                <p className="text-xs text-muted-foreground mt-1">
+                  *{lang === "it" ? "Se la tua adozione prevede l'invio di prodotti." : "Only if your adoption includes product shipping."}
+                </p>
+              </>
             )}
           </div>
         )}
@@ -877,12 +882,17 @@ export default function AdoptableTreeDetailPage() {
             {activeAdoption.orgStatus ? (
               <p className="text-xs text-blue-600 dark:text-blue-400 font-medium">{t.shippingReceived}</p>
             ) : (
-              <a
-                href={`mailto:${tree.ownerEmail}?subject=${encodeURIComponent(`ID adozione: ${activeAdoption.adoptionCode ?? activeAdoption.id}`)}`}
-                className="mt-1 w-full py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:opacity-90 transition-opacity flex items-center justify-center"
-              >
-                {t.shippingBtn}
-              </a>
+              <>
+                <a
+                  href={`mailto:${tree.ownerEmail}?subject=${encodeURIComponent(`ID adozione: ${activeAdoption.adoptionCode ?? activeAdoption.id}`)}`}
+                  className="mt-1 w-full py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:opacity-90 transition-opacity flex items-center justify-center"
+                >
+                  {t.shippingBtn}*
+                </a>
+                <p className="text-xs text-muted-foreground mt-1">
+                  *{lang === "it" ? "Se la tua adozione prevede l'invio di prodotti." : "Only if your adoption includes product shipping."}
+                </p>
+              </>
             )}
           </div>
         )}

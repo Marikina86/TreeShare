@@ -9,6 +9,18 @@ import { useGetMyProfile } from "@workspace/api-client-react";
 import { useGps, getPlatformInstructions } from "@/hooks/useGps";
 import DonationCampaignManager from "@/components/DonationCampaignManager";
 
+type MyAdoption = {
+  id: number;
+  treeId: number;
+  treeName: string;
+  startDate: string;
+  endDate: string;
+  adoptionCode: string | null;
+  status: string;
+  amountCents: number;
+  durationDays: number;
+};
+
 export default function SettingsPage() {
   const { lang, setLang, t } = useLang();
   const { user } = useUser();
@@ -39,6 +51,18 @@ export default function SettingsPage() {
     });
   }, [isAdmin]);
 
+  useEffect(() => {
+    setAdoptionsLoading(true);
+    getToken().then((token) => {
+      const h = token ? { Authorization: `Bearer ${token}` } : {};
+      fetch("/api/adopt/my-adoptions", { headers: h })
+        .then((r) => r.ok ? r.json() : [])
+        .then((data: MyAdoption[]) => setMyAdoptions(data))
+        .catch(() => setMyAdoptions([]))
+        .finally(() => setAdoptionsLoading(false));
+    });
+  }, []);
+
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
@@ -54,6 +78,9 @@ export default function SettingsPage() {
   const [showPwCurrent, setShowPwCurrent] = useState(false);
   const [showPwNew, setShowPwNew] = useState(false);
   const [showPwConfirm, setShowPwConfirm] = useState(false);
+
+  const [myAdoptions, setMyAdoptions] = useState<MyAdoption[]>([]);
+  const [adoptionsLoading, setAdoptionsLoading] = useState(true);
 
   async function handleChangePassword(e: React.FormEvent) {
     e.preventDefault();
@@ -653,6 +680,66 @@ export default function SettingsPage() {
         <DonationCampaignManager
           accountType={(myProfile as any)?.accountType ?? "user"}
         />
+
+        {/* Le tue adozioni */}
+        <section className="mb-8">
+          <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
+            {lang === "it" ? "Le tue adozioni" : "Your adoptions"}
+          </h2>
+          <div className="bg-card border border-border rounded-2xl overflow-hidden">
+            {adoptionsLoading ? (
+              <div className="px-5 py-6 flex items-center justify-center">
+                <span className="w-5 h-5 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+              </div>
+            ) : myAdoptions.length === 0 ? (
+              <div className="px-5 py-6 text-center">
+                <p className="text-sm text-muted-foreground">
+                  {lang === "it" ? "Non hai ancora adottato nessun albero." : "You haven't adopted any trees yet."}
+                </p>
+                <Link
+                  href="/adopt"
+                  className="inline-block mt-3 px-4 py-2 bg-primary text-primary-foreground text-sm font-semibold rounded-xl hover:opacity-90 transition-opacity"
+                >
+                  {lang === "it" ? "Esplora alberi adottabili" : "Explore adoptable trees"}
+                </Link>
+              </div>
+            ) : (
+              <ul className="divide-y divide-border">
+                {myAdoptions.map((a) => {
+                  const isActive = a.status === "active" && new Date(a.endDate) > new Date();
+                  return (
+                    <li key={a.id}>
+                      <Link
+                        href={`/adopt/${a.treeId}`}
+                        className="flex items-start gap-3 px-5 py-4 hover:bg-muted transition-colors"
+                      >
+                        <div className={`mt-0.5 w-2.5 h-2.5 rounded-full flex-shrink-0 ${isActive ? "bg-green-500" : "bg-muted-foreground/40"}`} />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-foreground truncate">{a.treeName}</p>
+                          {a.adoptionCode && (
+                            <p className="text-xs font-mono text-muted-foreground mt-0.5">{a.adoptionCode}</p>
+                          )}
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            {lang === "it" ? "Scade" : "Expires"}: {new Date(a.endDate).toLocaleDateString()}
+                          </p>
+                        </div>
+                        <span className={`flex-shrink-0 text-[11px] font-semibold px-2 py-0.5 rounded-full mt-0.5 ${
+                          isActive
+                            ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                            : "bg-muted text-muted-foreground"
+                        }`}>
+                          {isActive
+                            ? (lang === "it" ? "Attiva" : "Active")
+                            : (lang === "it" ? "Scaduta" : "Expired")}
+                        </span>
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
+        </section>
 
         {/* Account section */}
         <section className="mb-8">
