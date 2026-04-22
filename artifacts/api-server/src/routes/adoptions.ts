@@ -839,7 +839,7 @@ router.post("/adopt/confirm", requireAuth, async (req, res) => {
         },
       ]);
 
-      return { success: true, adoptionId: adoption.id, adoptionCode, endDate: endDate.toISOString(), treeName: tree.title, ownerEmail: tree.ownerEmail };
+      return { success: true, adoptionId: adoption.id, adoptionCode, endDate: endDate.toISOString(), treeName: tree.title, ownerEmail: tree.ownerEmail, accountEmail: fiscalOwner.entityEmail };
     });
 
     if ((result as any).error) {
@@ -850,6 +850,7 @@ router.post("/adopt/confirm", requireAuth, async (req, res) => {
     res.json(result);
 
     // Fire-and-forget: notify tree owner by email
+    // Priority: accountEmail (registered org email) → ownerEmail (stored on tree)
     const typedResult = result as {
       success: true;
       adoptionId: number;
@@ -857,8 +858,10 @@ router.post("/adopt/confirm", requireAuth, async (req, res) => {
       endDate: string;
       treeName: string;
       ownerEmail?: string | null;
+      accountEmail?: string | null;
     };
-    if (typedResult.ownerEmail) {
+    const recipientEmail = typedResult.accountEmail || typedResult.ownerEmail;
+    if (recipientEmail) {
       const { subject, html } = buildOwnerAdoptionEmail({
         treeName: typedResult.treeName,
         adoptionId: typedResult.adoptionId,
@@ -868,9 +871,9 @@ router.post("/adopt/confirm", requireAuth, async (req, res) => {
         netToEntityCents,
         endDate: typedResult.endDate,
       });
-      sendEmail(typedResult.ownerEmail, subject, html).then((r) => {
-        if (!r.sent) logger.warn({ err: r.error }, "[adopt] owner email not sent");
-        else logger.info({ adoptionId: typedResult.adoptionId }, "[adopt] owner email sent");
+      sendEmail(recipientEmail, subject, html).then((r) => {
+        if (!r.sent) logger.warn({ err: r.error, to: recipientEmail }, "[adopt] owner email not sent");
+        else logger.info({ adoptionId: typedResult.adoptionId, to: recipientEmail }, "[adopt] owner email sent");
       }).catch(() => {});
     }
   } catch (err) {
