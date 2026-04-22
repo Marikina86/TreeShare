@@ -68,8 +68,8 @@ const T = {
     expiresOn: "Scade il",
     shippingTitle: "Dati spedizione",
     noShipping: "Dati di spedizione non ancora inviati dall'adottante.",
-    markReceived: "Segna: Dati ricevuti",
-    markShipped: "Segna: Spedito",
+    checkDatiRicevuti: "Dati ricevuti",
+    checkSpedizione: "Spedizione effettuata",
     updating: "Aggiornamento...",
     active: "Attiva",
     expired: "Scaduta",
@@ -99,8 +99,8 @@ const T = {
     expiresOn: "Expires on",
     shippingTitle: "Shipping details",
     noShipping: "Shipping data not yet submitted by adopter.",
-    markReceived: "Mark: Data received",
-    markShipped: "Mark: Shipped",
+    checkDatiRicevuti: "Data received",
+    checkSpedizione: "Shipment completed",
     updating: "Updating...",
     active: "Active",
     expired: "Expired",
@@ -119,6 +119,7 @@ function AdoptionCard({ adoption, t, getToken, onStatusUpdated }: {
 }) {
   const [expanded, setExpanded] = useState(false);
   const [updating, setUpdating] = useState(false);
+  const { lang } = useLang();
   const orgStatusInfo = adoption.orgStatus ? ORG_STATUS_LABELS[adoption.orgStatus] : null;
 
   async function updateOrgStatus(newStatus: string) {
@@ -147,7 +148,8 @@ function AdoptionCard({ adoption, t, getToken, onStatusUpdated }: {
         ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300"
         : "bg-muted text-muted-foreground";
 
-  const lang = "it";
+  const isDatiRicevuti = adoption.orgStatus === "shipping_received" || adoption.orgStatus === "shipped";
+  const isSpedito = adoption.orgStatus === "shipped";
 
   return (
     <div className="bg-card border border-border rounded-2xl overflow-hidden">
@@ -229,26 +231,51 @@ function AdoptionCard({ adoption, t, getToken, onStatusUpdated }: {
             )}
           </div>
 
-          {adoption.shippingData && adoption.orgStatus !== "shipped" && (
-            <div className="flex gap-2 pt-1">
-              {adoption.orgStatus !== "shipping_received" && (
-                <button
-                  onClick={() => updateOrgStatus("shipping_received")}
-                  disabled={updating}
-                  className="flex-1 py-1.5 rounded-lg bg-blue-500 text-white text-xs font-medium hover:bg-blue-600 transition-colors disabled:opacity-50"
-                >
-                  {updating ? t.updating : t.markReceived}
-                </button>
-              )}
-              <button
-                onClick={() => updateOrgStatus("shipped")}
-                disabled={updating}
-                className="flex-1 py-1.5 rounded-lg bg-green-500 text-white text-xs font-medium hover:bg-green-600 transition-colors disabled:opacity-50"
+          <div className="border-t border-border pt-3 space-y-2.5">
+            <label className={`flex items-center gap-3 cursor-pointer select-none ${updating ? "opacity-50 pointer-events-none" : ""}`}>
+              <span className={`w-5 h-5 flex-shrink-0 rounded border-2 flex items-center justify-center transition-colors ${
+                isDatiRicevuti
+                  ? "bg-blue-500 border-blue-500"
+                  : "border-border bg-background"
+              }`}
+                onClick={() => updateOrgStatus(isDatiRicevuti ? "pending_shipping" : "shipping_received")}
               >
-                {updating ? t.updating : t.markShipped}
-              </button>
-            </div>
-          )}
+                {isDatiRicevuti && (
+                  <svg width="11" height="11" viewBox="0 0 12 12" fill="none">
+                    <path d="M2 6l3 3 5-5" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                )}
+              </span>
+              <span
+                className="text-sm text-foreground"
+                onClick={() => updateOrgStatus(isDatiRicevuti ? "pending_shipping" : "shipping_received")}
+              >
+                {t.checkDatiRicevuti}
+              </span>
+            </label>
+
+            <label className={`flex items-center gap-3 cursor-pointer select-none ${updating ? "opacity-50 pointer-events-none" : ""}`}>
+              <span className={`w-5 h-5 flex-shrink-0 rounded border-2 flex items-center justify-center transition-colors ${
+                isSpedito
+                  ? "bg-green-500 border-green-500"
+                  : "border-border bg-background"
+              }`}
+                onClick={() => updateOrgStatus(isSpedito ? "shipping_received" : "shipped")}
+              >
+                {isSpedito && (
+                  <svg width="11" height="11" viewBox="0 0 12 12" fill="none">
+                    <path d="M2 6l3 3 5-5" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                )}
+              </span>
+              <span
+                className="text-sm text-foreground"
+                onClick={() => updateOrgStatus(isSpedito ? "shipping_received" : "shipped")}
+              >
+                {t.checkSpedizione}
+              </span>
+            </label>
+          </div>
         </div>
       )}
     </div>
