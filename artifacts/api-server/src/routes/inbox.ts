@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { alertsTable, userNotificationsTable, tipsTable, eventsTable } from "@workspace/db";
-import { eq, desc } from "drizzle-orm";
+import { alertsTable, userNotificationsTable, tipsTable, eventsTable, usersTable } from "@workspace/db";
+import { eq, desc, or } from "drizzle-orm";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth";
 
 const router = Router();
@@ -13,8 +13,23 @@ const router = Router();
 router.get("/inbox", requireAuth, async (req, res) => {
   const userId = (req as AuthenticatedRequest).userId;
   try {
+    const [userRow] = await db
+      .select({ accountType: usersTable.accountType })
+      .from(usersTable)
+      .where(eq(usersTable.clerkUserId, userId));
+    const userAccountType = userRow?.accountType ?? "user";
+
     const [alerts, notifications, tips, events] = await Promise.all([
-      db.select().from(alertsTable).orderBy(desc(alertsTable.createdAt)),
+      db
+        .select()
+        .from(alertsTable)
+        .where(
+          or(
+            eq(alertsTable.targetGroup, "all"),
+            eq(alertsTable.targetGroup, userAccountType),
+          )
+        )
+        .orderBy(desc(alertsTable.createdAt)),
       db
         .select()
         .from(userNotificationsTable)

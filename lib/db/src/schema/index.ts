@@ -98,6 +98,7 @@ export const alertsTable = pgTable("alerts", {
   title: text("title").notNull(),
   message: text("message").notNull(),
   priority: text("priority").notNull().default("normal"),
+  targetGroup: text("target_group").notNull().default("all"),
   createdBy: text("created_by").notNull(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),

@@ -117,6 +117,7 @@ interface AdminAlertItem {
   title: string;
   message: string;
   priority: "low" | "normal" | "high" | "critical";
+  targetGroup: "all" | "organization" | "user";
   createdAt: string;
   updatedAt: string;
 }
@@ -222,7 +223,12 @@ export default function AdminPage() {
   const [alertsLoading, setAlertsLoading] = useState(false);
   const [editingAlert, setEditingAlert] = useState<AdminAlertItem | null>(null);
   const [alertSubmitting, setAlertSubmitting] = useState(false);
-  const [alertForm, setAlertForm] = useState({ title: "", message: "", priority: "normal" });
+  const [alertForm, setAlertForm] = useState({ title: "", message: "", priority: "normal", targetGroup: "all" });
+  const [personalNotifForm, setPersonalNotifForm] = useState({ userId: "", username: "", title: "", message: "" });
+  const [personalNotifSubmitting, setPersonalNotifSubmitting] = useState(false);
+  const [userSearchQuery, setUserSearchQuery] = useState("");
+  const [userSearchResults, setUserSearchResults] = useState<{ clerkUserId: string; username: string; photoUrl: string | null }[]>([]);
+  const [userSearchLoading, setUserSearchLoading] = useState(false);
 
   interface PricingTier { id: number; durationDays: number; priceCents: number; label: string; isActive: boolean; createdAt: string }
   interface CampaignFiscal {
@@ -677,7 +683,7 @@ export default function AdminPage() {
       } else {
         setAdminAlerts((p) => [saved, ...p]);
       }
-      setAlertForm({ title: "", message: "", priority: "normal" });
+      setAlertForm({ title: "", message: "", priority: "normal", targetGroup: "all" });
       setEditingAlert(null);
       toast({ title: lang === "it" ? (editingAlert ? "Avviso aggiornato" : "✅ Avviso pubblicato e notifica inviata") : (editingAlert ? "Alert updated" : "✅ Alert published and notification sent") });
     } catch { toast({ title: lang === "it" ? "Errore salvataggio avviso" : "Error saving alert", variant: "destructive" }); }
@@ -693,6 +699,48 @@ export default function AdminPage() {
       toast({ title: lang === "it" ? "🗑️ Avviso eliminato" : "🗑️ Alert deleted" });
     } catch { toast({ title: lang === "it" ? "Errore eliminazione avviso" : "Error deleting alert", variant: "destructive" }); }
     finally { setActionLoading(null); }
+  }
+
+  async function handleUserSearch(q: string) {
+    setUserSearchQuery(q);
+    if (!q.trim() || q.trim().length < 2) { setUserSearchResults([]); return; }
+    setUserSearchLoading(true);
+    try {
+      const res = await authFetch(`/api/admin/users?search=${encodeURIComponent(q.trim())}`);
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+      setUserSearchResults(
+        (data as any[]).slice(0, 8).map((u: any) => ({
+          clerkUserId: u.clerkUserId,
+          username: u.username ?? u.clerkUserId,
+          photoUrl: u.photoUrl ?? null,
+        }))
+      );
+    } catch { setUserSearchResults([]); }
+    finally { setUserSearchLoading(false); }
+  }
+
+  async function handleSendPersonalNotif(e: React.FormEvent) {
+    e.preventDefault();
+    if (!personalNotifForm.userId || !personalNotifForm.title.trim() || !personalNotifForm.message.trim()) return;
+    setPersonalNotifSubmitting(true);
+    try {
+      const res = await authFetch("/api/admin/notifications/user", {
+        method: "POST",
+        body: JSON.stringify({
+          userId: personalNotifForm.userId,
+          title: personalNotifForm.title.trim(),
+          message: personalNotifForm.message.trim(),
+        }),
+      });
+      if (!res.ok) throw new Error();
+      setPersonalNotifForm({ userId: "", username: "", title: "", message: "" });
+      setUserSearchQuery("");
+      setUserSearchResults([]);
+      toast({ title: lang === "it" ? `✅ Notifica inviata a @${personalNotifForm.username}` : `✅ Notification sent to @${personalNotifForm.username}` });
+    } catch {
+      toast({ title: lang === "it" ? "Errore invio notifica" : "Error sending notification", variant: "destructive" });
+    } finally { setPersonalNotifSubmitting(false); }
   }
 
   // ── Funzioni CRUD consigli ────────────────────────────────────────────────
@@ -2027,11 +2075,25 @@ export default function AdminPage() {
                       <option value="critical">{lang === "it" ? "Critica" : "Critical"}</option>
                     </select>
                   </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-medium text-muted-foreground">
+                      {lang === "it" ? "Destinatari" : "Recipients"}
+                    </label>
+                    <select
+                      value={alertForm.targetGroup}
+                      onChange={(e) => setAlertForm((f) => ({ ...f, targetGroup: e.target.value }))}
+                      className="px-3 py-2 text-sm bg-background border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20"
+                    >
+                      <option value="all">{lang === "it" ? "Tutti gli utenti" : "All users"}</option>
+                      <option value="organization">{lang === "it" ? "Solo organizzazioni" : "Organizations only"}</option>
+                      <option value="user">{lang === "it" ? "Solo privati" : "Private users only"}</option>
+                    </select>
+                  </div>
                   <div className="flex gap-2 ml-auto mt-auto">
                     {editingAlert && (
                       <button
                         type="button"
-                        onClick={() => { setEditingAlert(null); setAlertForm({ title: "", message: "", priority: "normal" }); }}
+                        onClick={() => { setEditingAlert(null); setAlertForm({ title: "", message: "", priority: "normal", targetGroup: "all" }); }}
                         disabled={alertSubmitting}
                         className="px-4 py-2 border border-border text-foreground rounded-xl text-sm font-medium hover:bg-muted transition-colors disabled:opacity-50"
                       >
@@ -2078,12 +2140,25 @@ export default function AdminPage() {
                       high: lang === "it" ? "Alta" : "High",
                       critical: lang === "it" ? "Critica" : "Critical",
                     };
+                    const groupLabels: Record<string, string> = {
+                      all: lang === "it" ? "Tutti" : "All",
+                      organization: lang === "it" ? "Organizzazioni" : "Orgs",
+                      user: lang === "it" ? "Privati" : "Private",
+                    };
+                    const groupColors: Record<string, string> = {
+                      all: "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400",
+                      organization: "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400",
+                      user: "bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400",
+                    };
                     return (
                       <div key={alert.id} className="px-5 py-4 flex items-start justify-between gap-3">
                         <div className="flex-1 min-w-0 space-y-1">
                           <div className="flex items-center gap-2 flex-wrap">
                             <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${priorityColors[alert.priority] ?? priorityColors.normal}`}>
                               {priorityLabels[alert.priority]}
+                            </span>
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${groupColors[alert.targetGroup ?? "all"] ?? groupColors.all}`}>
+                              {groupLabels[alert.targetGroup ?? "all"]}
                             </span>
                             <span className="font-semibold text-sm text-foreground truncate">{alert.title}</span>
                           </div>
@@ -2096,7 +2171,7 @@ export default function AdminPage() {
                         </div>
                         <div className="flex items-center gap-2 flex-shrink-0">
                           <button
-                            onClick={() => { setEditingAlert(alert); setAlertForm({ title: alert.title, message: alert.message, priority: alert.priority }); }}
+                            onClick={() => { setEditingAlert(alert); setAlertForm({ title: alert.title, message: alert.message, priority: alert.priority, targetGroup: alert.targetGroup ?? "all" }); }}
                             className="p-1.5 text-muted-foreground hover:text-primary transition-colors rounded-lg hover:bg-muted"
                             title={lang === "it" ? "Modifica" : "Edit"}
                           >
@@ -2129,6 +2204,106 @@ export default function AdminPage() {
             <p className="text-center text-xs text-muted-foreground pb-4">
               {adminAlerts.length} {lang === "it" ? "avvisi totali" : "total alerts"}
             </p>
+
+            {/* ── Notifica personale a utente specifico ── */}
+            <div className="bg-card border border-border rounded-2xl p-5">
+              <h2 className="font-semibold text-foreground mb-4 flex items-center gap-2">
+                <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" strokeLinecap="round"/><circle cx="12" cy="7" r="4"/></svg>
+                {lang === "it" ? "Notifica personale" : "Personal notification"}
+              </h2>
+              <form onSubmit={handleSendPersonalNotif} className="flex flex-col gap-3">
+                {/* User search */}
+                <div className="relative">
+                  <div className="flex items-center gap-2">
+                    <div className="relative flex-1">
+                      <input
+                        type="text"
+                        value={personalNotifForm.userId ? `@${personalNotifForm.username}` : userSearchQuery}
+                        onChange={(e) => {
+                          if (personalNotifForm.userId) {
+                            setPersonalNotifForm((f) => ({ ...f, userId: "", username: "" }));
+                          }
+                          handleUserSearch(e.target.value);
+                        }}
+                        placeholder={lang === "it" ? "Cerca utente per username..." : "Search user by username..."}
+                        className="w-full px-3 py-2 text-sm bg-background border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20"
+                      />
+                      {userSearchLoading && (
+                        <div className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+                      )}
+                    </div>
+                    {personalNotifForm.userId && (
+                      <button
+                        type="button"
+                        onClick={() => { setPersonalNotifForm((f) => ({ ...f, userId: "", username: "" })); setUserSearchQuery(""); setUserSearchResults([]); }}
+                        className="px-3 py-2 text-xs text-muted-foreground border border-border rounded-xl hover:bg-muted transition-colors"
+                      >
+                        {lang === "it" ? "Cambia" : "Change"}
+                      </button>
+                    )}
+                  </div>
+                  {userSearchResults.length > 0 && !personalNotifForm.userId && (
+                    <div className="absolute z-10 mt-1 w-full bg-card border border-border rounded-xl shadow-lg overflow-hidden">
+                      {userSearchResults.map((u) => (
+                        <button
+                          key={u.clerkUserId}
+                          type="button"
+                          onClick={() => {
+                            setPersonalNotifForm((f) => ({ ...f, userId: u.clerkUserId, username: u.username }));
+                            setUserSearchQuery("");
+                            setUserSearchResults([]);
+                          }}
+                          className="w-full flex items-center gap-2.5 px-3 py-2.5 hover:bg-muted transition-colors text-left text-sm"
+                        >
+                          {u.photoUrl ? (
+                            <img src={u.photoUrl} alt="" className="w-7 h-7 rounded-full object-cover flex-shrink-0" />
+                          ) : (
+                            <div className="w-7 h-7 rounded-full bg-muted flex items-center justify-center flex-shrink-0 text-xs font-semibold">
+                              {u.username?.[0]?.toUpperCase() ?? "?"}
+                            </div>
+                          )}
+                          <span className="font-medium text-foreground">@{u.username}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {personalNotifForm.userId && (
+                  <>
+                    <input
+                      type="text"
+                      value={personalNotifForm.title}
+                      onChange={(e) => setPersonalNotifForm((f) => ({ ...f, title: e.target.value }))}
+                      placeholder={lang === "it" ? "Titolo messaggio *" : "Message title *"}
+                      required
+                      maxLength={200}
+                      className="w-full px-3 py-2 text-sm bg-background border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20"
+                    />
+                    <textarea
+                      value={personalNotifForm.message}
+                      onChange={(e) => setPersonalNotifForm((f) => ({ ...f, message: e.target.value }))}
+                      placeholder={lang === "it" ? "Testo del messaggio *" : "Message text *"}
+                      required
+                      maxLength={2000}
+                      rows={3}
+                      className="w-full px-3 py-2 text-sm bg-background border border-border rounded-xl resize-none focus:outline-none focus:ring-2 focus:ring-primary/20"
+                    />
+                    <div className="flex justify-end">
+                      <button
+                        type="submit"
+                        disabled={personalNotifSubmitting || !personalNotifForm.title.trim() || !personalNotifForm.message.trim()}
+                        className="flex items-center gap-2 px-5 py-2 bg-primary text-primary-foreground rounded-xl text-sm font-semibold hover:opacity-90 transition-opacity disabled:opacity-50"
+                      >
+                        {personalNotifSubmitting
+                          ? (lang === "it" ? "Invio..." : "Sending...")
+                          : (lang === "it" ? `Invia a @${personalNotifForm.username}` : `Send to @${personalNotifForm.username}`)}
+                      </button>
+                    </div>
+                  </>
+                )}
+              </form>
+            </div>
           </>
         )}
 
