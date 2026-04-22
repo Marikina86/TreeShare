@@ -32,6 +32,7 @@ export default function SettingsPage() {
 
   const { data: myProfile } = useGetMyProfile();
   const isAdmin = (myProfile as any)?.isAdmin === true;
+  const isOrg = (myProfile as any)?.accountType === "organization";
 
   const [pendingPhotoCount, setPendingPhotoCount] = useState(0);
   const [pendingProblemCount, setPendingProblemCount] = useState(0);
@@ -681,65 +682,99 @@ export default function SettingsPage() {
           accountType={(myProfile as any)?.accountType ?? "user"}
         />
 
-        {/* Le tue adozioni */}
-        <section className="mb-8">
-          <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
-            {lang === "it" ? "Le tue adozioni" : "Your adoptions"}
-          </h2>
-          <div className="bg-card border border-border rounded-2xl overflow-hidden">
-            {adoptionsLoading ? (
-              <div className="px-5 py-6 flex items-center justify-center">
-                <span className="w-5 h-5 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
-              </div>
-            ) : myAdoptions.length === 0 ? (
-              <div className="px-5 py-6 text-center">
-                <p className="text-sm text-muted-foreground">
-                  {lang === "it" ? "Non hai ancora adottato nessun albero." : "You haven't adopted any trees yet."}
-                </p>
-                <Link
-                  href="/adopt"
-                  className="inline-block mt-3 px-4 py-2 bg-primary text-primary-foreground text-sm font-semibold rounded-xl hover:opacity-90 transition-opacity"
-                >
-                  {lang === "it" ? "Esplora alberi adottabili" : "Explore adoptable trees"}
-                </Link>
-              </div>
-            ) : (
-              <ul className="divide-y divide-border">
-                {myAdoptions.map((a) => {
-                  const isActive = a.status === "active" && new Date(a.endDate) > new Date();
-                  return (
-                    <li key={a.id}>
-                      <Link
-                        href={`/adopt/${a.treeId}`}
-                        className="flex items-start gap-3 px-5 py-4 hover:bg-muted transition-colors"
-                      >
-                        <div className={`mt-0.5 w-2.5 h-2.5 rounded-full flex-shrink-0 ${isActive ? "bg-green-500" : "bg-muted-foreground/40"}`} />
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-semibold text-foreground truncate">{a.treeName}</p>
-                          {a.adoptionCode && (
-                            <p className="text-xs font-mono text-muted-foreground mt-0.5">{a.adoptionCode}</p>
-                          )}
-                          <p className="text-xs text-muted-foreground mt-0.5">
-                            {lang === "it" ? "Scade" : "Expires"}: {new Date(a.endDate).toLocaleDateString()}
-                          </p>
-                        </div>
-                        <span className={`flex-shrink-0 text-[11px] font-semibold px-2 py-0.5 rounded-full mt-0.5 ${
-                          isActive
-                            ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
-                            : "bg-muted text-muted-foreground"
-                        }`}>
-                          {isActive
-                            ? (lang === "it" ? "Attiva" : "Active")
-                            : (lang === "it" ? "Scaduta" : "Expired")}
-                        </span>
-                      </Link>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </div>
-        </section>
+        {/* Le tue adozioni / Adozioni attive */}
+        {isOrg ? (
+          <section className="mb-8">
+            <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
+              {lang === "it" ? "Adozioni attive" : "Active adoptions"}
+            </h2>
+            <div className="bg-card border border-border rounded-2xl overflow-hidden">
+              <Link
+                href="/adopt/manage"
+                className="flex items-center justify-between px-5 py-4 hover:bg-muted transition-colors"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-green-100 dark:bg-green-900/30 flex items-center justify-center flex-shrink-0">
+                    <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" className="text-green-700 dark:text-green-400">
+                      <path d="M9 12l2 2 4-4" strokeLinecap="round" strokeLinejoin="round"/>
+                      <path d="M12 22C6.477 22 2 17.523 2 12S6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z" strokeLinecap="round"/>
+                    </svg>
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-foreground">
+                      {lang === "it" ? "Gestisci le adozioni ricevute" : "Manage received adoptions"}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {lang === "it" ? "Visualizza e aggiorna le adozioni attive dei tuoi alberi" : "View and update active adoptions of your trees"}
+                    </p>
+                  </div>
+                </div>
+                <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" className="text-muted-foreground flex-shrink-0">
+                  <path d="M9 18l6-6-6-6" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              </Link>
+            </div>
+          </section>
+        ) : (
+          <section className="mb-8">
+            <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
+              {lang === "it" ? "Le tue adozioni" : "Your adoptions"}
+            </h2>
+            <div className="bg-card border border-border rounded-2xl overflow-hidden">
+              {adoptionsLoading ? (
+                <div className="px-5 py-6 flex items-center justify-center">
+                  <span className="w-5 h-5 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+                </div>
+              ) : myAdoptions.length === 0 ? (
+                <div className="px-5 py-6 text-center">
+                  <p className="text-sm text-muted-foreground">
+                    {lang === "it" ? "Non hai ancora adottato nessun albero." : "You haven't adopted any trees yet."}
+                  </p>
+                  <Link
+                    href="/adopt"
+                    className="inline-block mt-3 px-4 py-2 bg-primary text-primary-foreground text-sm font-semibold rounded-xl hover:opacity-90 transition-opacity"
+                  >
+                    {lang === "it" ? "Esplora alberi adottabili" : "Explore adoptable trees"}
+                  </Link>
+                </div>
+              ) : (
+                <ul className="divide-y divide-border">
+                  {myAdoptions.map((a) => {
+                    const isActive = a.status === "active" && new Date(a.endDate) > new Date();
+                    return (
+                      <li key={a.id}>
+                        <Link
+                          href={`/adopt/${a.treeId}`}
+                          className="flex items-start gap-3 px-5 py-4 hover:bg-muted transition-colors"
+                        >
+                          <div className={`mt-0.5 w-2.5 h-2.5 rounded-full flex-shrink-0 ${isActive ? "bg-green-500" : "bg-muted-foreground/40"}`} />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-semibold text-foreground truncate">{a.treeName}</p>
+                            {a.adoptionCode && (
+                              <p className="text-xs font-mono text-muted-foreground mt-0.5">{a.adoptionCode}</p>
+                            )}
+                            <p className="text-xs text-muted-foreground mt-0.5">
+                              {lang === "it" ? "Scade" : "Expires"}: {new Date(a.endDate).toLocaleDateString()}
+                            </p>
+                          </div>
+                          <span className={`flex-shrink-0 text-[11px] font-semibold px-2 py-0.5 rounded-full mt-0.5 ${
+                            isActive
+                              ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                              : "bg-muted text-muted-foreground"
+                          }`}>
+                            {isActive
+                              ? (lang === "it" ? "Attiva" : "Active")
+                              : (lang === "it" ? "Scaduta" : "Expired")}
+                          </span>
+                        </Link>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
+          </section>
+        )}
 
         {/* Account section */}
         <section className="mb-8">
