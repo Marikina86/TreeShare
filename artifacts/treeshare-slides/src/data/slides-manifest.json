@@ -1,0 +1,50 @@
+[
+  {
+    "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567801",
+    "position": 1,
+    "filepath": "src/pages/slides/Slide1.tsx",
+    "title": "Cover — TreeShare",
+    "description": "Slide di copertina con logo e tagline",
+    "speakerNotes": ""
+  },
+  {
+    "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567802",
+    "position": 2,
+    "filepath": "src/pages/slides/Slide2.tsx",
+    "title": "Come funziona",
+    "description": "I tre passi: pianta, verifica AI, condividi",
+    "speakerNotes": ""
+  },
+  {
+    "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567803",
+    "position": 3,
+    "filepath": "src/pages/slides/Slide3.tsx",
+    "title": "Verifica AI",
+    "description": "Citazione sulla verifica tramite intelligenza artificiale",
+    "speakerNotes": ""
+  },
+  {
+    "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567804",
+    "position": 4,
+    "filepath": "src/pages/slides/Slide4.tsx",
+    "title": "Community",
+    "description": "Adotta, partecipa, impatta — tre funzionalità principali",
+    "speakerNotes": ""
+  },
+  {
+    "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567805",
+    "position": 5,
+    "filepath": "src/pages/slides/Slide5.tsx",
+    "title": "Impatto collettivo",
+    "description": "Insieme cambiamo il pianeta — statement bold",
+    "speakerNotes": ""
+  },
+  {
+    "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567806",
+    "position": 6,
+    "filepath": "src/pages/slides/Slide6.tsx",
+    "title": "Call to Action",
+    "description": "treeshareapp.com — scarica dal browser",
+    "speakerNotes": ""
+  }
+]

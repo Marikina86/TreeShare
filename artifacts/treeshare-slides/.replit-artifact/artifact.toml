@@ -1,0 +1,31 @@
+kind = "slides"
+previewPath = "/treeshare-slides/"
+title = "TreeShare — Slide Presentazione"
+version = "1.0.0"
+id = "artifacts/treeshare-slides"
+router = "path"
+
+[[integratedSkills]]
+name = "slides"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/treeshare-slides/" ]
+localPort = 19257
+
+[services.development]
+run = "pnpm --filter @workspace/treeshare-slides run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/treeshare-slides", "run", "build" ]
+publicDir = "artifacts/treeshare-slides/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "19257"
+BASE_PATH = "/treeshare-slides/"
