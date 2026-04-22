@@ -839,6 +839,20 @@ router.post("/adopt/confirm", requireAuth, async (req, res) => {
         },
       ]);
 
+      // Notifica in-app al venditore dell'albero
+      const durationLabel = durationDays >= 365
+        ? `${Math.round(durationDays / 365)} anno${Math.round(durationDays / 365) > 1 ? "i" : ""}`
+        : `${durationDays} giorni`;
+      const netEuros = (netToEntityCents / 100).toFixed(2).replace(".", ",");
+      const totalEuros = (amountCents / 100).toFixed(2).replace(".", ",");
+
+      await tx.insert(userNotificationsTable).values({
+        userId: tree.ownerId,
+        title: `🌳 Nuova adozione ricevuta per "${tree.title}"`,
+        message: `ID adozione: #${adoption.id} · Codice: ${adoptionCode} · Durata: ${durationLabel} · Importo pagato: €${totalEuros} · Netto a te (70%): €${netEuros}`,
+        isRead: false,
+      });
+
       return { success: true, adoptionId: adoption.id, adoptionCode, endDate: endDate.toISOString(), treeName: tree.title, ownerEmail: tree.ownerEmail, accountEmail: fiscalOwner.entityEmail };
     });
 
