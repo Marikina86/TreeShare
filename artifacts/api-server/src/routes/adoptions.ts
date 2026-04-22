@@ -14,9 +14,125 @@ import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAu
 import { getUncachableStripeClient, getStripePublishableKey } from "../lib/stripe";
 import { getRomeExpiryDate } from "../lib/eventCleaner";
 import { logger } from "../lib/logger";
+import { sendEmail } from "../lib/email";
 
 function generateAdoptionCode(): string {
   return "ADO-" + randomUUID().replace(/-/g, "").toUpperCase().substring(0, 8);
+}
+
+function buildOwnerAdoptionEmail(opts: {
+  treeName: string;
+  adoptionId: number;
+  adoptionCode: string;
+  durationDays: number;
+  amountCents: number;
+  netToEntityCents: number;
+  endDate: string;
+}): { subject: string; html: string } {
+  const euros = (cents: number) => (cents / 100).toFixed(2).replace(".", ",") + " €";
+  const expiry = new Date(opts.endDate).toLocaleDateString("it-IT", {
+    day: "2-digit", month: "long", year: "numeric",
+  });
+  const durationLabel =
+    opts.durationDays >= 365
+      ? `${Math.round(opts.durationDays / 365)} anno${Math.round(opts.durationDays / 365) > 1 ? "i" : ""}`
+      : `${opts.durationDays} giorni`;
+
+  const subject = `🌳 Nuova adozione ricevuta per "${opts.treeName}"`;
+
+  const html = `
+<!DOCTYPE html>
+<html lang="it">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#f5f5f5;font-family:'Segoe UI',Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f5f5f5;padding:32px 16px;">
+    <tr><td align="center">
+      <table width="580" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.08);max-width:580px;width:100%;">
+
+        <!-- Header -->
+        <tr>
+          <td style="background:#1a5c38;padding:28px 32px;text-align:center;">
+            <p style="margin:0;font-size:26px;">🌳</p>
+            <h1 style="margin:8px 0 0;color:#ffffff;font-size:20px;font-weight:700;letter-spacing:-.3px;">
+              Nuova adozione ricevuta!
+            </h1>
+          </td>
+        </tr>
+
+        <!-- Body -->
+        <tr>
+          <td style="padding:32px;">
+            <p style="margin:0 0 20px;color:#444;font-size:15px;line-height:1.6;">
+              Ottima notizia! Il tuo albero <strong style="color:#1a5c38;">${opts.treeName}</strong>
+              ha ricevuto una nuova adozione. Ecco il riepilogo:
+            </p>
+
+            <!-- Detail table -->
+            <table width="100%" cellpadding="0" cellspacing="0" style="background:#f8faf8;border:1px solid #d4e8d9;border-radius:10px;margin-bottom:24px;">
+              <tr>
+                <td style="padding:14px 18px;border-bottom:1px solid #e4ede6;">
+                  <span style="color:#888;font-size:12px;text-transform:uppercase;letter-spacing:.5px;">ID Adozione</span><br>
+                  <strong style="color:#222;font-size:15px;">#${opts.adoptionId}</strong>
+                </td>
+              </tr>
+              <tr>
+                <td style="padding:14px 18px;border-bottom:1px solid #e4ede6;">
+                  <span style="color:#888;font-size:12px;text-transform:uppercase;letter-spacing:.5px;">Codice Adozione</span><br>
+                  <strong style="color:#1a5c38;font-size:15px;font-family:monospace;">${opts.adoptionCode}</strong>
+                </td>
+              </tr>
+              <tr>
+                <td style="padding:14px 18px;border-bottom:1px solid #e4ede6;">
+                  <span style="color:#888;font-size:12px;text-transform:uppercase;letter-spacing:.5px;">Durata</span><br>
+                  <strong style="color:#222;font-size:15px;">${durationLabel}</strong>
+                  <span style="color:#888;font-size:13px;"> (scade il ${expiry})</span>
+                </td>
+              </tr>
+              <tr>
+                <td style="padding:14px 18px;border-bottom:1px solid #e4ede6;">
+                  <span style="color:#888;font-size:12px;text-transform:uppercase;letter-spacing:.5px;">Importo totale adozione</span><br>
+                  <strong style="color:#222;font-size:15px;">${euros(opts.amountCents)}</strong>
+                </td>
+              </tr>
+              <tr>
+                <td style="padding:14px 18px;">
+                  <span style="color:#888;font-size:12px;text-transform:uppercase;letter-spacing:.5px;">Importo netto a te (70%)</span><br>
+                  <strong style="color:#1a5c38;font-size:15px;">${euros(opts.netToEntityCents)}</strong>
+                  <span style="color:#888;font-size:12px;"> accreditato automaticamente da Stripe</span>
+                </td>
+              </tr>
+            </table>
+
+            <p style="margin:0 0 24px;color:#666;font-size:13px;line-height:1.6;">
+              Puoi gestire tutte le adozioni ricevute dalla sezione
+              <em>Gestisci adozioni</em> nella pagina del tuo albero su TreeShare.
+            </p>
+
+            <div style="text-align:center;">
+              <a href="https://treeshare.app/adopt/manage"
+                style="display:inline-block;background:#1a5c38;color:#fff;text-decoration:none;padding:12px 28px;border-radius:10px;font-weight:600;font-size:14px;">
+                Gestisci adozioni →
+              </a>
+            </div>
+          </td>
+        </tr>
+
+        <!-- Footer -->
+        <tr>
+          <td style="background:#f0f0f0;padding:16px 32px;text-align:center;">
+            <p style="margin:0;color:#aaa;font-size:11px;">
+              TreeShare · Questa email è stata inviata automaticamente, non rispondere.
+            </p>
+          </td>
+        </tr>
+
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+
+  return { subject, html };
 }
 
 const router = Router();
@@ -732,6 +848,31 @@ router.post("/adopt/confirm", requireAuth, async (req, res) => {
     }
 
     res.json(result);
+
+    // Fire-and-forget: notify tree owner by email
+    const typedResult = result as {
+      success: true;
+      adoptionId: number;
+      adoptionCode: string;
+      endDate: string;
+      treeName: string;
+      ownerEmail?: string | null;
+    };
+    if (typedResult.ownerEmail) {
+      const { subject, html } = buildOwnerAdoptionEmail({
+        treeName: typedResult.treeName,
+        adoptionId: typedResult.adoptionId,
+        adoptionCode: typedResult.adoptionCode,
+        durationDays,
+        amountCents,
+        netToEntityCents,
+        endDate: typedResult.endDate,
+      });
+      sendEmail(typedResult.ownerEmail, subject, html).then((r) => {
+        if (!r.sent) logger.warn({ err: r.error }, "[adopt] owner email not sent");
+        else logger.info({ adoptionId: typedResult.adoptionId }, "[adopt] owner email sent");
+      }).catch(() => {});
+    }
   } catch (err) {
     logger.error({ err }, "[adopt] confirm error");
     res.status(500).json({ error: "Errore interno" });
