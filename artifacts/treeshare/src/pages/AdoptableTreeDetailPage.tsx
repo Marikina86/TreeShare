@@ -119,6 +119,8 @@ const T = {
     pausedBadge: "In pausa",
     pausedUserMsg: "Questo albero è temporaneamente in pausa e non è adottabile al momento.",
     proposedBy: "Proposto da",
+    maxAdoptionsLabel: "Adozioni simultanee max",
+    maxAdoptionsHint: "Numero massimo di adozioni attive contemporaneamente",
   },
   en: {
     loading: "Loading...",
@@ -178,6 +180,8 @@ const T = {
     pausedBadge: "Paused",
     pausedUserMsg: "This tree is temporarily paused and is not available for adoption at the moment.",
     proposedBy: "Proposed by",
+    maxAdoptionsLabel: "Max simultaneous adoptions",
+    maxAdoptionsHint: "Maximum number of active adoptions at the same time",
   },
 };
 
@@ -372,11 +376,13 @@ function StripeConnectPanel({ treeId, t }: { treeId: number; t: typeof T.it }) {
 
 function OrgManageSection({ tree, t }: { tree: AdoptableTree; t: typeof T.it }) {
   const { getToken } = useAuth() as any;
+  const { lang } = useLang();
   const [, navigate] = useLocation();
   const [editMode, setEditMode] = useState(false);
   const [title, setTitle] = useState(tree.title);
   const [description, setDescription] = useState(tree.description);
   const [productDescription, setProductDescription] = useState(tree.productDescription ?? "");
+  const [maxAdoptions, setMaxAdoptions] = useState(tree.maxAdoptions ?? 1);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [toggling, setToggling] = useState(false);
@@ -416,7 +422,7 @@ function OrgManageSection({ tree, t }: { tree: AdoptableTree; t: typeof T.it }) 
       const res = await fetch(`/api/adopt/trees/${tree.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ title, description, productDescription }),
+        body: JSON.stringify({ title, description, productDescription, maxAdoptions }),
       });
       if (!res.ok) {
         const d = await res.json().catch(() => ({}));
@@ -534,6 +540,32 @@ function OrgManageSection({ tree, t }: { tree: AdoptableTree; t: typeof T.it }) 
               rows={2}
               className="w-full border border-border rounded-lg px-3 py-1.5 text-sm bg-background text-foreground resize-none"
             />
+          </div>
+          <div>
+            <label className="text-xs text-muted-foreground block mb-1">{t.maxAdoptionsLabel}</label>
+            <p className="text-[11px] text-muted-foreground mb-2">{t.maxAdoptionsHint}</p>
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => setMaxAdoptions((v) => Math.max(1, v - 1))}
+                disabled={maxAdoptions <= 1}
+                className="w-8 h-8 rounded-lg border border-border bg-muted flex items-center justify-center text-lg font-bold text-foreground hover:bg-muted/70 disabled:opacity-40 transition-colors"
+              >
+                −
+              </button>
+              <span className="text-sm font-semibold text-foreground w-6 text-center">{maxAdoptions}</span>
+              <button
+                type="button"
+                onClick={() => setMaxAdoptions((v) => Math.min(100, v + 1))}
+                disabled={maxAdoptions >= 100}
+                className="w-8 h-8 rounded-lg border border-border bg-muted flex items-center justify-center text-lg font-bold text-foreground hover:bg-muted/70 disabled:opacity-40 transition-colors"
+              >
+                +
+              </button>
+              <span className="text-xs text-muted-foreground ml-1">
+                ({tree.currentAdoptions ?? 0} {lang === "it" ? "attive ora" : "currently active"})
+              </span>
+            </div>
           </div>
           <div className="flex gap-2">
             <button
