@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useAuth } from "@/lib/auth";
 import Layout from "@/components/Layout";
 import { useToast } from "@/hooks/use-toast";
@@ -62,15 +62,20 @@ const PRIORITY_BORDER = {
   critical: "border-red-400 dark:border-red-600",
 };
 
+// ─── Cache modulo (persiste tra navigazioni, si azzera solo al ricaricamento) ──
+let _alertsCache: Alert[] = [];
+let _notifsCache: UserNotification[] = [];
+let _cacheLoaded = false;
+
 // ─── Componente principale ────────────────────────────────────────────────────
 export default function AlertsPage() {
   const { getToken } = useAuth();
   const { toast } = useToast();
   const { lang } = useLang();
 
-  const [alerts, setAlerts] = useState<Alert[]>([]);
-  const [notifications, setNotifications] = useState<UserNotification[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [alerts, setAlerts] = useState<Alert[]>(_alertsCache);
+  const [notifications, setNotifications] = useState<UserNotification[]>(_notifsCache);
+  const [loading, setLoading] = useState(!_cacheLoaded);
 
   const fetchAll = useCallback(async () => {
     setLoading(true);
@@ -83,8 +88,17 @@ export default function AlertsPage() {
         fetch("/api/notifications", { headers }),
       ]);
 
-      if (alertsRes.ok) setAlerts(await alertsRes.json());
-      if (notifsRes.ok) setNotifications(await notifsRes.json());
+      if (alertsRes.ok) {
+        const data = await alertsRes.json();
+        _alertsCache = data;
+        setAlerts(data);
+      }
+      if (notifsRes.ok) {
+        const data = await notifsRes.json();
+        _notifsCache = data;
+        setNotifications(data);
+      }
+      _cacheLoaded = true;
     } catch {
       toast({
         title: lang === "it" ? "Errore caricamento" : "Error loading",
@@ -95,14 +109,26 @@ export default function AlertsPage() {
     }
   }, [getToken, toast, lang]);
 
-  // Carica e segna come letti al montaggio
-  useEffect(() => {
-    fetchAll().then(async () => {
-      markAlertsRead();
-      markNotifsRead();
-      window.dispatchEvent(new Event("storage"));
+  const fetchAllRef = useRef(fetchAll);
+  fetchAllRef.current = fetchAll;
 
-      // Segna notifiche personali come lette sul server
+  // Fetch solo al primo caricamento (apertura app) o su treeshare:refresh-inbox
+  useEffect(() => {
+    if (!_cacheLoaded) {
+      fetchAllRef.current();
+    }
+    const handler = () => fetchAllRef.current();
+    window.addEventListener("treeshare:refresh-inbox", handler);
+    return () => window.removeEventListener("treeshare:refresh-inbox", handler);
+  }, []);
+
+  // Segna come letti ad ogni visita (senza refetch)
+  useEffect(() => {
+    markAlertsRead();
+    markNotifsRead();
+    window.dispatchEvent(new Event("storage"));
+
+    (async () => {
       try {
         const token = await getToken();
         if (token) {
@@ -112,8 +138,8 @@ export default function AlertsPage() {
           });
         }
       } catch { /* silenzioso */ }
-    });
-  }, [fetchAll]);
+    })();
+  }, [getToken]);
 
   function formatDate(iso: string) {
     return new Date(iso).toLocaleDateString(lang === "it" ? "it-IT" : "en-GB", {
