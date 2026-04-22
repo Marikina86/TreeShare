@@ -28,6 +28,8 @@ interface AdoptableTree {
   currentAdoptions: number;
   status: string;
   paused: boolean;
+  moderationStatus: string;
+  moderationMessage: string | null;
   ownerStripeReady: boolean;
   latitude: number;
   longitude: number;
@@ -118,6 +120,11 @@ const T = {
     resuming: "Riattivazione...",
     pausedBadge: "In pausa",
     pausedUserMsg: "Questo albero è temporaneamente in pausa e non è adottabile al momento.",
+    pendingBadge: "In attesa di approvazione",
+    pendingOwnerMsg: "Il tuo albero è in attesa di revisione da parte dell'amministratore. Riceverai una notifica quando sarà approvato o rifiutato.",
+    rejectedBadge: "Non approvato",
+    rejectedOwnerMsg: "Il tuo albero non è stato approvato. Motivo:",
+    rejectedOwnerMsgNoReason: "Il tuo albero non è stato approvato. Modifica il contenuto e contatta l'amministratore.",
     proposedBy: "Proposto da",
     maxAdoptionsLabel: "Adozioni simultanee max",
     maxAdoptionsHint: "Numero massimo di adozioni attive contemporaneamente",
@@ -179,6 +186,11 @@ const T = {
     resuming: "Resuming...",
     pausedBadge: "Paused",
     pausedUserMsg: "This tree is temporarily paused and is not available for adoption at the moment.",
+    pendingBadge: "Pending Approval",
+    pendingOwnerMsg: "Your tree is awaiting admin review. You will receive a notification when it is approved or rejected.",
+    rejectedBadge: "Not Approved",
+    rejectedOwnerMsg: "Your tree was not approved. Reason:",
+    rejectedOwnerMsgNoReason: "Your tree was not approved. Edit the content and contact the administrator.",
     proposedBy: "Proposed by",
     maxAdoptionsLabel: "Max simultaneous adoptions",
     maxAdoptionsHint: "Maximum number of active adoptions at the same time",
@@ -933,6 +945,32 @@ export default function AdoptableTreeDetailPage() {
           <p className="text-red-500 text-sm mb-3">{initError}</p>
         )}
 
+        {/* Moderation pending banner — visible to owner only */}
+        {isOwner && tree.moderationStatus === "pending" && (
+          <div className="mb-4 p-4 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-xl flex items-start gap-3">
+            <span className="text-2xl">⏳</span>
+            <div>
+              <p className="font-semibold text-amber-700 dark:text-amber-300 text-sm">{t.pendingBadge}</p>
+              <p className="text-xs text-amber-600 dark:text-amber-400 mt-0.5">{t.pendingOwnerMsg}</p>
+            </div>
+          </div>
+        )}
+
+        {/* Moderation rejected banner — visible to owner only */}
+        {isOwner && tree.moderationStatus === "rejected" && (
+          <div className="mb-4 p-4 bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800 rounded-xl flex items-start gap-3">
+            <span className="text-2xl">❌</span>
+            <div>
+              <p className="font-semibold text-red-700 dark:text-red-300 text-sm">{t.rejectedBadge}</p>
+              <p className="text-xs text-red-600 dark:text-red-400 mt-0.5">
+                {tree.moderationMessage
+                  ? `${t.rejectedOwnerMsg} ${tree.moderationMessage}`
+                  : t.rejectedOwnerMsgNoReason}
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* Paused banner — visible to non-owners when tree is paused */}
         {tree.paused && !isOwner && !adopted && !activeAdoption && (
           <div className="mb-4 p-4 bg-orange-50 dark:bg-orange-950/20 border border-orange-200 dark:border-orange-800 rounded-xl flex items-start gap-3">
@@ -944,8 +982,8 @@ export default function AdoptableTreeDetailPage() {
           </div>
         )}
 
-        {/* Duration selector — visible to all visitors on non-full, non-paused, non-owned trees */}
-        {!isOwner && !adopted && !activeAdoption && !isFull && !tree.paused && !showPayment && (
+        {/* Duration selector — visible to all visitors on non-full, non-paused, approved, non-owned trees */}
+        {!isOwner && !adopted && !activeAdoption && !isFull && !tree.paused && tree.moderationStatus === "approved" && !showPayment && (
           <div className="mb-4">
             <p className="text-sm font-medium text-foreground mb-2">{t.selectDuration}</p>
             <div className="grid grid-cols-4 gap-2">
@@ -974,7 +1012,7 @@ export default function AdoptableTreeDetailPage() {
           </div>
         )}
 
-        {!isOwner && !adopted && !activeAdoption && !tree.paused && (
+        {!isOwner && !adopted && !activeAdoption && !tree.paused && tree.moderationStatus === "approved" && (
           <>
             {!user && (
               <Link href="/sign-in">

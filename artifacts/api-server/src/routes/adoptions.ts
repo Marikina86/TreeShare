@@ -8,7 +8,8 @@ import {
   userNotificationsTable,
   paymentLedgerTable,
 } from "@workspace/db";
-import { eq, and, desc, lt, lte, gte, isNull, inArray } from "drizzle-orm";
+import { eq, and, desc, lt, lte, gte, isNull, inArray, count } from "drizzle-orm";
+import { requireAdmin } from "../middlewares/requireAdmin";
 import { fetchFiscalSnapshot } from "../lib/fiscalSnapshot";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth";
 import { getUncachableStripeClient, getStripePublishableKey } from "../lib/stripe";
@@ -202,6 +203,7 @@ router.get("/adopt/trees", async (req, res) => {
       })
       .from(adoptableTreesTable)
       .leftJoin(usersTable, eq(usersTable.clerkUserId, adoptableTreesTable.ownerId))
+      .where(eq(adoptableTreesTable.moderationStatus, "approved"))
       .orderBy(desc(adoptableTreesTable.createdAt));
     res.json(trees.map((t) => ({
       ...t,
@@ -266,6 +268,8 @@ router.get("/adopt/trees/:id", async (req, res) => {
         currentAdoptions: adoptableTreesTable.currentAdoptions,
         status: adoptableTreesTable.status,
         paused: adoptableTreesTable.paused,
+        moderationStatus: adoptableTreesTable.moderationStatus,
+        moderationMessage: adoptableTreesTable.moderationMessage,
         createdAt: adoptableTreesTable.createdAt,
         updatedAt: adoptableTreesTable.updatedAt,
         ownerUsername: usersTable.username,
@@ -312,10 +316,19 @@ router.post("/adopt/trees", requireAuth, async (req, res) => {
     } = req.body;
 
     if (!title || typeof title !== "string" || title.trim().length === 0) {
-      res.status(400).json({ error: "Titolo obbligatorio" }); return;
+      res.status(400).json({ error: "Il nome dell'albero è obbligatorio" }); return;
     }
     if (!description || typeof description !== "string" || description.trim().length === 0) {
-      res.status(400).json({ error: "Descrizione obbligatoria" }); return;
+      res.status(400).json({ error: "La descrizione è obbligatoria" }); return;
+    }
+    if (!speciesName || typeof speciesName !== "string" || speciesName.trim().length === 0) {
+      res.status(400).json({ error: "La specie botanica è obbligatoria" }); return;
+    }
+    if (!locationName || typeof locationName !== "string" || locationName.trim().length === 0) {
+      res.status(400).json({ error: "Il luogo è obbligatorio" }); return;
+    }
+    if (!productDescription || typeof productDescription !== "string" || productDescription.trim().length === 0) {
+      res.status(400).json({ error: "I prodotti offerti sono obbligatori" }); return;
     }
     if (!ownerEmail || typeof ownerEmail !== "string") {
       res.status(400).json({ error: "Email dell'ente obbligatoria" }); return;
@@ -356,6 +369,7 @@ router.post("/adopt/trees", requireAuth, async (req, res) => {
         durationDays: days,
         maxAdoptions: maxAdopt,
         status: "active",
+        moderationStatus: "pending",
       })
       .returning();
 
@@ -1122,5 +1136,106 @@ export async function notifyExpiringAdoptions(): Promise<void> {
     logger.error({ err }, "[adoptCleaner] Error sending expiry notifications");
   }
 }
+
+// ─── Admin: list pending adoptable trees ─────────────────────────────────────
+
+router.get("/admin/adopt/trees/pending", requireAuth, requireAdmin, async (req, res) => {
+  const page = Math.max(1, parseInt(req.query.page as string, 10) || 1);
+  const limit = Math.min(50, Math.max(1, parseInt(req.query.limit as string, 10) || 10));
+  const offset = (page - 1) * limit;
+  try {
+    const [items, [totalRow]] = await Promise.all([
+      db
+        .select({
+          id: adoptableTreesTable.id,
+          ownerId: adoptableTreesTable.ownerId,
+          ownerEmail: adoptableTreesTable.ownerEmail,
+          title: adoptableTreesTable.title,
+          description: adoptableTreesTable.description,
+          speciesName: adoptableTreesTable.speciesName,
+          locationName: adoptableTreesTable.locationName,
+          imageUrl: adoptableTreesTable.imageUrl,
+          thumbnailUrl: adoptableTreesTable.thumbnailUrl,
+          productDescription: adoptableTreesTable.productDescription,
+          priceCents: adoptableTreesTable.priceCents,
+          durationDays: adoptableTreesTable.durationDays,
+          moderationStatus: adoptableTreesTable.moderationStatus,
+          moderationMessage: adoptableTreesTable.moderationMessage,
+          createdAt: adoptableTreesTable.createdAt,
+          ownerUsername: usersTable.username,
+          ownerPhotoUrl: usersTable.photoUrl,
+        })
+        .from(adoptableTreesTable)
+        .leftJoin(usersTable, eq(usersTable.clerkUserId, adoptableTreesTable.ownerId))
+        .where(eq(adoptableTreesTable.moderationStatus, "pending"))
+        .orderBy(desc(adoptableTreesTable.createdAt))
+        .limit(limit)
+        .offset(offset),
+      db.select({ total: count() }).from(adoptableTreesTable).where(eq(adoptableTreesTable.moderationStatus, "pending")),
+    ]);
+    res.json({
+      items: items.map((t) => ({ ...t, createdAt: t.createdAt.toISOString() })),
+      total: Number(totalRow?.total ?? 0),
+      hasMore: offset + items.length < Number(totalRow?.total ?? 0),
+    });
+  } catch (err) {
+    logger.error({ err }, "[admin] list pending adopt trees error");
+    res.status(500).json({ error: "Errore interno" });
+  }
+});
+
+// ─── Admin: approve adoptable tree ───────────────────────────────────────────
+
+router.patch("/admin/adopt/trees/:id/approve", requireAuth, requireAdmin, async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (isNaN(id)) { res.status(400).json({ error: "ID non valido" }); return; }
+  try {
+    const [tree] = await db
+      .update(adoptableTreesTable)
+      .set({ moderationStatus: "approved", moderationMessage: null, updatedAt: new Date() })
+      .where(eq(adoptableTreesTable.id, id))
+      .returning({ id: adoptableTreesTable.id, ownerId: adoptableTreesTable.ownerId, title: adoptableTreesTable.title });
+    if (!tree) { res.status(404).json({ error: "Albero non trovato" }); return; }
+    await db.insert(userNotificationsTable).values({
+      userId: tree.ownerId,
+      title: "✅ Albero approvato",
+      message: `Il tuo albero "${tree.title}" è stato approvato e pubblicato. Gli adottanti possono ora vederlo.`,
+      isRead: false,
+    });
+    res.json({ ok: true });
+  } catch (err) {
+    logger.error({ err }, "[admin] approve adopt tree error");
+    res.status(500).json({ error: "Errore interno" });
+  }
+});
+
+// ─── Admin: reject adoptable tree ────────────────────────────────────────────
+
+router.patch("/admin/adopt/trees/:id/reject", requireAuth, requireAdmin, async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (isNaN(id)) { res.status(400).json({ error: "ID non valido" }); return; }
+  const { message } = req.body;
+  try {
+    const [tree] = await db
+      .update(adoptableTreesTable)
+      .set({ moderationStatus: "rejected", moderationMessage: message?.trim() || null, updatedAt: new Date() })
+      .where(eq(adoptableTreesTable.id, id))
+      .returning({ id: adoptableTreesTable.id, ownerId: adoptableTreesTable.ownerId, title: adoptableTreesTable.title });
+    if (!tree) { res.status(404).json({ error: "Albero non trovato" }); return; }
+    const notifMsg = message?.trim()
+      ? `Il tuo albero "${tree.title}" non è stato approvato. Motivo: ${message.trim()}`
+      : `Il tuo albero "${tree.title}" non è stato approvato. Modifica il contenuto e riprova.`;
+    await db.insert(userNotificationsTable).values({
+      userId: tree.ownerId,
+      title: "❌ Albero non approvato",
+      message: notifMsg,
+      isRead: false,
+    });
+    res.json({ ok: true });
+  } catch (err) {
+    logger.error({ err }, "[admin] reject adopt tree error");
+    res.status(500).json({ error: "Errore interno" });
+  }
+});
 
 export default router;

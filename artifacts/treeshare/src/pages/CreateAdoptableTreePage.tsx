@@ -47,11 +47,15 @@ const T = {
     required: "Obbligatorio",
     submit: "Crea albero",
     submitting: "Creazione in corso...",
-    success: "🌳 Albero creato con successo!",
+    success: "🌳 Albero inviato per approvazione!",
+    successDetail: "Il tuo albero è stato inviato e sarà visibile al pubblico dopo la revisione dell'amministratore. Riceverai una notifica quando sarà approvato.",
+    successManage: "Gestisci i tuoi alberi",
     errorGeneric: "Errore durante la creazione. Riprova.",
     validationTitle: "Il nome è obbligatorio",
     validationDesc: "La descrizione è obbligatoria",
     validationSpecies: "La specie è obbligatoria",
+    validationLocation: "Il luogo è obbligatorio",
+    validationProduct: "Descrivi cosa riceve l'adottante",
     validationPrice: "Il prezzo deve essere maggiore di 0",
     validationMaxAdoptions: "Le adozioni massime devono essere almeno 1",
     validationLat: "Latitudine non valida (tra -90 e 90)",
@@ -60,6 +64,7 @@ const T = {
     validationImageFormat: "Formato non supportato. Usa JPG, PNG o WebP.",
     validationImageSize: "L'immagine supera il limite di 10 MB",
     uploadingImage: "Caricamento immagine...",
+    profileRequired: "Compila tutti i campi obbligatori: nome, descrizione, specie, luogo e prodotti offerti.",
   },
   en: {
     pageTitle: "Create adoptable tree",
@@ -99,11 +104,15 @@ const T = {
     required: "Required",
     submit: "Create tree",
     submitting: "Creating...",
-    success: "🌳 Tree created successfully!",
+    success: "🌳 Tree submitted for approval!",
+    successDetail: "Your tree has been submitted and will be visible to the public after admin review. You will receive a notification once it is approved.",
+    successManage: "Manage your trees",
     errorGeneric: "Error creating tree. Please try again.",
     validationTitle: "Name is required",
     validationDesc: "Description is required",
     validationSpecies: "Species is required",
+    validationLocation: "Location is required",
+    validationProduct: "Please describe what the adopter receives",
     validationPrice: "Price must be greater than 0",
     validationMaxAdoptions: "Max adoptions must be at least 1",
     validationLat: "Invalid latitude (between -90 and 90)",
@@ -112,6 +121,7 @@ const T = {
     validationImageFormat: "Unsupported format. Use JPG, PNG or WebP.",
     validationImageSize: "Image exceeds the 10 MB limit",
     uploadingImage: "Uploading image...",
+    profileRequired: "Please fill in all required fields: name, description, species, location and offered products.",
   },
 };
 
@@ -205,6 +215,8 @@ export default function CreateAdoptableTreePage() {
     if (!title.trim()) return t.validationTitle;
     if (!description.trim()) return t.validationDesc;
     if (!speciesName.trim()) return t.validationSpecies;
+    if (!locationName.trim()) return t.validationLocation;
+    if (!productDescription.trim()) return t.validationProduct;
     const price = parseFloat(priceEur);
     if (isNaN(price) || price <= 0) return t.validationPrice;
     const maxA = parseInt(maxAdoptions, 10);
@@ -272,7 +284,6 @@ export default function CreateAdoptableTreePage() {
       await queryClient.invalidateQueries({ queryKey: ["adoptable-trees"] });
       await queryClient.invalidateQueries({ queryKey: ["adopt-my-trees"] });
       setSuccess(true);
-      setTimeout(() => navigate("/adopt"), 1800);
     } catch {
       setError(t.errorGeneric);
     } finally {
@@ -310,7 +321,16 @@ export default function CreateAdoptableTreePage() {
       <Layout>
         <div className="max-w-2xl mx-auto px-4 py-16 text-center">
           <div className="text-5xl mb-4">🌳</div>
-          <p className="text-foreground font-semibold text-lg">{t.success}</p>
+          <p className="text-foreground font-bold text-xl mb-3">{t.success}</p>
+          <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-2xl p-5 text-left mb-6">
+            <div className="flex items-start gap-3">
+              <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" className="text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5"><path d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" strokeLinecap="round" strokeLinejoin="round"/></svg>
+              <p className="text-sm text-amber-800 dark:text-amber-200">{t.successDetail}</p>
+            </div>
+          </div>
+          <Link href="/adopt/manage" className="inline-flex items-center gap-2 bg-primary text-primary-foreground px-5 py-2.5 rounded-xl font-semibold text-sm hover:bg-primary/90 transition-colors">
+            {t.successManage}
+          </Link>
         </div>
       </Layout>
     );
@@ -450,12 +470,15 @@ export default function CreateAdoptableTreePage() {
           <section className="bg-card border border-border rounded-2xl p-4 space-y-4">
             <h2 className="font-semibold text-sm uppercase tracking-wide text-muted-foreground">{t.sectionProduct}</h2>
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1">{t.fieldProductDesc}</label>
+              <label className="block text-sm font-medium text-foreground mb-1">
+                {t.fieldProductDesc} <span className="text-red-500">*</span>
+              </label>
               <textarea
                 value={productDescription}
                 onChange={(e) => setProductDescription(e.target.value)}
                 placeholder={t.fieldProductDescPlaceholder}
                 rows={3}
+                required
                 className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background text-foreground resize-none focus:outline-none focus:ring-2 focus:ring-primary/40"
               />
             </div>
@@ -466,12 +489,15 @@ export default function CreateAdoptableTreePage() {
             <h2 className="font-semibold text-sm uppercase tracking-wide text-muted-foreground">{t.sectionLocation}</h2>
 
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1">{t.fieldLocation}</label>
+              <label className="block text-sm font-medium text-foreground mb-1">
+                {t.fieldLocation} <span className="text-red-500">*</span>
+              </label>
               <input
                 type="text"
                 value={locationName}
                 onChange={(e) => setLocationName(e.target.value)}
                 placeholder={t.fieldLocationPlaceholder}
+                required
                 className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
               />
             </div>

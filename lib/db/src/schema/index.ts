@@ -340,11 +340,14 @@ export const adoptableTreesTable = pgTable("adoptable_trees", {
   currentAdoptions: integer("current_adoptions").notNull().default(0),
   status: text("status").notNull().default("active"),
   paused: boolean("paused").notNull().default(false),
+  moderationStatus: text("moderation_status").notNull().default("pending"),
+  moderationMessage: text("moderation_message"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 }, (table) => [
   index("adoptable_trees_owner_id_idx").on(table.ownerId),
   index("adoptable_trees_status_idx").on(table.status),
+  index("adoptable_trees_moderation_idx").on(table.moderationStatus),
 ]);
 
 export const treeAdoptionsTable = pgTable("tree_adoptions", {

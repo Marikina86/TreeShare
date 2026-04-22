@@ -122,7 +122,7 @@ interface AdminAlertItem {
   updatedAt: string;
 }
 
-type Tab = "users" | "reports" | "trees" | "problems" | "pending_events" | "pending_photos" | "pending_updates" | "alerts" | "tips" | "finance" | "discounts" | "ledger";
+type Tab = "users" | "reports" | "trees" | "problems" | "pending_events" | "pending_photos" | "pending_updates" | "pending_adopt_trees" | "alerts" | "tips" | "finance" | "discounts" | "ledger";
 type UserFilter = "all" | "active" | "blocked";
 type ReportFilter = "all" | "pending" | "reviewed" | "dismissed";
 
@@ -204,7 +204,12 @@ export default function AdminPage() {
   const [pendingEventsHasMore, setPendingEventsHasMore] = useState(false);
   const [pendingEventsPage, setPendingEventsPage] = useState(1);
   const [eventReviewMessages, setEventReviewMessages] = useState<Record<number, string>>({});
-  const [pendingCounts, setPendingCounts] = useState<{ pendingTrees: number; pendingUpdates: number; pendingEvents: number }>({ pendingTrees: 0, pendingUpdates: 0, pendingEvents: 0 });
+  const [pendingCounts, setPendingCounts] = useState<{ pendingTrees: number; pendingUpdates: number; pendingEvents: number; pendingAdoptTrees: number }>({ pendingTrees: 0, pendingUpdates: 0, pendingEvents: 0, pendingAdoptTrees: 0 });
+  const [pendingAdoptTrees, setPendingAdoptTrees] = useState<Array<{ id: number; ownerId: string; ownerEmail: string; title: string; description: string; speciesName: string | null; locationName: string | null; imageUrl: string | null; thumbnailUrl: string | null; productDescription: string | null; priceCents: number; durationDays: number; moderationStatus: string; moderationMessage: string | null; createdAt: string; ownerUsername: string | null; ownerPhotoUrl: string | null }>>([]);
+  const [pendingAdoptLoading, setPendingAdoptLoading] = useState(false);
+  const [pendingAdoptHasMore, setPendingAdoptHasMore] = useState(false);
+  const [pendingAdoptPage, setPendingAdoptPage] = useState(1);
+  const [adoptRejectMessages, setAdoptRejectMessages] = useState<Record<number, string>>({});
   const pendingTreesSentinel = useRef<HTMLDivElement>(null);
   const pendingUpdatesSentinel = useRef<HTMLDivElement>(null);
   const pendingEventsSentinel = useRef<HTMLDivElement>(null);
@@ -513,6 +518,55 @@ export default function AdminPage() {
       setPendingCounts((c) => ({ ...c, pendingTrees: Math.max(0, c.pendingTrees - 1) }));
       toast({ title: lang === "it" ? "🗑️ Contenuto eliminato" : "🗑️ Content deleted" });
     } catch { toast({ title: lang === "it" ? "Errore eliminazione" : "Delete error", variant: "destructive" }); }
+    finally { setActionLoading(null); }
+  }
+
+  async function loadPendingAdoptTrees(page = 1) {
+    if (pendingAdoptLoading) return;
+    setPendingAdoptLoading(true);
+    try {
+      const res = await authFetch(`/api/admin/adopt/trees/pending?page=${page}&limit=10`);
+      if (res.ok) {
+        const data = await res.json();
+        if (page === 1) {
+          setPendingAdoptTrees(data.items);
+        } else {
+          setPendingAdoptTrees((prev) => [...prev, ...data.items]);
+        }
+        setPendingAdoptHasMore(data.hasMore);
+        setPendingAdoptPage(page);
+        setPendingCounts((c) => ({ ...c, pendingAdoptTrees: data.total }));
+      }
+    } catch { toast({ title: lang === "it" ? "Errore caricamento" : "Load error", variant: "destructive" }); }
+    finally { setPendingAdoptLoading(false); }
+  }
+
+  async function handleApproveAdoptTree(id: number, title: string) {
+    setActionLoading(`adopt:${id}:approve`);
+    try {
+      const res = await authFetch(`/api/admin/adopt/trees/${id}/approve`, { method: "PATCH" });
+      if (!res.ok) throw new Error();
+      setPendingAdoptTrees((p) => p.filter((t) => t.id !== id));
+      setPendingCounts((c) => ({ ...c, pendingAdoptTrees: Math.max(0, c.pendingAdoptTrees - 1) }));
+      toast({ title: lang === "it" ? `✅ "${title}" approvato e pubblicato` : `✅ "${title}" approved and published` });
+    } catch { toast({ title: lang === "it" ? "Errore approvazione" : "Approval error", variant: "destructive" }); }
+    finally { setActionLoading(null); }
+  }
+
+  async function handleRejectAdoptTree(id: number, title: string) {
+    const message = adoptRejectMessages[id] ?? "";
+    setActionLoading(`adopt:${id}:reject`);
+    try {
+      const res = await authFetch(`/api/admin/adopt/trees/${id}/reject`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message }),
+      });
+      if (!res.ok) throw new Error();
+      setPendingAdoptTrees((p) => p.filter((t) => t.id !== id));
+      setPendingCounts((c) => ({ ...c, pendingAdoptTrees: Math.max(0, c.pendingAdoptTrees - 1) }));
+      toast({ title: lang === "it" ? `❌ "${title}" rifiutato` : `❌ "${title}" rejected` });
+    } catch { toast({ title: lang === "it" ? "Errore rifiuto" : "Reject error", variant: "destructive" }); }
     finally { setActionLoading(null); }
   }
 
@@ -877,6 +931,7 @@ export default function AdminPage() {
   useEffect(() => { if (activeTab === "pending_events") loadPendingEvents(1); }, [activeTab]);
   useEffect(() => { if (activeTab === "pending_photos") loadPendingTrees(1); }, [activeTab]);
   useEffect(() => { if (activeTab === "pending_updates") loadPendingUpdates(1); }, [activeTab]);
+  useEffect(() => { if (activeTab === "pending_adopt_trees") loadPendingAdoptTrees(1); }, [activeTab]);
   useEffect(() => { if (activeTab === "alerts") loadAdminAlerts(); }, [activeTab]);
   useEffect(() => { if (activeTab === "tips") loadAdminTips(); }, [activeTab]);
   useEffect(() => { if (activeTab === "ledger") loadLedger(); }, [activeTab]);
@@ -1096,6 +1151,18 @@ export default function AdminPage() {
             {pendingCounts.pendingUpdates > 0 && (
               <span className="bg-amber-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full leading-none animate-pulse">
                 {pendingCounts.pendingUpdates}
+              </span>
+            )}
+          </button>
+          <button
+            onClick={() => setActiveTab("pending_adopt_trees")}
+            className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors ${activeTab === "pending_adopt_trees" ? "bg-amber-500 text-white" : "text-muted-foreground hover:bg-muted"}`}
+          >
+            <svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path d="M17 8C8 10 5.9 16.17 3.82 19.41 4.2 20.86 4.7 21 5 21c2 0 6.5-6 11-9.5" strokeLinecap="round" strokeLinejoin="round"/><path d="M7.5 14C9 12 10.5 10.5 14 10" strokeLinecap="round" strokeLinejoin="round"/><circle cx="17" cy="5" r="3"/></svg>
+            {lang === "it" ? "Adozioni in attesa" : "Pending Adopt Trees"}
+            {pendingCounts.pendingAdoptTrees > 0 && (
+              <span className="bg-amber-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full leading-none animate-pulse">
+                {pendingCounts.pendingAdoptTrees}
               </span>
             )}
           </button>
@@ -2024,6 +2091,135 @@ export default function AdminPage() {
                       </div>
                     );
                   })}
+              </div>
+            )}
+          </>
+        )}
+
+        {/* ── ALBERI IN ADOZIONE IN ATTESA TAB ── */}
+        {activeTab === "pending_adopt_trees" && (
+          <>
+            <div className="bg-card border border-border rounded-2xl p-5">
+              <h2 className="font-bold text-lg mb-1 flex items-center gap-2">
+                <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path d="M17 8C8 10 5.9 16.17 3.82 19.41 4.2 20.86 4.7 21 5 21c2 0 6.5-6 11-9.5" strokeLinecap="round" strokeLinejoin="round"/><path d="M7.5 14C9 12 10.5 10.5 14 10" strokeLinecap="round" strokeLinejoin="round"/><circle cx="17" cy="5" r="3"/></svg>
+                {lang === "it" ? "Alberi in adozione in attesa di approvazione" : "Adoptable Trees Pending Approval"}
+                <span className="ml-2 text-sm font-normal text-muted-foreground">({pendingCounts.pendingAdoptTrees})</span>
+              </h2>
+              <p className="text-sm text-muted-foreground">
+                {lang === "it"
+                  ? "Revisiona gli alberi inviati dagli enti. Approva per renderli pubblici o rifiuta con un messaggio."
+                  : "Review trees submitted by organizations. Approve to make them public, or reject with a message."}
+              </p>
+            </div>
+            {pendingAdoptLoading && pendingAdoptTrees.length === 0 ? (
+              <div className="flex justify-center py-12">
+                <svg className="animate-spin h-8 w-8 text-primary" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+              </div>
+            ) : pendingAdoptTrees.length === 0 ? (
+              <div className="text-center py-12 text-muted-foreground">
+                <svg width="48" height="48" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5" className="mx-auto mb-3 opacity-40"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                <p className="font-medium">{lang === "it" ? "Nessun albero in attesa" : "No trees pending review"}</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {pendingAdoptTrees.map((tree) => {
+                  const isApproving = actionLoading === `adopt:${tree.id}:approve`;
+                  const isRejecting = actionLoading === `adopt:${tree.id}:reject`;
+                  const isActing = isApproving || isRejecting;
+                  const euros = (tree.priceCents / 100).toFixed(2).replace(".", ",");
+                  const durationLabel = tree.durationDays >= 365
+                    ? `${Math.round(tree.durationDays / 365)} ${lang === "it" ? "anno/i" : "year(s)"}`
+                    : `${tree.durationDays} ${lang === "it" ? "giorni" : "days"}`;
+                  return (
+                    <div key={tree.id} className="bg-card border border-border rounded-2xl overflow-hidden">
+                      <div className="flex gap-4 p-4">
+                        {tree.thumbnailUrl || tree.imageUrl ? (
+                          <img
+                            src={`/api/storage${tree.thumbnailUrl ?? tree.imageUrl}`}
+                            alt={tree.title}
+                            className="w-24 h-24 object-cover rounded-xl flex-shrink-0"
+                          />
+                        ) : (
+                          <div className="w-24 h-24 rounded-xl bg-muted flex items-center justify-center flex-shrink-0">
+                            <svg width="32" height="32" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5" className="text-muted-foreground opacity-50"><path d="M17 8C8 10 5.9 16.17 3.82 19.41 4.2 20.86 4.7 21 5 21c2 0 6.5-6 11-9.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                          </div>
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-start justify-between gap-2 mb-1">
+                            <h3 className="font-bold text-foreground text-lg leading-tight">{tree.title}</h3>
+                            <span className="text-xs bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 px-2 py-0.5 rounded-full font-medium flex-shrink-0">
+                              {lang === "it" ? "In attesa" : "Pending"}
+                            </span>
+                          </div>
+                          <p className="text-sm text-muted-foreground mb-2 line-clamp-2">{tree.description}</p>
+                          <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                            {tree.speciesName && <span>🌿 {tree.speciesName}</span>}
+                            {tree.locationName && <span>📍 {tree.locationName}</span>}
+                            <span>💶 {euros} €</span>
+                            <span>⏱ {durationLabel}</span>
+                          </div>
+                          {tree.productDescription && (
+                            <p className="text-xs text-muted-foreground mt-1">
+                              <span className="font-medium">{lang === "it" ? "Prodotti: " : "Products: "}</span>
+                              {tree.productDescription}
+                            </p>
+                          )}
+                          <p className="text-xs text-muted-foreground mt-1">
+                            {lang === "it" ? "Ente: " : "Org: "}
+                            <span className="font-medium">{tree.ownerUsername ?? tree.ownerEmail}</span>
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {new Date(tree.createdAt).toLocaleDateString(lang === "it" ? "it-IT" : "en-GB", { day: "2-digit", month: "short", year: "numeric" })}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="border-t border-border px-4 py-3 space-y-2">
+                        <textarea
+                          value={adoptRejectMessages[tree.id] ?? ""}
+                          onChange={(e) => setAdoptRejectMessages((m) => ({ ...m, [tree.id]: e.target.value }))}
+                          placeholder={lang === "it" ? "Motivo del rifiuto (opzionale)..." : "Rejection reason (optional)..."}
+                          rows={2}
+                          className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary/20"
+                        />
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => handleApproveAdoptTree(tree.id, tree.title)}
+                            disabled={isActing}
+                            className="flex-1 flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-2 rounded-xl text-sm transition-colors disabled:opacity-60"
+                          >
+                            {isApproving ? (
+                              <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+                            ) : (
+                              <svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path d="M5 13l4 4L19 7" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                            )}
+                            {lang === "it" ? "Approva e pubblica" : "Approve & Publish"}
+                          </button>
+                          <button
+                            onClick={() => handleRejectAdoptTree(tree.id, tree.title)}
+                            disabled={isActing}
+                            className="flex-1 flex items-center justify-center gap-2 bg-destructive hover:bg-destructive/90 text-destructive-foreground font-semibold py-2 rounded-xl text-sm transition-colors disabled:opacity-60"
+                          >
+                            {isRejecting ? (
+                              <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+                            ) : (
+                              <svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                            )}
+                            {lang === "it" ? "Rifiuta" : "Reject"}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+                {pendingAdoptHasMore && (
+                  <button
+                    onClick={() => loadPendingAdoptTrees(pendingAdoptPage + 1)}
+                    disabled={pendingAdoptLoading}
+                    className="w-full py-3 rounded-xl border border-border text-sm font-medium text-muted-foreground hover:bg-muted transition-colors disabled:opacity-60"
+                  >
+                    {pendingAdoptLoading ? (lang === "it" ? "Caricamento..." : "Loading...") : (lang === "it" ? "Carica altri" : "Load more")}
+                  </button>
+                )}
               </div>
             )}
           </>

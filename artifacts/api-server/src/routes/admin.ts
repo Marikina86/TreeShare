@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { usersTable, treesTable, reportsTable, treeUpdatesTable, treeSunsTable, eventsTable, eventParticipantsTable, problemReportsTable, userConsentsTable, cookieConsentsTable, userNotificationsTable, donationCampaignsTable, weeklyWinnersTable, organizationsTable, alertsTable } from "@workspace/db";
+import { usersTable, treesTable, reportsTable, treeUpdatesTable, treeSunsTable, eventsTable, eventParticipantsTable, problemReportsTable, userConsentsTable, cookieConsentsTable, userNotificationsTable, donationCampaignsTable, weeklyWinnersTable, organizationsTable, alertsTable, adoptableTreesTable } from "@workspace/db";
 import { eq, desc, sql, count, ilike, or, inArray } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
 import { requireAdmin } from "../middlewares/requireAdmin";
@@ -343,15 +343,17 @@ router.get("/admin/trees", requireAuth, requireAdmin, async (req, res) => {
 // GET /admin/pending-counts — lightweight counts for badges (no heavy data)
 router.get("/admin/pending-counts", requireAuth, requireAdmin, async (req, res) => {
   try {
-    const [[treesCount], [updatesCount], [eventsCount]] = await Promise.all([
+    const [[treesCount], [updatesCount], [eventsCount], [adoptTreesCount]] = await Promise.all([
       db.select({ total: count() }).from(treesTable).where(eq(treesTable.photoStatus, "pending")),
       db.select({ total: count() }).from(treeUpdatesTable).where(eq(treeUpdatesTable.photoStatus, "pending")),
       db.select({ total: count() }).from(eventsTable).where(eq(eventsTable.moderationStatus, "pending")),
+      db.select({ total: count() }).from(adoptableTreesTable).where(eq(adoptableTreesTable.moderationStatus, "pending")),
     ]);
     res.json({
       pendingTrees: Number(treesCount?.total ?? 0),
       pendingUpdates: Number(updatesCount?.total ?? 0),
       pendingEvents: Number(eventsCount?.total ?? 0),
+      pendingAdoptTrees: Number(adoptTreesCount?.total ?? 0),
     });
   } catch (err) {
     req.log.error({ err }, "Error fetching pending counts");
