@@ -118,6 +118,7 @@ export default function PrivacyPage() {
             <ul className="list-disc list-outside ml-5 space-y-2 text-muted-foreground mb-3">
               <li><strong className="text-foreground">Stripe</strong> – gestione dei pagamenti</li>
               <li><strong className="text-foreground">PayPal</strong> – gestione dei pagamenti</li>
+              <li><strong className="text-foreground">Firebase (Google)</strong> – notifiche push e messaggistica in tempo reale</li>
               <li><strong className="text-foreground">Supabase</strong> – gestione database e autenticazione</li>
               <li><strong className="text-foreground">Cloudinary</strong> – gestione e archiviazione immagini</li>
               <li><strong className="text-foreground">Leaflet / Google Maps / Google Earth / Street View</strong> – servizi di geolocalizzazione e mappe</li>
