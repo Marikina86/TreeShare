@@ -56,7 +56,7 @@ function encodeBlob(
  *
  * Iterations = 8 → precisione ~0.4% sulla qualità, tipicamente <50 ms.
  */
-async function smartEncode(
+export async function smartEncode(
   canvas: HTMLCanvasElement,
   targetBytes: number,
   maxQ = 0.88,

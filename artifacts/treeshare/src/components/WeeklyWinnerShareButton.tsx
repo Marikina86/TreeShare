@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
+import { smartEncode } from "@/lib/imageUtils";
 
 interface Props {
   photoUrl: string;
@@ -252,13 +253,8 @@ async function composeShareImage(
     L.photoAreaH + L.bottomBarH - L.pad,
   );
 
-  return await new Promise<Blob>((resolve, reject) => {
-    canvas.toBlob(
-      (b) => (b ? resolve(b) : reject(new Error("toBlob failed"))),
-      "image/jpeg",
-      0.9,
-    );
-  });
+  const targetBytes = format === "story" ? 320 * 1024 : 250 * 1024;
+  return smartEncode(canvas, targetBytes);
 }
 
 export default function WeeklyWinnerShareButton(props: Props) {
@@ -270,10 +266,11 @@ export default function WeeklyWinnerShareButton(props: Props) {
     setBusy(format);
     try {
       const blob = await composeShareImage(props, format);
+      const ext = blob.type === "image/webp" ? "webp" : "jpg";
       const file = new File(
         [blob],
-        `treeshare-weekly-winner-${format}-${props.treeId}.jpg`,
-        { type: "image/jpeg" },
+        `treeshare-weekly-winner-${format}-${props.treeId}.${ext}`,
+        { type: blob.type || "image/jpeg" },
       );
 
       const baseUrl =
