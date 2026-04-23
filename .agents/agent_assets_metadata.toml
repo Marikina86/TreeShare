@@ -36,3 +36,9 @@ id = "qhFyonf-73PMvc50nP6Qc"
 uri = "file://artifacts/treeshare-video/public/images/business-green.jpg"
 type = "image"
 title = "business professional shaking hands outdoors green sustainable corporate environmental campaign"
+
+[[outputs]]
+id = "-3sCHGBEV7o4QzJk6htfk"
+uri = "file://screenshots/weekly_winner_preview.jpg"
+type = "image"
+title = "Weekly Winner — anteprima Feed e Story"
