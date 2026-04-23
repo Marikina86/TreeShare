@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { getListTreesQueryKey } from "@workspace/api-client-react";
+import { getListTreesQueryKey, useGetCurrentWeeklyWinners } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import Layout from "@/components/Layout";
 import TreeCard from "@/components/TreeCard";
@@ -73,8 +73,12 @@ export default function FeedPage() {
   const [detectingProvince, setDetectingProvince] = useState(false);
   const provinceDetectedRef = useRef(false);
 
-  const [weeklyWinners] = useState<Record<string, WeeklyWinnerTree>>({});
-  const loadingWinners = false;
+  const { data: weeklyWinnersData, isLoading: loadingWinners } =
+    useGetCurrentWeeklyWinners();
+  const weeklyWinners = (weeklyWinnersData ?? {}) as Record<
+    string,
+    WeeklyWinnerTree
+  >;
 
   async function handleProvinceToggle() {
     if (provinceFilter) {
