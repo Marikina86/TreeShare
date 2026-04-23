@@ -3,6 +3,7 @@ import { getListTreesQueryKey, useGetCurrentWeeklyWinners } from "@workspace/api
 import { useQueryClient } from "@tanstack/react-query";
 import Layout from "@/components/Layout";
 import TreeCard from "@/components/TreeCard";
+import WeeklyWinnerShareButton from "@/components/WeeklyWinnerShareButton";
 import { Link } from "wouter";
 import { useAdaptiveQuality } from "@/hooks/useAdaptiveQuality";
 import { useFeed } from "@/hooks/useFeed";
@@ -264,6 +265,16 @@ export default function FeedPage() {
                   ({provinceWinner!.weekSunCount} 🌞 questa settimana)
                 </span>
               )}
+              <div className="ml-auto">
+                <WeeklyWinnerShareButton
+                  treeId={provinceWinner!.treeId}
+                  photoUrl={provinceWinner!.photoUrl}
+                  plantName={provinceWinner!.plantName}
+                  username={provinceWinner!.username}
+                  province={provinceWinner!.province ?? provinceFilter}
+                  weekSunCount={provinceWinner!.weekSunCount}
+                />
+              </div>
             </div>
             <div className="ring-2 ring-amber-400 rounded-2xl overflow-hidden shadow-lg">
               <TreeCard
