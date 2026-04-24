@@ -22,6 +22,7 @@ import donationsRouter from "./donations";
 import discountCodesRouter from "./discountCodes";
 import adoptionsRouter from "./adoptions";
 import adminLedgerRouter from "./adminLedger";
+import appSettingsRouter from "./appSettings";
 
 const router: IRouter = Router();
 
@@ -48,5 +49,6 @@ router.use("/donations", donationsRouter);
 router.use(discountCodesRouter);
 router.use(adoptionsRouter);
 router.use(adminLedgerRouter);
+router.use(appSettingsRouter);
 
 export default router;

@@ -50,6 +50,8 @@ const T = {
     filterSpeciesAll: "Tutte le specie",
     filterLocationAll: "Tutti i luoghi",
     filterLabel: "Filtra",
+    adoptionsDisabled: "Le adozioni sono temporaneamente disabilitate dall'amministratore.",
+    adoptionsDisabledShort: "Adozioni disabilitate",
   },
   en: {
     title: "Adopt a Tree",
@@ -71,6 +73,8 @@ const T = {
     filterSpeciesAll: "All species",
     filterLocationAll: "All locations",
     filterLabel: "Filter",
+    adoptionsDisabled: "Adoptions are temporarily disabled by the administrator.",
+    adoptionsDisabledShort: "Adoptions disabled",
   },
 };
 
@@ -175,6 +179,17 @@ export default function AdoptableTreesPage() {
     staleTime: 60_000,
   });
 
+  const settingsQuery = useQuery<{ adoptionsEnabled: boolean }>({
+    queryKey: ["app-settings-public"],
+    queryFn: async () => {
+      const res = await fetch("/api/app-settings/public");
+      if (!res.ok) return { adoptionsEnabled: true };
+      return res.json();
+    },
+    staleTime: 30_000,
+  });
+  const adoptionsEnabled = settingsQuery.data?.adoptionsEnabled ?? true;
+
   const trees = treesQuery.data ?? [];
 
   const speciesOptions = useMemo(() => {
@@ -210,14 +225,35 @@ export default function AdoptableTreesPage() {
             <p className="text-muted-foreground text-sm mt-1">{t.subtitle}</p>
           </div>
           {isOrg && (
-            <Link href="/adopt/create">
-              <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity">
-                <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
-                  <path d="M12 4v16M4 12h16" strokeLinecap="round"/>
-                </svg>
-                {t.createBtn}
-              </button>
-            </Link>
+            adoptionsEnabled ? (
+              <Link href="/adopt/create">
+                <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity">
+                  <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+                    <path d="M12 4v16M4 12h16" strokeLinecap="round"/>
+                  </svg>
+                  {t.createBtn}
+                </button>
+              </Link>
+            ) : (
+              <div className="flex flex-col items-end gap-1">
+                <button
+                  type="button"
+                  disabled
+                  aria-disabled="true"
+                  title={t.adoptionsDisabled}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-sm font-medium opacity-40 blur-[1px] cursor-not-allowed pointer-events-none select-none"
+                >
+                  <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+                    <path d="M12 4v16M4 12h16" strokeLinecap="round"/>
+                  </svg>
+                  {t.createBtn}
+                </button>
+                <span className="text-[11px] text-amber-600 dark:text-amber-400 font-medium flex items-center gap-1">
+                  <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01" strokeLinecap="round"/></svg>
+                  {t.adoptionsDisabledShort}
+                </span>
+              </div>
+            )
           )}
         </div>
 

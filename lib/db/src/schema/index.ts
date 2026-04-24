@@ -419,6 +419,15 @@ export const paymentLedgerTable = pgTable("payment_ledger", {
   index("payment_ledger_created_at_idx").on(table.createdAt),
 ]);
 
+// ── App settings (key/value store for runtime feature flags) ─────────────────
+
+export const appSettingsTable = pgTable("app_settings", {
+  key: text("key").primaryKey(),
+  value: text("value").notNull(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  updatedBy: text("updated_by"),
+});
+
 export const insertUserSchema = createInsertSchema(usersTable).omit({ id: true, createdAt: true });
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof usersTable.$inferSelect;

@@ -1,6 +1,6 @@
 import { useState, useRef } from "react";
 import { useLocation, Link } from "wouter";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth";
 import { useUser } from "@/lib/auth";
 import { useGetMyProfile } from "@workspace/api-client-react";
@@ -65,6 +65,8 @@ const T = {
     validationImageSize: "L'immagine supera il limite di 10 MB",
     uploadingImage: "Caricamento immagine...",
     profileRequired: "Compila tutti i campi obbligatori: nome, descrizione, specie, luogo e prodotti offerti.",
+    adoptionsDisabledTitle: "Adozioni temporaneamente disabilitate",
+    adoptionsDisabledDesc: "L'amministratore ha sospeso la creazione di nuovi alberi in adozione. Riprova più tardi.",
   },
   en: {
     pageTitle: "Create adoptable tree",
@@ -122,6 +124,8 @@ const T = {
     validationImageSize: "Image exceeds the 10 MB limit",
     uploadingImage: "Uploading image...",
     profileRequired: "Please fill in all required fields: name, description, species, location and offered products.",
+    adoptionsDisabledTitle: "Adoptions temporarily disabled",
+    adoptionsDisabledDesc: "The administrator has paused new adoptable tree creation. Please try again later.",
   },
 };
 
@@ -162,6 +166,17 @@ export default function CreateAdoptableTreePage() {
   const accountType = (profile.data as any)?.accountType;
   const isOrg = accountType === "organization";
   const isLoadingProfile = profile.isLoading;
+
+  const settingsQuery = useQuery<{ adoptionsEnabled: boolean }>({
+    queryKey: ["app-settings-public"],
+    queryFn: async () => {
+      const res = await fetch("/api/app-settings/public");
+      if (!res.ok) return { adoptionsEnabled: true };
+      return res.json();
+    },
+    staleTime: 30_000,
+  });
+  const adoptionsEnabled = settingsQuery.data?.adoptionsEnabled ?? true;
 
   const [title, setTitle] = useState("");
   const [speciesName, setSpeciesName] = useState("");
@@ -232,6 +247,10 @@ export default function CreateAdoptableTreePage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    if (!adoptionsEnabled) {
+      setError(t.adoptionsDisabledDesc);
+      return;
+    }
     const validationError = validate();
     if (validationError) { setError(validationError); return; }
 
@@ -308,6 +327,21 @@ export default function CreateAdoptableTreePage() {
         <div className="max-w-2xl mx-auto px-4 py-16 text-center">
           <div className="text-5xl mb-4">🔒</div>
           <p className="text-muted-foreground text-sm">{t.orgOnly}</p>
+          <Link href="/adopt" className="mt-4 inline-block text-primary text-sm hover:underline">
+            ← {t.back}
+          </Link>
+        </div>
+      </Layout>
+    );
+  }
+
+  if (!adoptionsEnabled) {
+    return (
+      <Layout>
+        <div className="max-w-2xl mx-auto px-4 py-16 text-center">
+          <div className="text-5xl mb-4">⏸️</div>
+          <h2 className="text-xl font-bold text-foreground mb-2">{t.adoptionsDisabledTitle}</h2>
+          <p className="text-muted-foreground text-sm">{t.adoptionsDisabledDesc}</p>
           <Link href="/adopt" className="mt-4 inline-block text-primary text-sm hover:underline">
             ← {t.back}
           </Link>

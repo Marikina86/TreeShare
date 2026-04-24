@@ -16,6 +16,7 @@ import { getUncachableStripeClient, getStripePublishableKey } from "../lib/strip
 import { getRomeExpiryDate } from "../lib/eventCleaner";
 import { logger } from "../lib/logger";
 import { sendEmail } from "../lib/email";
+import { isAdoptionsEnabled } from "../lib/appSettings";
 
 function generateAdoptionCode(): string {
   return "ADO-" + randomUUID().replace(/-/g, "").toUpperCase().substring(0, 8);
@@ -303,6 +304,14 @@ router.get("/adopt/trees/:id", async (req, res) => {
 router.post("/adopt/trees", requireAuth, async (req, res) => {
   const userId = (req as AuthenticatedRequest).userId;
   try {
+    if (!(await isAdoptionsEnabled())) {
+      res.status(403).json({
+        error: "Le adozioni sono temporaneamente disabilitate dall'amministratore",
+        code: "ADOPTIONS_DISABLED",
+      });
+      return;
+    }
+
     const accountType = await getAccountType(userId);
     if (accountType !== "organization") {
       res.status(403).json({ error: "Solo le organizzazioni possono creare alberi in adozione" });

@@ -122,7 +122,7 @@ interface AdminAlertItem {
   updatedAt: string;
 }
 
-type Tab = "users" | "reports" | "trees" | "problems" | "pending_events" | "pending_photos" | "pending_updates" | "pending_adopt_trees" | "alerts" | "tips" | "finance" | "discounts" | "ledger";
+type Tab = "users" | "reports" | "trees" | "problems" | "pending_events" | "pending_photos" | "pending_updates" | "pending_adopt_trees" | "alerts" | "tips" | "finance" | "discounts" | "ledger" | "settings";
 type UserFilter = "all" | "active" | "blocked";
 type ReportFilter = "all" | "pending" | "reviewed" | "dismissed";
 
@@ -159,6 +159,128 @@ function BillingRow({ label, value }: { label: string; value?: string | null }) 
     <div className="flex items-start gap-3 px-4 py-2.5 bg-card">
       <span className="text-xs text-muted-foreground w-36 shrink-0 pt-0.5">{label}</span>
       <span className="text-sm font-medium text-foreground break-all">{value ?? "—"}</span>
+    </div>
+  );
+}
+
+function AdminSettingsSection({
+  lang,
+  authFetch,
+  toast,
+}: {
+  lang: "it" | "en";
+  authFetch: (url: string, options?: RequestInit) => Promise<Response>;
+  toast: ReturnType<typeof useToast>["toast"];
+}) {
+  const queryClient = useQueryClient();
+  const [saving, setSaving] = useState(false);
+
+  const T = lang === "it"
+    ? {
+        title: "Impostazioni piattaforma",
+        subtitle: "Abilita o disabilita funzionalità per tutti gli utenti.",
+        adoptionsTitle: "Adozioni alberi",
+        adoptionsDesc: "Quando disabilitate, le organizzazioni non possono creare nuovi alberi in adozione e il pulsante \"Aggiungi albero\" appare sfocato.",
+        enabled: "Abilitate",
+        disabled: "Disabilitate",
+        loading: "Caricamento...",
+        loadError: "Errore caricamento impostazioni",
+        savedEnabled: "Adozioni abilitate",
+        savedDisabled: "Adozioni disabilitate",
+        saveError: "Errore aggiornamento impostazione",
+      }
+    : {
+        title: "Platform settings",
+        subtitle: "Enable or disable features for all users.",
+        adoptionsTitle: "Tree adoptions",
+        adoptionsDesc: "When disabled, organizations cannot create new adoptable trees and the \"Add tree\" button is blurred.",
+        enabled: "Enabled",
+        disabled: "Disabled",
+        loading: "Loading...",
+        loadError: "Failed to load settings",
+        savedEnabled: "Adoptions enabled",
+        savedDisabled: "Adoptions disabled",
+        saveError: "Failed to update setting",
+      };
+
+  const settingsQuery = useQuery<{ adoptionsEnabled: boolean }>({
+    queryKey: ["admin-app-settings"],
+    queryFn: async () => {
+      const res = await authFetch("/api/admin/app-settings");
+      if (!res.ok) throw new Error("load failed");
+      return res.json();
+    },
+  });
+
+  const adoptionsEnabled = settingsQuery.data?.adoptionsEnabled ?? true;
+
+  async function toggleAdoptions(next: boolean) {
+    setSaving(true);
+    try {
+      const res = await authFetch("/api/admin/app-settings/adoptions", {
+        method: "PUT",
+        body: JSON.stringify({ enabled: next }),
+      });
+      if (!res.ok) throw new Error("save failed");
+      await queryClient.invalidateQueries({ queryKey: ["admin-app-settings"] });
+      await queryClient.invalidateQueries({ queryKey: ["app-settings-public"] });
+      toast({ title: next ? T.savedEnabled : T.savedDisabled });
+    } catch {
+      toast({ title: T.saveError, variant: "destructive" });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <h2 className="text-lg font-semibold text-foreground">{T.title}</h2>
+        <p className="text-sm text-muted-foreground mt-1">{T.subtitle}</p>
+      </div>
+
+      {settingsQuery.isLoading ? (
+        <div className="text-center py-10 text-muted-foreground text-sm">{T.loading}</div>
+      ) : settingsQuery.isError ? (
+        <div className="text-center py-10 text-destructive text-sm">{T.loadError}</div>
+      ) : (
+        <div className="bg-card border border-border rounded-2xl p-5 flex items-start justify-between gap-4">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2">
+              <span className="text-2xl">🌳</span>
+              <h3 className="font-semibold text-foreground">{T.adoptionsTitle}</h3>
+              <span
+                className={`text-[11px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full ${
+                  adoptionsEnabled
+                    ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300"
+                    : "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300"
+                }`}
+              >
+                {adoptionsEnabled ? T.enabled : T.disabled}
+              </span>
+            </div>
+            <p className="text-sm text-muted-foreground mt-2">{T.adoptionsDesc}</p>
+          </div>
+
+          <button
+            type="button"
+            role="switch"
+            aria-checked={adoptionsEnabled}
+            disabled={saving}
+            onClick={() => toggleAdoptions(!adoptionsEnabled)}
+            className={`relative inline-flex h-7 w-12 shrink-0 items-center rounded-full transition-colors disabled:opacity-50 ${
+              adoptionsEnabled ? "bg-emerald-500" : "bg-muted"
+            }`}
+            title={adoptionsEnabled ? T.enabled : T.disabled}
+          >
+            <span
+              className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${
+                adoptionsEnabled ? "translate-x-6" : "translate-x-1"
+              }`}
+            />
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -324,7 +446,7 @@ export default function AdminPage() {
   const T = {
     it: {
       title: "Pannello di controllo", subtitle: "Gestione utenti e contenuti",
-      tabs: { users: "Utenti", reports: "Segnalazioni", trees: "Contenuti", problems: "Problemi", alerts: "Avvisi", tips: "Consigli", finance: "Finanza", discounts: "Sconti", ledger: "Ledger" },
+      tabs: { users: "Utenti", reports: "Segnalazioni", trees: "Contenuti", problems: "Problemi", alerts: "Avvisi", tips: "Consigli", finance: "Finanza", discounts: "Sconti", ledger: "Ledger", settings: "Impostazioni" },
       stats: { users: "Utenti totali", trees: "Alberi piantati", blocked: "Utenti bloccati" },
       search: "Cerca utente...", searchTrees: "Cerca contenuto...",
       filters: { all: "Tutti", active: "Attivi", blocked: "Bloccati", pending: "In attesa", reviewed: "Esaminati", dismissed: "Archiviati" },
@@ -347,7 +469,7 @@ export default function AdminPage() {
     },
     en: {
       title: "Admin Panel", subtitle: "User and content management",
-      tabs: { users: "Users", reports: "Reports", trees: "Content", problems: "Problems", alerts: "Alerts", tips: "Tips", finance: "Finance", discounts: "Discounts", ledger: "Ledger" },
+      tabs: { users: "Users", reports: "Reports", trees: "Content", problems: "Problems", alerts: "Alerts", tips: "Tips", finance: "Finance", discounts: "Discounts", ledger: "Ledger", settings: "Settings" },
       stats: { users: "Total users", trees: "Trees planted", blocked: "Blocked users" },
       search: "Search user...", searchTrees: "Search content...",
       filters: { all: "All", active: "Active", blocked: "Blocked", pending: "Pending", reviewed: "Reviewed", dismissed: "Dismissed" },
@@ -1203,6 +1325,13 @@ export default function AdminPage() {
             <svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" strokeLinecap="round" strokeLinejoin="round"/><path d="M9 12h6M9 16h4" strokeLinecap="round"/></svg>
             {T.tabs.ledger}
             {ledgerData && <span className="text-xs opacity-75">({ledgerData.summary.count})</span>}
+          </button>
+          <button
+            onClick={() => setActiveTab("settings")}
+            className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors ${activeTab === "settings" ? "bg-slate-700 text-white" : "text-muted-foreground hover:bg-muted"}`}
+          >
+            <svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 11-4 0v-.09a1.65 1.65 0 00-1-1.51 1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 110-4h.09a1.65 1.65 0 001.51-1 1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06a1.65 1.65 0 001.82.33h.01a1.65 1.65 0 001-1.51V3a2 2 0 114 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82v.01a1.65 1.65 0 001.51 1H21a2 2 0 110 4h-.09a1.65 1.65 0 00-1.51 1z" strokeLinecap="round" strokeLinejoin="round"/></svg>
+            {T.tabs.settings}
           </button>
         </div>
       </header>
@@ -3122,6 +3251,11 @@ export default function AdminPage() {
               <div className="text-center py-10 text-muted-foreground">{lang === "it" ? "Nessun dato disponibile" : "No data available"}</div>
             )}
           </>
+        )}
+
+        {/* ── SETTINGS TAB ── */}
+        {activeTab === "settings" && (
+          <AdminSettingsSection lang={lang as "it" | "en"} authFetch={authFetch} toast={toast} />
         )}
 
       </div>
