@@ -96,6 +96,9 @@ const T = {
     perAdoption: "/ adozione",
     error: "Errore",
     productDesc: "Cosa ricevi",
+    certTitle: "Certificato di adozione",
+    certDesc: "Scarica il certificato ufficiale da compilare e consegnare all'adottante.",
+    certBtn: "Scarica certificato PDF",
     stripeSection: "Pagamenti Stripe Connect",
     stripeConnected: "Stripe collegato ✓",
     stripeNotConnected: "Stripe non collegato",
@@ -200,6 +203,9 @@ const T = {
     adoptionsDisabled: "Adoptions are temporarily disabled by the administrator.",
     stripeStatusError: "Could not load Stripe status. Please try again.",
     stripeRetry: "Retry",
+    certTitle: "Adoption certificate",
+    certDesc: "Download the official certificate to fill in and deliver to the adopter.",
+    certBtn: "Download certificate PDF",
   },
 };
 
@@ -501,6 +507,29 @@ function OrgManageSection({ tree, t }: { tree: AdoptableTree; t: typeof T.it }) 
         <Link href="/adopt/manage" className="text-xs text-amber-600 dark:text-amber-400 hover:underline">
           {t.orgManageAdoptions}
         </Link>
+      </div>
+
+      {/* Certificate download */}
+      <div className="flex items-center gap-3 p-3 bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800 rounded-xl">
+        <div className="flex-shrink-0 w-8 h-8 rounded-lg bg-emerald-100 dark:bg-emerald-900/40 flex items-center justify-center">
+          <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8" className="text-emerald-700 dark:text-emerald-300">
+            <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-xs font-semibold text-emerald-800 dark:text-emerald-200">{t.certTitle}</p>
+          <p className="text-[11px] text-emerald-700 dark:text-emerald-400 leading-relaxed">{t.certDesc}</p>
+        </div>
+        <a
+          href="/certificato-adozione-treeshare.pdf"
+          download="Certificato_Adozione_TreeShare.pdf"
+          className="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold transition-colors"
+        >
+          <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.2">
+            <path d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+          {t.certBtn}
+        </a>
       </div>
 
       <StripeConnectPanel treeId={tree.id} t={t} />

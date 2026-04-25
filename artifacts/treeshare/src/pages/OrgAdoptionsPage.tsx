@@ -75,6 +75,9 @@ const T = {
     expired: "Scaduta",
     orgStatusLabel: "Spedizione",
     none: "Nessuno",
+    certTitle: "Certificato di adozione",
+    certDesc: "Scarica il certificato ufficiale da compilare e consegnare all'adottante come attestazione dell'adozione.",
+    certBtn: "Scarica certificato PDF",
   },
   en: {
     title: "Received adoptions",
@@ -106,6 +109,9 @@ const T = {
     expired: "Expired",
     orgStatusLabel: "Shipping",
     none: "None",
+    certTitle: "Adoption certificate",
+    certDesc: "Download the official certificate to fill in and deliver to the adopter as proof of adoption.",
+    certBtn: "Download certificate PDF",
   },
 };
 
@@ -353,6 +359,31 @@ export default function OrgAdoptionsPage() {
           </Link>
           <h1 className="text-xl font-bold text-foreground">📋 {t.title}</h1>
           <span className="ml-auto text-xs text-muted-foreground">{allAdoptions.length} totali</span>
+        </div>
+
+        {/* Certificate download banner */}
+        <div className="mb-5 p-4 bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800 rounded-2xl flex flex-col sm:flex-row sm:items-center gap-3">
+          <div className="flex items-start gap-3 flex-1 min-w-0">
+            <div className="flex-shrink-0 w-10 h-10 rounded-xl bg-emerald-100 dark:bg-emerald-900/40 flex items-center justify-center">
+              <svg width="22" height="22" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8" className="text-emerald-700 dark:text-emerald-300">
+                <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            </div>
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-emerald-800 dark:text-emerald-200">{t.certTitle}</p>
+              <p className="text-xs text-emerald-700 dark:text-emerald-400 mt-0.5 leading-relaxed">{t.certDesc}</p>
+            </div>
+          </div>
+          <a
+            href="/certificato-adozione-treeshare.pdf"
+            download="Certificato_Adozione_TreeShare.pdf"
+            className="flex-shrink-0 flex items-center justify-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-semibold transition-colors"
+          >
+            <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.2">
+              <path d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+            {t.certBtn}
+          </a>
         </div>
 
         {/* Filters */}
