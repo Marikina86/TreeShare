@@ -128,6 +128,9 @@ const T = {
     proposedBy: "Proposto da",
     maxAdoptionsLabel: "Adozioni simultanee max",
     maxAdoptionsHint: "Numero massimo di adozioni attive contemporaneamente",
+    adoptionsDisabled: "Le adozioni sono temporaneamente disabilitate dall'amministratore.",
+    stripeStatusError: "Impossibile caricare lo stato Stripe. Riprova.",
+    stripeRetry: "Riprova",
   },
   en: {
     loading: "Loading...",
@@ -194,6 +197,9 @@ const T = {
     proposedBy: "Proposed by",
     maxAdoptionsLabel: "Max simultaneous adoptions",
     maxAdoptionsHint: "Maximum number of active adoptions at the same time",
+    adoptionsDisabled: "Adoptions are temporarily disabled by the administrator.",
+    stripeStatusError: "Could not load Stripe status. Please try again.",
+    stripeRetry: "Retry",
   },
 };
 
@@ -344,7 +350,19 @@ function StripeConnectPanel({ treeId, t }: { treeId: number; t: typeof T.it }) {
         <div className="h-4 bg-violet-100 dark:bg-violet-900/30 rounded animate-pulse" />
       )}
 
-      {!statusQuery.isLoading && status && (
+      {!statusQuery.isLoading && statusQuery.isError && (
+        <div className="flex items-center justify-between">
+          <p className="text-xs text-red-600 dark:text-red-400">{t.stripeStatusError}</p>
+          <button
+            onClick={handleRefresh}
+            className="text-[10px] text-violet-600 hover:underline"
+          >
+            {t.stripeRetry}
+          </button>
+        </div>
+      )}
+
+      {!statusQuery.isLoading && !statusQuery.isError && status && (
         <>
           <div className="flex items-center gap-2 mb-2">
             {status.chargesEnabled ? (
@@ -623,6 +641,17 @@ export default function AdoptableTreeDetailPage() {
   const [adoptedEndDate, setAdoptedEndDate] = useState<string | null>(null);
   const [adoptedCode, setAdoptedCode] = useState<string | null>(null);
   const [stripePromiseLoaded, setStripePromiseLoaded] = useState<ReturnType<typeof loadStripe> | null>(null);
+
+  const settingsQuery = useQuery<{ adoptionsEnabled: boolean }>({
+    queryKey: ["app-settings-public"],
+    queryFn: async () => {
+      const res = await fetch("/api/app-settings/public");
+      if (!res.ok) return { adoptionsEnabled: true };
+      return res.json();
+    },
+    staleTime: 30_000,
+  });
+  const adoptionsEnabled = settingsQuery.data?.adoptionsEnabled ?? true;
 
   const treeQuery = useQuery<AdoptableTree>({
     queryKey: ["adoptable-tree", treeId],
@@ -983,7 +1012,7 @@ export default function AdoptableTreeDetailPage() {
         )}
 
         {/* Duration selector — visible to all visitors on non-full, non-paused, approved, non-owned trees */}
-        {!isOwner && !adopted && !activeAdoption && !isFull && !tree.paused && tree.moderationStatus === "approved" && !showPayment && (
+        {!isOwner && !adopted && !activeAdoption && !isFull && !tree.paused && tree.moderationStatus === "approved" && !showPayment && adoptionsEnabled && (
           <div className="mb-4">
             <p className="text-sm font-medium text-foreground mb-2">{t.selectDuration}</p>
             <div className="grid grid-cols-4 gap-2">
@@ -1014,14 +1043,20 @@ export default function AdoptableTreeDetailPage() {
 
         {!isOwner && !adopted && !activeAdoption && !tree.paused && tree.moderationStatus === "approved" && (
           <>
-            {!user && (
+            {!adoptionsEnabled && (
+              <div className="mb-4 p-4 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-xl flex items-start gap-3">
+                <span className="text-2xl">⚠️</span>
+                <p className="text-sm text-amber-700 dark:text-amber-300">{t.adoptionsDisabled}</p>
+              </div>
+            )}
+            {adoptionsEnabled && !user && (
               <Link href="/sign-in">
                 <button className="w-full py-3 rounded-xl bg-primary text-primary-foreground font-semibold text-sm hover:opacity-90 transition-opacity">
                   {t.loginToAdopt}
                 </button>
               </Link>
             )}
-            {user && !showPayment && (
+            {adoptionsEnabled && user && !showPayment && (
               <>
                 {!tree.ownerStripeReady && (
                   <p className="text-sm text-amber-600 dark:text-amber-400 mb-2 p-3 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-lg">
