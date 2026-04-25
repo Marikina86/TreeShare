@@ -492,8 +492,8 @@ router.post("/trees/:treeId/updates", requireAuth, async (req, res) => {
       .select({ id: treeUpdatesTable.id })
       .from(treeUpdatesTable)
       .where(eq(treeUpdatesTable.treeId, treeId));
-    if (existingUpdates.length >= 2) {
-      res.status(422).json({ error: "Limite raggiunto: puoi aggiungere al massimo 2 aggiornamenti per pianta." });
+    if (existingUpdates.length >= 9) {
+      res.status(422).json({ error: "Limite raggiunto: puoi aggiungere al massimo 9 aggiornamenti per pianta (10 foto in totale)." });
       return;
     }
     const [update] = await db
