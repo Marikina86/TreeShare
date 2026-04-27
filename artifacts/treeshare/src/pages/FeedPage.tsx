@@ -107,12 +107,20 @@ export default function FeedPage() {
       })
     : allTrees;
 
-  const provinceWinner: WeeklyWinnerTree | null = provinceFilter
-    ? (weeklyWinners[provinceFilter] ?? null)
+  // Best winner across all provinces (highest week sun count)
+  const topWinner: WeeklyWinnerTree | null = Object.values(weeklyWinners).length > 0
+    ? (Object.values(weeklyWinners) as WeeklyWinnerTree[]).reduce((a, b) =>
+        (a.weekSunCount ?? 0) >= (b.weekSunCount ?? 0) ? a : b
+      )
     : null;
 
+  // With province filter: show that province's winner; without: show the top winner globally
+  const provinceWinner: WeeklyWinnerTree | null = provinceFilter
+    ? (weeklyWinners[provinceFilter] ?? null)
+    : topWinner;
+
   const winnerAlreadyInFeed = provinceWinner
-    ? filteredTrees.some((t) => t.id === provinceWinner.treeId)
+    ? allTrees.some((t) => t.id === provinceWinner.treeId)
     : false;
 
   const showPinnedWinner = provinceWinner && !winnerAlreadyInFeed;
@@ -258,7 +266,7 @@ export default function FeedPage() {
             <div className="flex items-center gap-2 mb-3">
               <span className="text-lg">🌞</span>
               <h2 className="font-bold text-foreground text-base">
-                Pianta della Settimana — {provinceFilter}
+                Pianta della Settimana{provinceWinner!.province ? ` — ${provinceWinner!.province}` : provinceFilter ? ` — ${provinceFilter}` : ""}
               </h2>
               {provinceWinner!.weekSunCount !== undefined && (
                 <span className="text-xs text-muted-foreground ml-1">
