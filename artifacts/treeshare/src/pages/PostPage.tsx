@@ -565,12 +565,15 @@ export default function PostPage() {
                   onSelect={(r: LocationResult) => {
                     setLocationName(r.city || r.displayName);
                     setCountry(r.country);
-                    if (!latitude && !longitude) {
-                      setLatitude(String(r.lat));
-                      setLongitude(String(r.lng));
-                    } else {
-                      setLatitude(String(r.lat));
-                      setLongitude(String(r.lng));
+                    setLatitude(String(r.lat));
+                    setLongitude(String(r.lng));
+                    if (r.province) {
+                      const cleaned = r.province
+                        .replace(/^Provincia di /i, "")
+                        .replace(/^Città metropolitana di /i, "")
+                        .replace(/^Province of /i, "")
+                        .trim();
+                      if (cleaned) setProvince(cleaned);
                     }
                   }}
                   placeholder="es. Villa Borghese, Roma..."
