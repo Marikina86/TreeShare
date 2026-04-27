@@ -297,6 +297,7 @@ export default function PrivacyPage() {
           </p>
           <div className="flex flex-wrap gap-4 text-sm">
             <Link href="/terms" className="text-primary hover:underline">Termini e Condizioni</Link>
+            <Link href="/cookies" className="text-primary hover:underline">Cookie Policy</Link>
             <Link href="/" className="text-muted-foreground hover:text-foreground transition-colors">← Torna alla home</Link>
           </div>
         </div>

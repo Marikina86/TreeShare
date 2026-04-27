@@ -833,6 +833,10 @@ export default function OrganizationSignupPage() {
                   {consentErrors.terms}
                 </p>
               )}
+              <p className="text-xs text-muted-foreground ml-0 mt-1">
+                Registrandoti, prendi atto della nostra{" "}
+                <Link to="/cookies" className="underline text-primary font-medium">Cookie Policy</Link>.
+              </p>
             </CardContent>
           </Card>
 

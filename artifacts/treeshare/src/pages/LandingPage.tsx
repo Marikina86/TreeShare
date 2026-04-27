@@ -360,6 +360,10 @@ export default function LandingPage() {
           <Link href="/terms" className="hover:text-primary transition-colors">
             {({ it: "Condizioni d'uso", en: "Terms of Use", fr: "Conditions d'utilisation", pt: "Termos de Uso", es: "Términos de Uso", ja: "利用規約" } as Record<string, string>)[lang]}
           </Link>
+          <span>·</span>
+          <Link href="/cookies" className="hover:text-primary transition-colors">
+            {({ it: "Cookie Policy", en: "Cookie Policy", fr: "Politique de cookies", pt: "Política de Cookies", es: "Política de Cookies", ja: "クッキーポリシー" } as Record<string, string>)[lang]}
+          </Link>
         </div>
       </footer>
     </div>

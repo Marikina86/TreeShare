@@ -286,6 +286,7 @@ export default function TermsPage() {
           </p>
           <div className="flex flex-wrap gap-4 text-sm">
             <Link href="/privacy" className="text-primary hover:underline">Informativa sulla Privacy</Link>
+            <Link href="/cookies" className="text-primary hover:underline">Cookie Policy</Link>
             <Link href="/" className="text-muted-foreground hover:text-foreground transition-colors">← Torna alla home</Link>
           </div>
         </div>

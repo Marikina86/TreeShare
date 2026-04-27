@@ -631,6 +631,10 @@ export default function PostPage() {
               {" "}e l'{" "}
               <Link href="/privacy#ai" className="text-primary underline hover:opacity-80" onClick={() => setShowPrivacyPopup(false)}>
                 informativa AI
+              </Link>
+              {" "}e la{" "}
+              <Link href="/cookies" className="text-primary underline hover:opacity-80" onClick={() => setShowPrivacyPopup(false)}>
+                cookie policy
               </Link>.
             </div>
 

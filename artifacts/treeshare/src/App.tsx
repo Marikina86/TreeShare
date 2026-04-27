@@ -17,6 +17,7 @@ import ProfilePage from "@/pages/ProfilePage";
 import OnboardingPage from "@/pages/OnboardingPage";
 import PrivacyPage from "@/pages/PrivacyPage";
 import TermsPage from "@/pages/TermsPage";
+import CookiePage from "@/pages/CookiePage";
 import EventsPage from "@/pages/EventsPage";
 import AlertsPage from "@/pages/AlertsPage";
 import TipsPage from "@/pages/TipsPage";
@@ -182,6 +183,7 @@ function AuthProviderWithRoutes() {
             <Route path="/admin" component={() => <AdminRoute component={AdminPage} />} />
             <Route path="/privacy" component={PrivacyPage} />
             <Route path="/terms" component={TermsPage} />
+            <Route path="/cookies" component={CookiePage} />
             <Route path="/register" component={RegisterChoicePage} />
             <Route path="/register-privato" component={PrivateSignupPage} />
             <Route path="/register-ente" component={OrganizationSignupPage} />

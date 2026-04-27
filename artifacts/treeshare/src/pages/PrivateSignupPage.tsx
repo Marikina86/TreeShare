@@ -605,6 +605,11 @@ export default function PrivateSignupPage() {
               </span>
             </label>
             <FieldError message={errors.acceptTerms} />
+            <p className="text-xs text-muted-foreground mt-1">
+              {lang === "en"
+                ? <>By registering, you acknowledge our <Link href="/cookies" className="underline text-primary font-medium">Cookie Policy</Link>.</>
+                : <>Registrandoti, prendi atto della nostra <Link href="/cookies" className="underline text-primary font-medium">Cookie Policy</Link>.</>}
+            </p>
           </div>
 
           <button

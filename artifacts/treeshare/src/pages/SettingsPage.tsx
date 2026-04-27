@@ -911,6 +911,31 @@ export default function SettingsPage() {
                 <path d="M9 18l6-6-6-6" strokeLinecap="round" strokeLinejoin="round"/>
               </svg>
             </Link>
+            <Link
+              href="/cookies"
+              className="flex items-center justify-between px-5 py-4 hover:bg-muted transition-colors"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center flex-shrink-0">
+                  <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" className="text-muted-foreground">
+                    <circle cx="12" cy="12" r="10" strokeLinecap="round" strokeLinejoin="round"/>
+                    <circle cx="8" cy="9" r="1" fill="currentColor" stroke="none"/>
+                    <circle cx="14" cy="7" r="1" fill="currentColor" stroke="none"/>
+                    <circle cx="15" cy="14" r="1" fill="currentColor" stroke="none"/>
+                    <circle cx="9" cy="15" r="1" fill="currentColor" stroke="none"/>
+                  </svg>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-foreground">Cookie Policy</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {({ it: "Gestione dei cookie e tecnologie simili", en: "Cookie and tracking technologies", fr: "Gestion des cookies et technologies similaires", pt: "Gestão de cookies e tecnologias similares", es: "Gestión de cookies y tecnologías similares", ja: "クッキーとトラッキング技術の管理" } as Record<string,string>)[lang]}
+                  </p>
+                </div>
+              </div>
+              <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" className="text-muted-foreground">
+                <path d="M9 18l6-6-6-6" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            </Link>
           </div>
         </section>
 
