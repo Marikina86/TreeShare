@@ -3,6 +3,7 @@ import { useAuth } from "@/lib/auth";
 import Layout from "@/components/Layout";
 import { useToast } from "@/hooks/use-toast";
 import { useLang } from "@/lib/i18n";
+import { Link } from "wouter";
 
 // ─── Chiave localStorage per il timestamp dell'ultima lettura ────────────────
 const ALERTS_LAST_READ_KEY = "alerts_last_read_at";
@@ -182,34 +183,55 @@ export default function AlertsPage() {
               </div>
             ) : (
               <div className="space-y-3">
-                {notifications.map((n) => (
-                  <div
-                    key={n.id}
-                    className={`p-5 bg-card rounded-2xl shadow-sm border-2 transition-colors ${
-                      !n.isRead
-                        ? "border-primary/40 bg-primary/5 dark:bg-primary/10"
-                        : "border-border"
-                    }`}
-                  >
-                    <div className="flex items-start justify-between gap-3 mb-2">
-                      <div className="flex items-center gap-2">
-                        <span className="text-base">🔔</span>
-                        <h2 className="font-semibold text-foreground leading-snug">{n.title}</h2>
-                        {!n.isRead && (
-                          <span className="w-2 h-2 rounded-full bg-primary flex-shrink-0" />
+                {notifications.map((n) => {
+                  const isWinner = n.type === "weekly_winner" && n.relatedId;
+                  const icon = isWinner ? "🌞" : "🔔";
+                  const cardClass = `p-5 bg-card rounded-2xl shadow-sm border-2 transition-colors ${
+                    !n.isRead
+                      ? "border-primary/40 bg-primary/5 dark:bg-primary/10"
+                      : "border-border"
+                  }`;
+                  const inner = (
+                    <>
+                      <div className="flex items-start justify-between gap-3 mb-2">
+                        <div className="flex items-center gap-2">
+                          <span className="text-base">{icon}</span>
+                          <h2 className="font-semibold text-foreground leading-snug">{n.title}</h2>
+                          {!n.isRead && (
+                            <span className="w-2 h-2 rounded-full bg-primary flex-shrink-0" />
+                          )}
+                        </div>
+                        <span className="text-xs text-muted-foreground whitespace-nowrap flex-shrink-0">
+                          {formatDate(n.createdAt)}
+                        </span>
+                      </div>
+                      <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap pl-7">{n.message}</p>
+                      <div className="flex items-center justify-between mt-3 pl-7">
+                        <p className="text-xs text-muted-foreground flex items-center gap-1">
+                          <svg width="11" height="11" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                          {lang === "it" ? "Team TreeShare" : "TreeShare Team"}
+                        </p>
+                        {isWinner && (
+                          <span className="text-xs text-primary font-medium flex items-center gap-1">
+                            {lang === "it" ? "Vedi la pianta" : "View plant"}
+                            <svg width="11" height="11" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path d="M9 18l6-6-6-6" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                          </span>
                         )}
                       </div>
-                      <span className="text-xs text-muted-foreground whitespace-nowrap flex-shrink-0">
-                        {formatDate(n.createdAt)}
-                      </span>
+                    </>
+                  );
+                  return isWinner ? (
+                    <Link key={n.id} href={`/tree/${n.relatedId}`}>
+                      <div className={`${cardClass} cursor-pointer hover:shadow-md hover:border-primary/60 active:scale-[0.99] transition-all`}>
+                        {inner}
+                      </div>
+                    </Link>
+                  ) : (
+                    <div key={n.id} className={cardClass}>
+                      {inner}
                     </div>
-                    <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap pl-7">{n.message}</p>
-                    <p className="text-xs text-muted-foreground mt-3 pl-7 flex items-center gap-1">
-                      <svg width="11" height="11" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" strokeLinecap="round" strokeLinejoin="round"/></svg>
-                      {lang === "it" ? "Team TreeShare" : "TreeShare Team"}
-                    </p>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </section>

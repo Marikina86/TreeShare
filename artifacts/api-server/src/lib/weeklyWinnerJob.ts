@@ -1,6 +1,6 @@
 import { db } from "@workspace/db";
-import { treesTable, treeSunsTable, weeklyWinnersTable, userNotificationsTable } from "@workspace/db";
-import { eq, and, gte, lt, count, inArray } from "drizzle-orm";
+import { treesTable, weeklyWinnersTable, userNotificationsTable } from "@workspace/db";
+import { eq, desc, asc } from "drizzle-orm";
 import { logger } from "./logger";
 
 /** Returns Monday 00:00:00 UTC of the current week */
@@ -65,14 +65,12 @@ export async function getCurrentWinnersMap(): Promise<
   }
 }
 
-/** Main calculation: find the single global winner for the last completed week */
+/** Main calculation: winner = approved tree with most total suns; tie-break → earliest publication */
 export async function calculateWeeklyWinners(): Promise<void> {
   const weekStart = getLastCompletedWeekStart();
-  const weekEnd = new Date(weekStart);
-  weekEnd.setUTCDate(weekEnd.getUTCDate() + 7);
 
   logger.info(
-    { weekStart: weekStart.toISOString(), weekEnd: weekEnd.toISOString() },
+    { weekStart: weekStart.toISOString() },
     "[weeklyWinner] Starting calculation"
   );
 
@@ -89,93 +87,53 @@ export async function calculateWeeklyWinners(): Promise<void> {
       return;
     }
 
-    // Count suns per tree received during the week window
-    const sunsInWeek = await db
-      .select({ treeId: treeSunsTable.treeId, sunCount: count(treeSunsTable.id) })
-      .from(treeSunsTable)
-      .where(
-        and(
-          gte(treeSunsTable.createdAt, weekStart),
-          lt(treeSunsTable.createdAt, weekEnd)
-        )
-      )
-      .groupBy(treeSunsTable.treeId);
-
-    if (sunsInWeek.length === 0) {
-      logger.info("[weeklyWinner] No suns recorded this week, skipping");
-      return;
-    }
-
-    // Fetch approved tree info for all sun candidates
-    const candidateTreeIds = sunsInWeek.map((s) => s.treeId);
-    const trees = await db
+    // Find the approved tree with the most total suns (pre-calculated column); tie-break → earliest createdAt
+    const [topTree] = await db
       .select({
         id: treesTable.id,
         userId: treesTable.userId,
         province: treesTable.province,
         country: treesTable.country,
+        sunCount: treesTable.sunCount,
         createdAt: treesTable.createdAt,
       })
       .from(treesTable)
-      .where(
-        and(
-          eq(treesTable.photoStatus, "approved"),
-          inArray(treesTable.id, candidateTreeIds)
-        )
-      );
+      .where(eq(treesTable.photoStatus, "approved"))
+      .orderBy(desc(treesTable.sunCount), asc(treesTable.createdAt))
+      .limit(1);
 
-    if (trees.length === 0) {
+    if (!topTree) {
       logger.info("[weeklyWinner] No approved trees found, skipping");
       return;
     }
 
-    // Build sunCount map
-    const sunMap = new Map(sunsInWeek.map((s) => [s.treeId, Number(s.sunCount)]));
-
-    // Find the single global winner: most suns this week; tie-break → earliest publication date
-    type Candidate = { treeId: number; userId: string; province: string; sunCount: number; createdAt: Date };
-    let winner: Candidate | null = null;
-
-    for (const tree of trees) {
-      const suns = sunMap.get(tree.id) ?? 0;
-      const groupKey = tree.province || tree.country || "Italia";
-      if (
-        !winner ||
-        suns > winner.sunCount ||
-        (suns === winner.sunCount && tree.createdAt < winner.createdAt)
-      ) {
-        winner = { treeId: tree.id, userId: tree.userId, province: groupKey, sunCount: suns, createdAt: tree.createdAt };
-      }
-    }
-
-    if (!winner) {
-      logger.info("[weeklyWinner] No winner found, skipping");
-      return;
-    }
+    const province = topTree.province || topTree.country || "Italia";
 
     // Save the single winner
     await db.insert(weeklyWinnersTable).values({
-      treeId: winner.treeId,
-      userId: winner.userId,
-      province: winner.province,
+      treeId: topTree.id,
+      userId: topTree.userId,
+      province,
       weekStart,
-      sunCount: winner.sunCount,
+      sunCount: topTree.sunCount,
     });
 
     logger.info(
-      { treeId: winner.treeId, sunCount: winner.sunCount, province: winner.province },
+      { treeId: topTree.id, sunCount: topTree.sunCount, province },
       "[weeklyWinner] Winner saved"
     );
 
     // Send in-app notification to the winner
     try {
       await db.insert(userNotificationsTable).values({
-        userId: winner.userId,
+        userId: topTree.userId,
         title: "🌞 Complimenti!",
-        message: "La tua pianta è la Pianta della Settimana di TreeShare!",
+        message: "La tua pianta è la Pianta della Settimana di TreeShare! Tocca per vederla.",
+        type: "weekly_winner",
+        relatedId: topTree.id,
         isRead: false,
       });
-      logger.info({ userId: winner.userId }, "[weeklyWinner] Notification sent");
+      logger.info({ userId: topTree.userId, treeId: topTree.id }, "[weeklyWinner] Notification sent");
     } catch (notifyErr) {
       logger.error({ notifyErr }, "[weeklyWinner] Error sending notification");
     }

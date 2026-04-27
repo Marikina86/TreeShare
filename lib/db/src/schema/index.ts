@@ -131,6 +131,8 @@ export const userNotificationsTable = pgTable("user_notifications", {
   userId: text("user_id").notNull(),
   title: text("title").notNull(),
   message: text("message").notNull(),
+  type: text("type"),
+  relatedId: integer("related_id"),
   isRead: boolean("is_read").notNull().default(false),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 }, (table) => [
