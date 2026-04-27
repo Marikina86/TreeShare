@@ -21,6 +21,16 @@ function getPreviousWeekStart(): Date {
   return current;
 }
 
+/**
+ * Returns the Monday of the most recently *completed* week.
+ * - On Sunday UTC: the current week (Mon–Sun) is ending → use getCurrentWeekStart()
+ * - On Monday–Saturday UTC: the previous week already ended → use getPreviousWeekStart()
+ */
+function getLastCompletedWeekStart(): Date {
+  const now = new Date();
+  return now.getUTCDay() === 0 ? getCurrentWeekStart() : getPreviousWeekStart();
+}
+
 /** Returns the set of treeIds that are current weekly winners (pinned this week) */
 export async function getCurrentWinnerIds(): Promise<Set<number>> {
   try {
@@ -55,14 +65,14 @@ export async function getCurrentWinnersMap(): Promise<
   }
 }
 
-/** Main calculation: find winners for each province in the previous week */
+/** Main calculation: find winners for each province in the last completed week */
 export async function calculateWeeklyWinners(): Promise<void> {
-  const prevWeekStart = getPreviousWeekStart();
-  const prevWeekEnd = new Date(prevWeekStart);
-  prevWeekEnd.setUTCDate(prevWeekEnd.getUTCDate() + 7);
+  const weekStart = getLastCompletedWeekStart();
+  const weekEnd = new Date(weekStart);
+  weekEnd.setUTCDate(weekEnd.getUTCDate() + 7);
 
   logger.info(
-    { weekStart: prevWeekStart.toISOString(), weekEnd: prevWeekEnd.toISOString() },
+    { weekStart: weekStart.toISOString(), weekEnd: weekEnd.toISOString() },
     "[weeklyWinner] Starting calculation"
   );
 
@@ -71,7 +81,7 @@ export async function calculateWeeklyWinners(): Promise<void> {
     const existing = await db
       .select({ id: weeklyWinnersTable.id })
       .from(weeklyWinnersTable)
-      .where(eq(weeklyWinnersTable.weekStart, prevWeekStart))
+      .where(eq(weeklyWinnersTable.weekStart, weekStart))
       .limit(1);
 
     if (existing.length > 0) {
@@ -79,14 +89,14 @@ export async function calculateWeeklyWinners(): Promise<void> {
       return;
     }
 
-    // Count suns per tree received during the previous week window
+    // Count suns per tree received during the week window
     const sunsInWeek = await db
       .select({ treeId: treeSunsTable.treeId, sunCount: count(treeSunsTable.id) })
       .from(treeSunsTable)
       .where(
         and(
-          gte(treeSunsTable.createdAt, prevWeekStart),
-          lt(treeSunsTable.createdAt, prevWeekEnd)
+          gte(treeSunsTable.createdAt, weekStart),
+          lt(treeSunsTable.createdAt, weekEnd)
         )
       )
       .groupBy(treeSunsTable.treeId);
@@ -151,7 +161,7 @@ export async function calculateWeeklyWinners(): Promise<void> {
           treeId: winner.treeId,
           userId: winner.userId,
           province,
-          weekStart: prevWeekStart,
+          weekStart: weekStart,
           sunCount: winner.sunCount,
           notified: false,
         });
@@ -171,7 +181,7 @@ export async function calculateWeeklyWinners(): Promise<void> {
             .set({ notified: true })
             .where(
               and(
-                eq(weeklyWinnersTable.weekStart, prevWeekStart),
+                eq(weeklyWinnersTable.weekStart, weekStart),
                 eq(weeklyWinnersTable.province, province)
               )
             );
@@ -211,7 +221,8 @@ function getNextSundayAt2359Rome(): Date {
   targetRome.setDate(romeNow.getDate() + daysUntilSunday);
   targetRome.setHours(23, 59, 0, 0);
 
-  const romeOffsetMs = targetRome.getTime() - now.getTime();
+  // Subtract romeNow (not now) so the Rome→UTC offset cancels correctly
+  const romeOffsetMs = targetRome.getTime() - romeNow.getTime();
   const targetUtc = new Date(now.getTime() + romeOffsetMs);
 
   return targetUtc;
