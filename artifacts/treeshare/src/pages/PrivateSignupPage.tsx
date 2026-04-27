@@ -51,6 +51,7 @@ export default function PrivateSignupPage() {
     cognome: "",
     citta: "",
     provincia: "",
+    telefono: "",
     email: "",
     password: "",
     confirmPassword: "",
@@ -80,6 +81,11 @@ export default function PrivateSignupPage() {
     if (!fields.nome.trim()) e.nome = "Nome obbligatorio";
     if (!fields.cognome.trim()) e.cognome = "Cognome obbligatorio";
     if (!fields.citta.trim()) e.citta = "Città obbligatoria";
+    if (!fields.telefono.trim()) {
+      e.telefono = lang === "en" ? "Phone number required" : "Numero di telefono obbligatorio";
+    } else if (!/^[+\d][\d\s\-().]{6,19}$/.test(fields.telefono.trim())) {
+      e.telefono = lang === "en" ? "Invalid phone number" : "Numero di telefono non valido";
+    }
     if (!fields.email.trim() || !/^\S+@\S+\.\S+$/.test(fields.email))
       e.email = "Email non valida";
     if (fields.password.length < 8) e.password = "Password minimo 8 caratteri";
@@ -491,6 +497,21 @@ export default function PrivateSignupPage() {
                 className={inputCls}
               />
             </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-foreground mb-1.5">
+              {lang === "en" ? "Phone number" : "Numero di telefono"} <span className="text-destructive">*</span>
+            </label>
+            <input
+              type="tel"
+              value={fields.telefono}
+              onChange={(e) => set("telefono", e.target.value)}
+              placeholder="+39 333 1234567"
+              autoComplete="tel"
+              className={`${inputCls} ${errors.telefono ? errorCls : ""}`}
+            />
+            <FieldError message={errors.telefono} />
           </div>
 
           <div>
