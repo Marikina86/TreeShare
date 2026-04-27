@@ -106,13 +106,14 @@ export async function calculateWeeklyWinners(): Promise<void> {
       return;
     }
 
-    // Fetch tree info for candidates that are approved and have province set
+    // Fetch tree info for approved candidates (province or country used as grouping key)
     const candidateTreeIds = sunsInWeek.map((s) => s.treeId);
     const trees = await db
       .select({
         id: treesTable.id,
         userId: treesTable.userId,
         province: treesTable.province,
+        country: treesTable.country,
         createdAt: treesTable.createdAt,
       })
       .from(treesTable)
@@ -126,20 +127,20 @@ export async function calculateWeeklyWinners(): Promise<void> {
     // Build sunCount map
     const sunMap = new Map(sunsInWeek.map((s) => [s.treeId, Number(s.sunCount)]));
 
-    // Find best tree per province (most suns, tie-break: earliest createdAt)
+    // Find best tree per group key: province if set, else country, else "Italia"
     type ProvinceWinner = { treeId: number; userId: string; sunCount: number; createdAt: Date };
     const provinceMap = new Map<string, ProvinceWinner>();
 
     for (const tree of trees) {
-      if (!tree.province) continue;
+      const groupKey = tree.province || tree.country || "Italia";
       const suns = sunMap.get(tree.id) ?? 0;
-      const current = provinceMap.get(tree.province);
+      const current = provinceMap.get(groupKey);
       if (
         !current ||
         suns > current.sunCount ||
         (suns === current.sunCount && tree.createdAt < current.createdAt)
       ) {
-        provinceMap.set(tree.province, {
+        provinceMap.set(groupKey, {
           treeId: tree.id,
           userId: tree.userId,
           sunCount: suns,
@@ -149,50 +150,40 @@ export async function calculateWeeklyWinners(): Promise<void> {
     }
 
     if (provinceMap.size === 0) {
-      logger.info("[weeklyWinner] No trees with province found, skipping");
+      logger.info("[weeklyWinner] No approved trees found, skipping");
       return;
     }
 
     // Save winners and send notifications
     let saved = 0;
-    for (const [province, winner] of provinceMap) {
+    for (const [groupKey, winner] of provinceMap) {
       try {
         await db.insert(weeklyWinnersTable).values({
           treeId: winner.treeId,
           userId: winner.userId,
-          province,
+          province: groupKey,
           weekStart: weekStart,
           sunCount: winner.sunCount,
-          notified: false,
         });
 
         // Send in-app notification to winner
         try {
+          const isProvince = groupKey !== "Italia" && !/^[A-Z]{2,3}$/.test(groupKey);
+          const locationLabel = isProvince ? `nella provincia di ${groupKey}` : `in ${groupKey}`;
           await db.insert(userNotificationsTable).values({
             userId: winner.userId,
             title: "🌞 Complimenti!",
-            message: `La tua pianta è la Pianta della Settimana nella provincia di ${province}!`,
-            type: "weekly_winner",
-            relatedId: winner.treeId,
+            message: `La tua pianta è la Pianta della Settimana ${locationLabel}!`,
+            isRead: false,
           });
-
-          await db
-            .update(weeklyWinnersTable)
-            .set({ notified: true })
-            .where(
-              and(
-                eq(weeklyWinnersTable.weekStart, weekStart),
-                eq(weeklyWinnersTable.province, province)
-              )
-            );
         } catch (notifyErr) {
-          logger.error({ notifyErr, province }, "[weeklyWinner] Error sending notification");
+          logger.error({ notifyErr, groupKey }, "[weeklyWinner] Error sending notification");
         }
 
         saved++;
-        logger.info({ province, treeId: winner.treeId, sunCount: winner.sunCount }, "[weeklyWinner] Winner saved");
+        logger.info({ groupKey, treeId: winner.treeId, sunCount: winner.sunCount }, "[weeklyWinner] Winner saved");
       } catch (err) {
-        logger.error({ err, province }, "[weeklyWinner] Error saving winner");
+        logger.error({ err, groupKey }, "[weeklyWinner] Error saving winner");
       }
     }
 
