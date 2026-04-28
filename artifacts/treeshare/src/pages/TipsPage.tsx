@@ -415,20 +415,20 @@ export default function TipsPage() {
                 </div>
               </div>
 
-              {/* Immagine opzionale */}
-              {tip.imageUrl && (
-                <img
-                  src={resolveImg(tip.imageUrl)}
-                  alt={tip.title}
-                  className="w-full h-40 object-cover rounded-xl mb-3"
-                  loading="lazy"
-                />
-              )}
-
-              {/* Descrizione */}
-              <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-wrap mb-3">
-                {tip.description}
-              </p>
+              {/* Descrizione + immagine opzionale */}
+              <div className="flex items-start gap-3 mb-3">
+                {tip.imageUrl && (
+                  <img
+                    src={resolveImg(tip.imageUrl)}
+                    alt={tip.title}
+                    className="w-16 h-16 flex-shrink-0 object-cover rounded-xl"
+                    loading="lazy"
+                  />
+                )}
+                <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-wrap">
+                  {tip.description}
+                </p>
+              </div>
 
               {/* Footer */}
               <p className="text-xs text-muted-foreground/60">
