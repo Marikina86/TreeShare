@@ -15,7 +15,7 @@ export default function PrivacyPage() {
 
       <main className="max-w-3xl mx-auto px-6 py-12">
         <h1 className="text-3xl font-bold text-foreground mb-2">Privacy Policy</h1>
-        <p className="text-sm text-muted-foreground mb-10">Ultimo aggiornamento: 20/04/2026</p>
+        <p className="text-sm text-muted-foreground mb-10">Ultimo aggiornamento: 28/04/2026</p>
 
         <p className="text-sm text-muted-foreground leading-relaxed mb-10">
           Benvenuto/a su TreeShare, una piattaforma social dedicata alla condivisione di alberi piantati e iniziative ambientali.
@@ -90,6 +90,7 @@ export default function PrivacyPage() {
               {[
                 { purpose: "Creazione e gestione dell'account", basis: "esecuzione del contratto" },
                 { purpose: "Condivisione contenuti e funzionalità social", basis: "esecuzione del contratto" },
+                { purpose: "Condivisione su piattaforme di terze parti (es. Facebook)", basis: "consenso dell'utente" },
                 { purpose: "Geolocalizzazione degli alberi", basis: "consenso dell'utente" },
                 { purpose: "Gestione delle adozioni e dei servizi a pagamento", basis: "esecuzione del contratto" },
                 { purpose: "Invio notifiche (accesso, sicurezza, suggerimenti)", basis: "legittimo interesse / consenso" },
@@ -128,6 +129,7 @@ export default function PrivacyPage() {
                 { name: "Supabase", role: "database e autenticazione", type: "responsabile del trattamento" },
                 { name: "Cloudinary", role: "gestione immagini", type: "responsabile del trattamento" },
                 { name: "Google Maps / Google Earth / Street View", role: "servizi di mappa", type: "titolari autonomi" },
+                { name: "Meta Platforms Inc. (Facebook)", role: "condivisione social su iniziativa dell'utente", type: "titolare autonomo" },
               ].map(({ name, role, type }) => (
                 <div key={name} className="flex items-start gap-3 py-2.5 border-b border-border last:border-0">
                   <div className="flex-1 min-w-0">
@@ -143,11 +145,53 @@ export default function PrivacyPage() {
             </p>
           </section>
 
-          {/* 6 */}
+          {/* 6 — NEW */}
           <section>
-            <h2 className="text-lg font-semibold mb-3 text-foreground">6. Trasferimento dei dati extra UE</h2>
+            <h2 className="text-lg font-semibold mb-3 text-foreground">6. Condivisione su piattaforme social di terze parti</h2>
+            <div className="space-y-4">
+              <div>
+                <h3 className="font-medium text-foreground mb-1">Condivisione su iniziativa dell'utente</h3>
+                <p className="text-muted-foreground">
+                  L'utente può scegliere di condividere contenuti tramite servizi di terze parti, come Facebook. La condivisione avviene <strong className="text-foreground">esclusivamente su iniziativa dell'utente</strong> e sotto il suo controllo. Non vengono effettuate condivisioni automatiche senza l'intervento dell'utente.
+                </p>
+              </div>
+
+              <div>
+                <h3 className="font-medium text-foreground mb-1">Dati trasmessi</h3>
+                <p className="text-muted-foreground">
+                  In caso di condivisione, i contenuti selezionati dall'utente (ad esempio foto, descrizioni) possono essere trasmessi alla piattaforma esterna scelta. TreeShare non trasmette alcun dato in modo automatico o senza esplicita azione dell'utente.
+                </p>
+              </div>
+
+              <div>
+                <h3 className="font-medium text-foreground mb-1">Ruolo delle piattaforme terze</h3>
+                <p className="text-muted-foreground">
+                  Le piattaforme di terze parti (inclusa Meta Platforms Inc.) operano come <strong className="text-foreground">titolari autonomi del trattamento</strong> dei dati. L'utilizzo di tali servizi è soggetto alle rispettive condizioni d'uso e informative sulla privacy, sulle quali TreeShare non ha controllo.
+                </p>
+              </div>
+
+              <div className="grid sm:grid-cols-2 gap-3">
+                <div className="bg-primary/5 border border-primary/20 rounded-xl px-4 py-3">
+                  <p className="text-xs font-semibold text-primary mb-1">Base giuridica</p>
+                  <p className="text-xs text-muted-foreground">
+                    Il trattamento dei dati connesso alla condivisione social si basa sul <strong className="text-foreground">consenso</strong> e sull'azione volontaria dell'utente.
+                  </p>
+                </div>
+                <div className="bg-muted/40 border border-border rounded-xl px-4 py-3">
+                  <p className="text-xs font-semibold text-foreground mb-1">Controllo dell'utente</p>
+                  <p className="text-xs text-muted-foreground">
+                    L'utente può decidere in qualsiasi momento se condividere o meno i contenuti e può interrompere tale condivisione evitando l'utilizzo delle relative funzionalità.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {/* 7 */}
+          <section>
+            <h2 className="text-lg font-semibold mb-3 text-foreground">7. Trasferimento dei dati extra UE</h2>
             <p className="text-muted-foreground mb-3">
-              Alcuni fornitori (es. Google, Stripe, PayPal) possono trasferire dati al di fuori dello Spazio Economico Europeo.
+              Alcuni fornitori (es. Google, Stripe, PayPal, Meta) possono trasferire dati al di fuori dello Spazio Economico Europeo.
             </p>
             <p className="text-muted-foreground mb-3">Tali trasferimenti avvengono nel rispetto del GDPR tramite:</p>
             <ul className="list-disc list-outside ml-5 space-y-2 text-muted-foreground">
@@ -156,9 +200,9 @@ export default function PrivacyPage() {
             </ul>
           </section>
 
-          {/* 7 */}
+          {/* 8 */}
           <section>
-            <h2 className="text-lg font-semibold mb-3 text-foreground">7. Geolocalizzazione</h2>
+            <h2 className="text-lg font-semibold mb-3 text-foreground">8. Geolocalizzazione</h2>
             <p className="text-muted-foreground mb-2">
               La geolocalizzazione è attivata solo previo consenso dell'utente.
             </p>
@@ -167,7 +211,7 @@ export default function PrivacyPage() {
             </p>
           </section>
 
-          {/* 8 — AI */}
+          {/* 9 — AI */}
           <section id="ai" className="rounded-2xl border border-primary/20 bg-primary/5 px-6 py-6">
             <div className="flex items-center gap-2 mb-4">
               <div className="w-8 h-8 rounded-full bg-primary/15 flex items-center justify-center flex-shrink-0">
@@ -175,7 +219,7 @@ export default function PrivacyPage() {
                   <path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" strokeLinecap="round" strokeLinejoin="round"/>
                 </svg>
               </div>
-              <h2 className="text-lg font-semibold text-foreground">8. Utilizzo dell'intelligenza artificiale (AI)</h2>
+              <h2 className="text-lg font-semibold text-foreground">9. Utilizzo dell'intelligenza artificiale (AI)</h2>
             </div>
             <p className="text-muted-foreground mb-3">
               La piattaforma utilizza sistemi di intelligenza artificiale per:
@@ -189,9 +233,9 @@ export default function PrivacyPage() {
             </p>
           </section>
 
-          {/* 9 */}
+          {/* 10 */}
           <section>
-            <h2 className="text-lg font-semibold mb-3 text-foreground">9. Conservazione dei dati</h2>
+            <h2 className="text-lg font-semibold mb-3 text-foreground">10. Conservazione dei dati</h2>
             <p className="text-muted-foreground mb-4">I dati personali sono conservati:</p>
             <div className="space-y-2">
               {[
@@ -210,9 +254,9 @@ export default function PrivacyPage() {
             </p>
           </section>
 
-          {/* 10 */}
+          {/* 11 */}
           <section>
-            <h2 className="text-lg font-semibold mb-3 text-foreground">10. Condivisione dei dati</h2>
+            <h2 className="text-lg font-semibold mb-3 text-foreground">11. Condivisione dei dati</h2>
             <p className="text-muted-foreground mb-3">I dati possono essere condivisi con:</p>
             <ul className="list-disc list-outside ml-5 space-y-2 text-muted-foreground mb-4">
               <li>Fornitori di servizi tecnologici (vedi sezione 5)</li>
@@ -223,9 +267,9 @@ export default function PrivacyPage() {
             </div>
           </section>
 
-          {/* 11 */}
+          {/* 12 */}
           <section>
-            <h2 className="text-lg font-semibold mb-3 text-foreground">11. Diritti dell'utente</h2>
+            <h2 className="text-lg font-semibold mb-3 text-foreground">12. Diritti dell'utente</h2>
             <p className="text-muted-foreground mb-4">L'utente può esercitare i seguenti diritti:</p>
             <div className="grid sm:grid-cols-2 gap-3 mb-4">
               {[
@@ -255,32 +299,32 @@ export default function PrivacyPage() {
             </p>
           </section>
 
-          {/* 12 */}
+          {/* 13 */}
           <section>
-            <h2 className="text-lg font-semibold mb-3 text-foreground">12. Sicurezza dei dati</h2>
+            <h2 className="text-lg font-semibold mb-3 text-foreground">13. Sicurezza dei dati</h2>
             <p className="text-muted-foreground">
               Adottiamo misure tecniche e organizzative adeguate per proteggere i dati personali.
             </p>
           </section>
 
-          {/* 13 */}
+          {/* 14 */}
           <section>
-            <h2 className="text-lg font-semibold mb-3 text-foreground">13. Cookie e tecnologie simili</h2>
+            <h2 className="text-lg font-semibold mb-3 text-foreground">14. Cookie e tecnologie simili</h2>
             <p className="text-muted-foreground mb-2">La piattaforma utilizza cookie e strumenti simili.</p>
             <p className="text-muted-foreground">Per maggiori informazioni è disponibile una Cookie Policy dedicata.</p>
           </section>
 
-          {/* 14 */}
+          {/* 15 */}
           <section>
-            <h2 className="text-lg font-semibold mb-3 text-foreground">14. Modifiche alla Privacy Policy</h2>
+            <h2 className="text-lg font-semibold mb-3 text-foreground">15. Modifiche alla Privacy Policy</h2>
             <p className="text-muted-foreground">
               La presente Privacy Policy può essere aggiornata. Le modifiche saranno comunicate tramite la piattaforma.
             </p>
           </section>
 
-          {/* 15 */}
+          {/* 16 */}
           <section>
-            <h2 className="text-lg font-semibold mb-3 text-foreground">15. Contatti</h2>
+            <h2 className="text-lg font-semibold mb-3 text-foreground">16. Contatti</h2>
             <p className="text-muted-foreground">
               Per informazioni:{" "}
               <a href="mailto:treeshare@treeshareapp.com" className="text-primary hover:underline">
