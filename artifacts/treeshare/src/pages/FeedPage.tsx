@@ -99,14 +99,6 @@ export default function FeedPage() {
     }
   }
 
-  const allTrees = data?.trees ?? [];
-  const filteredTrees = provinceFilter
-    ? allTrees.filter((t) => {
-        const tp = (t as any).province as string | null | undefined;
-        return tp && tp.toLowerCase() === provinceFilter.toLowerCase();
-      })
-    : allTrees;
-
   // Best winner across all provinces (highest week sun count)
   const topWinner: WeeklyWinnerTree | null = Object.values(weeklyWinners).length > 0
     ? (Object.values(weeklyWinners) as WeeklyWinnerTree[]).reduce((a, b) =>
@@ -119,11 +111,19 @@ export default function FeedPage() {
     ? (weeklyWinners[provinceFilter] ?? null)
     : topWinner;
 
-  const winnerAlreadyInFeed = provinceWinner
-    ? allTrees.some((t) => t.id === provinceWinner.treeId)
-    : false;
+  // The winner is ALWAYS pinned at the top for the whole week
+  const showPinnedWinner = !!provinceWinner;
 
-  const showPinnedWinner = provinceWinner && !winnerAlreadyInFeed;
+  const allTrees = data?.trees ?? [];
+  const filteredTrees = allTrees.filter((t) => {
+    // Always exclude the weekly winner from the grid — it's shown pinned at the top
+    if (provinceWinner && t.id === provinceWinner.treeId) return false;
+    if (provinceFilter) {
+      const tp = (t as any).province as string | null | undefined;
+      return tp && tp.toLowerCase() === provinceFilter.toLowerCase();
+    }
+    return true;
+  });
 
   // ── Pull-to-refresh touch handling ──────────────────────────────────────────
   const scrollContainerRef = useRef<HTMLDivElement>(null);
