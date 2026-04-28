@@ -4,6 +4,7 @@ import Layout from "@/components/Layout";
 import { useToast } from "@/hooks/use-toast";
 import { useLang } from "@/lib/i18n";
 import { useGetMyProfile } from "@workspace/api-client-react";
+import { resolveImg } from "@/lib/imageUtils";
 
 // ─── Chiave localStorage per il timestamp dell'ultima lettura ────────────────
 const TIPS_LAST_READ_KEY = "tips_last_read_at";
@@ -270,7 +271,7 @@ export default function TipsPage() {
                 {form.imageUrl ? (
                   <div className="flex items-center gap-3">
                     <img
-                      src={`/api/storage/objects/${form.imageUrl}`}
+                      src={resolveImg(form.imageUrl)}
                       className="w-16 h-16 rounded-xl object-cover border border-border"
                       alt=""
                     />
@@ -417,7 +418,7 @@ export default function TipsPage() {
               {/* Immagine opzionale */}
               {tip.imageUrl && (
                 <img
-                  src={`/api/storage/objects/${tip.imageUrl}`}
+                  src={resolveImg(tip.imageUrl)}
                   alt={tip.title}
                   className="w-full h-40 object-cover rounded-xl mb-3"
                   loading="lazy"

@@ -78,6 +78,12 @@ export default function AlertsPage() {
   const [notifications, setNotifications] = useState<UserNotification[]>(_notifsCache);
   const [loading, setLoading] = useState(!_cacheLoaded);
 
+  // ── Pull-to-refresh state ──────────────────────────────────────────────────
+  const touchStartY = useRef(0);
+  const [pullDistance, setPullDistance] = useState(0);
+  const [pullState, setPullState] = useState<"idle" | "pulling" | "refreshing" | "done">("idle");
+  const pullThreshold = 80;
+
   const fetchAll = useCallback(async () => {
     setLoading(true);
     try {
@@ -113,14 +119,11 @@ export default function AlertsPage() {
   const fetchAllRef = useRef(fetchAll);
   fetchAllRef.current = fetchAll;
 
-  // Fetch solo al primo caricamento (apertura app) o su treeshare:refresh-inbox
+  // Fetch solo al primo caricamento (apertura app) — nessun polling
   useEffect(() => {
     if (!_cacheLoaded) {
       fetchAllRef.current();
     }
-    const handler = () => fetchAllRef.current();
-    window.addEventListener("treeshare:refresh-inbox", handler);
-    return () => window.removeEventListener("treeshare:refresh-inbox", handler);
   }, []);
 
   // Segna come letti ad ogni visita (senza refetch)
@@ -142,6 +145,36 @@ export default function AlertsPage() {
     })();
   }, [getToken]);
 
+  // ── Touch handlers per pull-to-refresh ────────────────────────────────────
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    if (window.scrollY > 0 || loading) return;
+    touchStartY.current = e.touches[0].clientY;
+    setPullState("pulling");
+  }, [loading]);
+
+  const handleTouchMove = useCallback((e: React.TouchEvent) => {
+    if (pullState !== "pulling") return;
+    const diff = Math.max(0, e.touches[0].clientY - touchStartY.current);
+    setPullDistance(Math.min(diff * 0.5, 140));
+  }, [pullState]);
+
+  const handleTouchEnd = useCallback(async () => {
+    if (pullState !== "pulling") return;
+    if (pullDistance >= pullThreshold) {
+      setPullState("refreshing");
+      setPullDistance(pullThreshold);
+      _cacheLoaded = false;
+      await fetchAllRef.current();
+      // aggiorna anche il badge nel Layout
+      window.dispatchEvent(new Event("treeshare:refresh-inbox"));
+      setPullState("done");
+      setTimeout(() => { setPullDistance(0); setPullState("idle"); }, 600);
+    } else {
+      setPullDistance(0);
+      setPullState("idle");
+    }
+  }, [pullState, pullDistance]);
+
   function formatDate(iso: string) {
     return new Date(iso).toLocaleDateString(lang === "it" ? "it-IT" : "en-GB", {
       day: "2-digit",
@@ -156,7 +189,43 @@ export default function AlertsPage() {
 
   return (
     <Layout>
-      <div className="max-w-2xl mx-auto px-4 py-8 space-y-8">
+      <div
+        className="max-w-2xl mx-auto px-4 py-8 space-y-8"
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+      >
+        {/* Pull-to-refresh indicator */}
+        {(pullState !== "idle" || pullDistance > 0) && (
+          <div
+            className="flex items-center justify-center gap-2 transition-all duration-200 overflow-hidden -mt-4"
+            style={{ height: pullDistance, marginBottom: pullDistance > 0 ? 8 : 0 }}
+          >
+            {pullState === "refreshing" ? (
+              <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+            ) : pullState === "done" ? (
+              <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" className="text-green-500">
+                <path d="M5 13l4 4L19 7" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            ) : (
+              <svg
+                width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"
+                className={`text-muted-foreground transition-transform ${pullDistance >= pullThreshold ? "rotate-180" : ""}`}
+              >
+                <path d="M12 5v14M5 12l7 7 7-7" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            )}
+            <span className="text-xs font-medium text-muted-foreground">
+              {pullState === "refreshing"
+                ? (lang === "it" ? "Aggiornamento..." : "Refreshing...")
+                : pullState === "done"
+                ? (lang === "it" ? "Aggiornato!" : "Updated!")
+                : pullDistance >= pullThreshold
+                ? (lang === "it" ? "Rilascia per aggiornare" : "Release to refresh")
+                : (lang === "it" ? "Scorri per aggiornare" : "Pull to refresh")}
+            </span>
+          </div>
+        )}
 
         {/* ── Messaggi personali ── */}
         {(notifications.length > 0 || loading) && (

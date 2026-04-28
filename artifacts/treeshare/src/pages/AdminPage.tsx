@@ -5,6 +5,7 @@ import { useLocation } from "wouter";
 import { useLang } from "@/lib/i18n";
 import { useToast } from "@/hooks/use-toast";
 import AdminDiscountSection from "@/components/AdminDiscountSection";
+import { resolveImg } from "@/lib/imageUtils";
 
 interface AdminUser {
   id: number;
@@ -2707,7 +2708,7 @@ export default function AdminPage() {
                   {tipForm.imageUrl ? (
                     <div className="flex items-center gap-3">
                       <img
-                        src={`/api/storage/objects/${tipForm.imageUrl}`}
+                        src={resolveImg(tipForm.imageUrl)}
                         className="w-16 h-16 rounded-xl object-cover border border-border"
                         alt=""
                       />
@@ -2797,7 +2798,7 @@ export default function AdminPage() {
                         <div className="flex-1 min-w-0 flex items-start gap-3">
                           {tip.imageUrl && (
                             <img
-                              src={`/api/storage/objects/${tip.imageUrl}`}
+                              src={resolveImg(tip.imageUrl)}
                               className="w-12 h-12 rounded-lg object-cover border border-border flex-shrink-0"
                               alt=""
                             />
