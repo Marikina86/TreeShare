@@ -3,8 +3,11 @@ import { Router } from "express";
 const router = Router();
 
 const MODELS_FALLBACK = [
-  "gemini-flash-lite-latest",
-  "gemini-2.5-flash",
+  "gemini-2.0-flash-lite",
+  "gemini-2.0-flash",
+  "gemini-1.5-flash",
+  "gemini-1.5-flash-8b",
+  "gemini-1.5-pro",
 ];
 
 const PROMPT = `Analizza l'immagine fornita.
@@ -88,9 +91,17 @@ router.post("/plants/verify", async (req, res) => {
 
   let lastError = "";
 
+  const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
   for (const model of MODELS_FALLBACK) {
     try {
-      const apiRes = await callGemini(apiKey, model, mimeType, base64);
+      let apiRes = await callGemini(apiKey, model, mimeType, base64);
+
+      // 503 = temporaneamente sovraccarico: aspetta 1s e riprova una volta
+      if (apiRes.status === 503) {
+        await sleep(1000);
+        apiRes = await callGemini(apiKey, model, mimeType, base64);
+      }
 
       if (apiRes.status === 429) {
         lastError = `${model}: quota esaurita (429)`;
