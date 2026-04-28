@@ -2,18 +2,15 @@ import { Router } from "express";
 
 const router = Router();
 
-// Each entry: model name + API version to use.
-// 2.x models use v1beta; 1.5 models need v1 (no longer available on v1beta).
-// 2.5 preview models have an independent quota from 2.0.
+// Modelli disponibili con questa API key (verificati tramite ListModels).
+// Priorità: 2.5-flash-lite (quota alta, veloce) → 2.5-flash → 2.0-flash-lite → 2.0-flash.
 const MODELS_FALLBACK: Array<{ model: string; apiVersion: "v1" | "v1beta" }> = [
-  { model: "gemini-2.5-flash-preview-04-17", apiVersion: "v1beta" },
-  { model: "gemini-2.0-flash-lite",          apiVersion: "v1beta" },
-  { model: "gemini-2.0-flash",               apiVersion: "v1beta" },
-  { model: "gemini-2.0-flash-001",           apiVersion: "v1beta" },
-  { model: "gemini-1.5-flash",               apiVersion: "v1"     },
-  { model: "gemini-1.5-flash-002",           apiVersion: "v1"     },
-  { model: "gemini-1.5-flash-8b",            apiVersion: "v1"     },
-  { model: "gemini-1.5-pro",                 apiVersion: "v1"     },
+  { model: "gemini-2.5-flash-lite",  apiVersion: "v1beta" },
+  { model: "gemini-2.5-flash",       apiVersion: "v1beta" },
+  { model: "gemini-2.0-flash-lite",  apiVersion: "v1beta" },
+  { model: "gemini-2.0-flash-lite-001", apiVersion: "v1beta" },
+  { model: "gemini-2.0-flash",       apiVersion: "v1beta" },
+  { model: "gemini-2.0-flash-001",   apiVersion: "v1beta" },
 ];
 
 const PROMPT = `Analizza l'immagine fornita.
