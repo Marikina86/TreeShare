@@ -47,6 +47,10 @@ function getCategoryConfig(category: string) {
   return CATEGORY_CONFIG[category] ?? { icon: "🌿", cls: "bg-muted text-muted-foreground" };
 }
 
+// ─── Cache modulo (persiste tra navigazioni, si azzera solo al ricaricamento) ─
+let _tipsCache: Tip[] = [];
+let _tipsCacheLoaded = false;
+
 // ─── Componente principale ────────────────────────────────────────────────────
 export default function TipsPage() {
   const { getToken } = useAuth();
@@ -56,8 +60,8 @@ export default function TipsPage() {
   const { data: myProfile } = useGetMyProfile();
   const isAdmin = (myProfile as any)?.isAdmin === true;
 
-  const [tips, setTips] = useState<Tip[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [tips, setTips] = useState<Tip[]>(_tipsCache);
+  const [loading, setLoading] = useState(!_tipsCacheLoaded);
 
   // ─── Stato pannello admin ─────────────────────────────────────────────────
   const [showForm, setShowForm] = useState(false);
@@ -82,6 +86,11 @@ export default function TipsPage() {
   }, [getToken]);
 
   // ─── Carica consigli ──────────────────────────────────────────────────────
+  const toastRef = useRef(toast);
+  toastRef.current = toast;
+  const langRef = useRef(lang);
+  langRef.current = lang;
+
   const fetchTips = useCallback(async () => {
     setLoading(true);
     try {
@@ -90,22 +99,28 @@ export default function TipsPage() {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
       if (!res.ok) throw new Error();
-      setTips(await res.json());
+      const data: Tip[] = await res.json();
+      _tipsCache = data;
+      _tipsCacheLoaded = true;
+      setTips(data);
     } catch {
-      toast({
-        title: lang === "it" ? "Errore caricamento consigli" : "Error loading tips",
+      toastRef.current({
+        title: langRef.current === "it" ? "Errore caricamento consigli" : "Error loading tips",
         variant: "destructive",
       });
     } finally {
       setLoading(false);
     }
-  }, [getToken, toast, lang]);
+  }, [getToken]);
+
+  const fetchTipsRef = useRef(fetchTips);
+  fetchTipsRef.current = fetchTips;
 
   useEffect(() => {
-    fetchTips();
+    if (!_tipsCacheLoaded) fetchTipsRef.current();
     markTipsRead();
     window.dispatchEvent(new Event("storage"));
-  }, [fetchTips]);
+  }, []);
 
   // ─── Upload immagine consiglio ────────────────────────────────────────────
   async function handleTipImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
@@ -151,7 +166,7 @@ export default function TipsPage() {
       });
       if (!res.ok) throw new Error();
       const saved: Tip = await res.json();
-      setTips((prev) => [saved, ...prev]);
+      setTips((prev) => { const next = [saved, ...prev]; _tipsCache = next; return next; });
       setForm({ title: "", description: "", category: "general", imageUrl: "" });
       setShowForm(false);
       toast({ title: lang === "it" ? "Consiglio pubblicato" : "Tip published" });
@@ -171,7 +186,7 @@ export default function TipsPage() {
     try {
       const res = await authFetch(`/api/admin/tips/${id}`, { method: "DELETE" });
       if (!res.ok) throw new Error();
-      setTips((prev) => prev.filter((t) => t.id !== id));
+      setTips((prev) => { const next = prev.filter((t) => t.id !== id); _tipsCache = next; return next; });
       toast({ title: lang === "it" ? "Consiglio eliminato" : "Tip deleted" });
     } catch {
       toast({
@@ -423,6 +438,7 @@ export default function TipsPage() {
                     alt={tip.title}
                     className="w-16 h-16 flex-shrink-0 object-cover rounded-xl"
                     loading="lazy"
+                    decoding="async"
                   />
                 )}
                 <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-wrap">
