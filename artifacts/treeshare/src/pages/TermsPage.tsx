@@ -33,6 +33,7 @@ export default function TermsPage() {
               <li>Condividere foto e informazioni relative agli alberi piantati</li>
               <li>Visualizzare alberi su mappa geolocalizzata</li>
               <li>Partecipare e condividere eventi ambientali</li>
+              <li>Accedere a un marketplace per servizi, prodotti e iniziative ambientali</li>
               <li>Promuovere e aderire a campagne (secondo le condizioni di cui all'art. 10)</li>
               <li>Adottare alberi (secondo le condizioni di cui all'art. 11)</li>
               <li>Ricevere notifiche (accessi, consigli, aggiornamenti)</li>
@@ -96,6 +97,9 @@ export default function TermsPage() {
             <p className="text-muted-foreground mb-3">
               Con il caricamento, concede a TreeShare una <strong className="text-foreground">licenza non esclusiva</strong>, gratuita e globale per visualizzare i contenuti sulla piattaforma e per consentirne la condivisione tramite le funzionalità disponibili.
             </p>
+            <p className="text-muted-foreground mb-3">
+              L'utente accetta che i propri contenuti e alcune informazioni associate (es. nome, posizione dell'albero) possano essere <strong className="text-foreground">visibili ad altri utenti della piattaforma</strong> secondo le impostazioni di visibilità scelte. I contenuti pubblicati in modalità pubblica sono accessibili a tutti gli utenti registrati.
+            </p>
             <p className="text-muted-foreground">
               TreeShare può rimuovere contenuti, anche senza preavviso, qualora ritenuti non conformi ai presenti Termini.
             </p>
@@ -154,13 +158,14 @@ export default function TermsPage() {
 
           {/* 9 */}
           <section>
-            <h2 className="text-lg font-semibold mb-3 text-foreground">9. Pagamenti</h2>
+            <h2 className="text-lg font-semibold mb-3 text-foreground">9. Pagamenti e servizi di terze parti</h2>
             <p className="text-muted-foreground mb-3">
-              I pagamenti sono gestiti da provider esterni (es. Stripe, PayPal).
+              I pagamenti sono gestiti da provider esterni (es. Stripe, PayPal). La piattaforma può avvalersi di servizi forniti da terze parti per il corretto funzionamento del servizio, inclusi strumenti di pagamento, logistica e marketing.
             </p>
             <ul className="list-disc list-outside ml-5 space-y-2 text-muted-foreground">
               <li>TreeShare non conserva dati completi di pagamento</li>
-              <li>I pagamenti sono soggetti ai termini dei provider</li>
+              <li>I pagamenti e i servizi di terze parti sono soggetti ai termini dei rispettivi provider</li>
+              <li>TreeShare seleziona partner affidabili nel rispetto della normativa applicabile</li>
             </ul>
           </section>
 
@@ -286,25 +291,52 @@ export default function TermsPage() {
             </p>
           </section>
 
-          {/* 21 */}
+          {/* 21 — NEW */}
           <section>
-            <h2 className="text-lg font-semibold mb-3 text-foreground">21. Modifiche ai Termini</h2>
+            <h2 className="text-lg font-semibold mb-3 text-foreground">21. Modello di business</h2>
+            <p className="text-muted-foreground mb-3">
+              La piattaforma può generare ricavi attraverso:
+            </p>
+            <ul className="list-disc list-outside ml-5 space-y-2 text-muted-foreground mb-3">
+              <li>Servizi a pagamento offerti agli utenti</li>
+              <li>Commissioni sulle transazioni effettuate tramite il marketplace</li>
+              <li>Attività promozionali e partnership con soggetti terzi selezionati</li>
+            </ul>
+            <p className="text-muted-foreground text-xs">
+              Tali attività sono svolte nel rispetto della normativa applicabile e non incidono sulla tutela dei dati personali degli utenti.
+            </p>
+          </section>
+
+          {/* 22 — NEW */}
+          <section>
+            <h2 className="text-lg font-semibold mb-3 text-foreground">22. Limitazione sull'uso dei dati</h2>
+            <div className="bg-muted/40 border border-border rounded-xl px-5 py-4">
+              <p className="text-muted-foreground">
+                I dati personali degli utenti sono trattati in conformità al <strong className="text-foreground">GDPR</strong> e alle disposizioni della Privacy Policy di TreeShare. I dati non vengono ceduti a terzi in modo incompatibile con le finalità ivi indicate. Per maggiori informazioni sul trattamento dei dati consulta la{" "}
+                <a href="/privacy" className="text-primary hover:underline">Privacy Policy</a>.
+              </p>
+            </div>
+          </section>
+
+          {/* 23 */}
+          <section>
+            <h2 className="text-lg font-semibold mb-3 text-foreground">23. Modifiche ai Termini</h2>
             <p className="text-muted-foreground">
               I Termini possono essere modificati in qualsiasi momento.
             </p>
           </section>
 
-          {/* 22 */}
+          {/* 24 */}
           <section>
-            <h2 className="text-lg font-semibold mb-3 text-foreground">22. Legge applicabile</h2>
+            <h2 className="text-lg font-semibold mb-3 text-foreground">24. Legge applicabile</h2>
             <p className="text-muted-foreground">
               Legge italiana – Foro competente: Cuneo.
             </p>
           </section>
 
-          {/* 23 */}
+          {/* 25 */}
           <section>
-            <h2 className="text-lg font-semibold mb-3 text-foreground">23. Contatti</h2>
+            <h2 className="text-lg font-semibold mb-3 text-foreground">25. Contatti</h2>
             <p className="text-muted-foreground">
               Email:{" "}
               <a href="mailto:treeshare@treeshareapp.com" className="text-primary hover:underline">

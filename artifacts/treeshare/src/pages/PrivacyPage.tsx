@@ -90,7 +90,9 @@ export default function PrivacyPage() {
               {[
                 { purpose: "Creazione e gestione dell'account", basis: "esecuzione del contratto" },
                 { purpose: "Condivisione contenuti e funzionalità social", basis: "esecuzione del contratto" },
+                { purpose: "Marketplace e interazioni fra utenti", basis: "esecuzione del contratto" },
                 { purpose: "Condivisione su piattaforme di terze parti (es. Facebook)", basis: "consenso dell'utente" },
+                { purpose: "Marketing e comunicazioni promozionali", basis: "consenso esplicito" },
                 { purpose: "Geolocalizzazione degli alberi", basis: "consenso dell'utente" },
                 { purpose: "Gestione delle adozioni e dei servizi a pagamento", basis: "esecuzione del contratto" },
                 { purpose: "Invio notifiche (accesso, sicurezza, suggerimenti)", basis: "legittimo interesse / consenso" },
@@ -256,14 +258,38 @@ export default function PrivacyPage() {
 
           {/* 11 */}
           <section>
-            <h2 className="text-lg font-semibold mb-3 text-foreground">11. Condivisione dei dati</h2>
-            <p className="text-muted-foreground mb-3">I dati possono essere condivisi con:</p>
-            <ul className="list-disc list-outside ml-5 space-y-2 text-muted-foreground mb-4">
-              <li>Fornitori di servizi tecnologici (vedi sezione 5)</li>
-              <li>Autorità competenti (obblighi di legge)</li>
-            </ul>
-            <div className="bg-primary/5 border border-primary/20 rounded-xl px-5 py-4">
-              <p className="font-semibold text-primary">I dati personali NON vengono venduti a terzi.</p>
+            <h2 className="text-lg font-semibold mb-3 text-foreground">11. Condivisione dei dati e partner</h2>
+
+            <div className="space-y-4">
+              <div>
+                <h3 className="font-medium text-foreground mb-2">Soggetti con cui i dati possono essere condivisi</h3>
+                <ul className="list-disc list-outside ml-5 space-y-2 text-muted-foreground">
+                  <li>Fornitori di servizi tecnologici (vedi sezione 5)</li>
+                  <li>Partner selezionati che supportano l'erogazione del servizio (es. pagamenti, logistica, analisi dei dati), nel rispetto della normativa applicabile</li>
+                  <li>Autorità competenti (obblighi di legge)</li>
+                </ul>
+              </div>
+
+              <div>
+                <h3 className="font-medium text-foreground mb-2">Marketing e comunicazioni promozionali</h3>
+                <p className="text-muted-foreground">
+                  Previo <strong className="text-foreground">consenso esplicito</strong>, i dati possono essere utilizzati per l'invio di comunicazioni promozionali o per attività di marketing, anche personalizzato. Il consenso può essere revocato in qualsiasi momento.
+                </p>
+              </div>
+
+              <div>
+                <h3 className="font-medium text-foreground mb-2">Dati aggregati e anonimizzati</h3>
+                <p className="text-muted-foreground">
+                  Informazioni aggregate e anonimizzate, che non consentono l'identificazione diretta degli utenti, possono essere utilizzate e condivise per finalità statistiche, commerciali e di ricerca, nel rispetto del GDPR.
+                </p>
+              </div>
+
+              <div className="bg-primary/5 border border-primary/20 rounded-xl px-5 py-4">
+                <p className="font-semibold text-primary mb-1">Esclusione vendita diretta</p>
+                <p className="text-sm text-muted-foreground">
+                  I dati personali identificabili <strong className="text-foreground">non vengono ceduti a terzi</strong> in modo incompatibile con le finalità indicate nella presente Privacy Policy, né venduti senza il <strong className="text-foreground">consenso esplicito</strong> dell'utente.
+                </p>
+              </div>
             </div>
           </section>
 
