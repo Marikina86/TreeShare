@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useAuth } from "@/lib/auth";
 import Layout from "@/components/Layout";
 import { useToast } from "@/hooks/use-toast";
@@ -23,6 +23,7 @@ interface Tip {
   title: string;
   description: string;
   category: string;
+  imageUrl?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -59,10 +60,12 @@ export default function TipsPage() {
 
   // ─── Stato pannello admin ─────────────────────────────────────────────────
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ title: "", description: "", category: "general" });
+  const [form, setForm] = useState({ title: "", description: "", category: "general", imageUrl: "" });
   const [submitting, setSubmitting] = useState(false);
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
+  const [imageUploading, setImageUploading] = useState(false);
+  const imageInputRef = useRef<HTMLInputElement>(null);
 
   // ─── authFetch ────────────────────────────────────────────────────────────
   const authFetch = useCallback(async (url: string, options?: RequestInit) => {
@@ -103,6 +106,33 @@ export default function TipsPage() {
     window.dispatchEvent(new Event("storage"));
   }, [fetchTips]);
 
+  // ─── Upload immagine consiglio ────────────────────────────────────────────
+  async function handleTipImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImageUploading(true);
+    try {
+      const mime = file.type || "image/jpeg";
+      const ext = mime === "image/webp" ? "webp" : mime === "image/png" ? "png" : "jpg";
+      const res = await fetch("/api/storage/uploads/request-url", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: `tip.${ext}`, size: file.size, contentType: mime }),
+      });
+      if (!res.ok) throw new Error();
+      const { uploadURL } = await res.json();
+      const uploadRes = await fetch(uploadURL, { method: "PUT", headers: { "Content-Type": mime }, body: file });
+      if (!uploadRes.ok) throw new Error();
+      const { finalObjectPath } = await uploadRes.json();
+      setForm((f) => ({ ...f, imageUrl: finalObjectPath }));
+    } catch {
+      toast({ title: lang === "it" ? "Errore caricamento foto" : "Photo upload error", variant: "destructive" });
+    } finally {
+      setImageUploading(false);
+      if (imageInputRef.current) imageInputRef.current.value = "";
+    }
+  }
+
   // ─── Crea consiglio ───────────────────────────────────────────────────────
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
@@ -111,12 +141,17 @@ export default function TipsPage() {
     try {
       const res = await authFetch("/api/admin/tips", {
         method: "POST",
-        body: JSON.stringify(form),
+        body: JSON.stringify({
+          title: form.title,
+          description: form.description,
+          category: form.category,
+          imageUrl: form.imageUrl || null,
+        }),
       });
       if (!res.ok) throw new Error();
       const saved: Tip = await res.json();
       setTips((prev) => [saved, ...prev]);
-      setForm({ title: "", description: "", category: "general" });
+      setForm({ title: "", description: "", category: "general", imageUrl: "" });
       setShowForm(false);
       toast({ title: lang === "it" ? "Consiglio pubblicato" : "Tip published" });
     } catch {
@@ -226,6 +261,46 @@ export default function TipsPage() {
                 rows={5}
                 className="w-full px-3 py-2 text-sm bg-background border border-border rounded-xl resize-none focus:outline-none focus:ring-2 focus:ring-primary/20"
               />
+
+              {/* Upload foto opzionale */}
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-medium text-muted-foreground">
+                  {L({ it: "Foto (opzionale)", en: "Photo (optional)" })}
+                </label>
+                {form.imageUrl ? (
+                  <div className="flex items-center gap-3">
+                    <img
+                      src={`/api/storage/objects/${form.imageUrl}`}
+                      className="w-16 h-16 rounded-xl object-cover border border-border"
+                      alt=""
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setForm((f) => ({ ...f, imageUrl: "" }))}
+                      className="text-xs text-destructive hover:underline"
+                    >
+                      {L({ it: "Rimuovi", en: "Remove" })}
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <input ref={imageInputRef} type="file" accept="image/*" className="hidden" onChange={handleTipImageUpload} />
+                    <button
+                      type="button"
+                      onClick={() => imageInputRef.current?.click()}
+                      disabled={imageUploading}
+                      className="flex items-center gap-1.5 w-fit px-3 py-1.5 border border-dashed border-border rounded-xl text-xs text-muted-foreground hover:border-primary hover:text-primary transition-colors disabled:opacity-50"
+                    >
+                      {imageUploading
+                        ? <div className="w-3 h-3 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                        : <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                      }
+                      {imageUploading ? L({ it: "Caricamento...", en: "Uploading..." }) : L({ it: "Aggiungi foto", en: "Add photo" })}
+                    </button>
+                  </>
+                )}
+              </div>
+
               <div className="flex items-end gap-3 flex-wrap">
                 <div className="flex flex-col gap-1">
                   <label className="text-xs font-medium text-muted-foreground">
@@ -243,7 +318,7 @@ export default function TipsPage() {
                 </div>
                 <button
                   type="submit"
-                  disabled={submitting || !form.title.trim() || !form.description.trim()}
+                  disabled={submitting || imageUploading || !form.title.trim() || !form.description.trim()}
                   className="ml-auto px-5 py-2 bg-primary text-primary-foreground rounded-xl text-sm font-semibold hover:opacity-90 transition-opacity disabled:opacity-50"
                 >
                   {submitting
@@ -338,6 +413,16 @@ export default function TipsPage() {
                   )}
                 </div>
               </div>
+
+              {/* Immagine opzionale */}
+              {tip.imageUrl && (
+                <img
+                  src={`/api/storage/objects/${tip.imageUrl}`}
+                  alt={tip.title}
+                  className="w-full h-40 object-cover rounded-xl mb-3"
+                  loading="lazy"
+                />
+              )}
 
               {/* Descrizione */}
               <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-wrap mb-3">

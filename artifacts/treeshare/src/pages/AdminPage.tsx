@@ -337,13 +337,15 @@ export default function AdminPage() {
   const pendingEventsSentinel = useRef<HTMLDivElement>(null);
 
   // ── Stato consigli admin ──────────────────────────────────────────────────
-  interface AdminTipItem { id: number; title: string; description: string; category: string; createdAt: string; updatedAt: string; }
+  interface AdminTipItem { id: number; title: string; description: string; category: string; imageUrl?: string | null; createdAt: string; updatedAt: string; }
   const [adminTips, setAdminTips] = useState<AdminTipItem[]>([]);
   const [tipsLoading, setTipsLoading] = useState(false);
   const [editingTip, setEditingTip] = useState<AdminTipItem | null>(null);
   const [tipSubmitting, setTipSubmitting] = useState(false);
+  const [tipImageUploading, setTipImageUploading] = useState(false);
+  const tipImageInputRef = useRef<HTMLInputElement>(null);
   const TIP_CATEGORIES = ["general", "piante", "coltivazione", "irrigazione", "potatura", "fertilizzazione", "parassiti", "stagioni"];
-  const [tipForm, setTipForm] = useState({ title: "", description: "", category: "general" });
+  const [tipForm, setTipForm] = useState({ title: "", description: "", category: "general", imageUrl: "" });
 
   // ── Stato avvisi admin ────────────────────────────────────────────────────
   const [adminAlerts, setAdminAlerts] = useState<AdminAlertItem[]>([]);
@@ -930,6 +932,32 @@ export default function AdminPage() {
     finally { setTipsLoading(false); }
   }
 
+  async function handleAdminTipImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setTipImageUploading(true);
+    try {
+      const mime = file.type || "image/jpeg";
+      const ext = mime === "image/webp" ? "webp" : mime === "image/png" ? "png" : "jpg";
+      const res = await fetch("/api/storage/uploads/request-url", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: `tip.${ext}`, size: file.size, contentType: mime }),
+      });
+      if (!res.ok) throw new Error();
+      const { uploadURL } = await res.json();
+      const uploadRes = await fetch(uploadURL, { method: "PUT", headers: { "Content-Type": mime }, body: file });
+      if (!uploadRes.ok) throw new Error();
+      const { finalObjectPath } = await uploadRes.json();
+      setTipForm((f) => ({ ...f, imageUrl: finalObjectPath }));
+    } catch {
+      toast({ title: lang === "it" ? "Errore caricamento foto" : "Photo upload error", variant: "destructive" });
+    } finally {
+      setTipImageUploading(false);
+      if (tipImageInputRef.current) tipImageInputRef.current.value = "";
+    }
+  }
+
   async function handleSaveTip(e: React.FormEvent) {
     e.preventDefault();
     if (!tipForm.title.trim() || !tipForm.description.trim()) return;
@@ -937,7 +965,15 @@ export default function AdminPage() {
     try {
       const method = editingTip ? "PATCH" : "POST";
       const url = editingTip ? `/api/admin/tips/${editingTip.id}` : "/api/admin/tips";
-      const res = await authFetch(url, { method, body: JSON.stringify(tipForm) });
+      const res = await authFetch(url, {
+        method,
+        body: JSON.stringify({
+          title: tipForm.title,
+          description: tipForm.description,
+          category: tipForm.category,
+          imageUrl: tipForm.imageUrl || null,
+        }),
+      });
       if (!res.ok) throw new Error();
       const saved: AdminTipItem = await res.json();
       if (editingTip) {
@@ -945,7 +981,7 @@ export default function AdminPage() {
       } else {
         setAdminTips((p) => [saved, ...p]);
       }
-      setTipForm({ title: "", description: "", category: "general" });
+      setTipForm({ title: "", description: "", category: "general", imageUrl: "" });
       setEditingTip(null);
       toast({ title: lang === "it" ? (editingTip ? "Consiglio aggiornato" : "✅ Consiglio pubblicato") : (editingTip ? "Tip updated" : "✅ Tip published") });
     } catch { toast({ title: lang === "it" ? "Errore salvataggio consiglio" : "Error saving tip", variant: "destructive" }); }
@@ -2662,6 +2698,46 @@ export default function AdminPage() {
                   rows={5}
                   className="w-full px-3 py-2 text-sm bg-background border border-border rounded-xl resize-none focus:outline-none focus:ring-2 focus:ring-primary/20"
                 />
+
+                {/* Upload foto opzionale */}
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-medium text-muted-foreground">
+                    {lang === "it" ? "Foto (opzionale)" : "Photo (optional)"}
+                  </label>
+                  {tipForm.imageUrl ? (
+                    <div className="flex items-center gap-3">
+                      <img
+                        src={`/api/storage/objects/${tipForm.imageUrl}`}
+                        className="w-16 h-16 rounded-xl object-cover border border-border"
+                        alt=""
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setTipForm((f) => ({ ...f, imageUrl: "" }))}
+                        className="text-xs text-destructive hover:underline"
+                      >
+                        {lang === "it" ? "Rimuovi" : "Remove"}
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      <input ref={tipImageInputRef} type="file" accept="image/*" className="hidden" onChange={handleAdminTipImageUpload} />
+                      <button
+                        type="button"
+                        onClick={() => tipImageInputRef.current?.click()}
+                        disabled={tipImageUploading}
+                        className="flex items-center gap-1.5 w-fit px-3 py-1.5 border border-dashed border-border rounded-xl text-xs text-muted-foreground hover:border-primary hover:text-primary transition-colors disabled:opacity-50"
+                      >
+                        {tipImageUploading
+                          ? <div className="w-3 h-3 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                          : <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                        }
+                        {tipImageUploading ? (lang === "it" ? "Caricamento..." : "Uploading...") : (lang === "it" ? "Aggiungi foto" : "Add photo")}
+                      </button>
+                    </>
+                  )}
+                </div>
+
                 <div className="flex items-center gap-3 flex-wrap">
                   <div className="flex flex-col gap-1">
                     <label className="text-xs font-medium text-muted-foreground">
@@ -2681,7 +2757,7 @@ export default function AdminPage() {
                     {editingTip && (
                       <button
                         type="button"
-                        onClick={() => { setEditingTip(null); setTipForm({ title: "", description: "", category: "general" }); }}
+                        onClick={() => { setEditingTip(null); setTipForm({ title: "", description: "", category: "general", imageUrl: "" }); }}
                         disabled={tipSubmitting}
                         className="px-4 py-2 border border-border text-foreground rounded-xl text-sm font-medium hover:bg-muted transition-colors disabled:opacity-50"
                       >
@@ -2690,7 +2766,7 @@ export default function AdminPage() {
                     )}
                     <button
                       type="submit"
-                      disabled={tipSubmitting || !tipForm.title.trim() || !tipForm.description.trim()}
+                      disabled={tipSubmitting || tipImageUploading || !tipForm.title.trim() || !tipForm.description.trim()}
                       className="flex items-center gap-2 px-5 py-2 bg-primary text-primary-foreground rounded-xl text-sm font-semibold hover:opacity-90 transition-opacity disabled:opacity-50"
                     >
                       {tipSubmitting ? (lang === "it" ? "Salvataggio..." : "Saving...") : editingTip ? (lang === "it" ? "Aggiorna" : "Update") : (lang === "it" ? "Pubblica consiglio" : "Publish tip")}
@@ -2718,23 +2794,32 @@ export default function AdminPage() {
                     const isDeletingTip = actionLoading === `tip:${tip.id}:delete`;
                     return (
                       <div key={tip.id} className="px-5 py-4 flex items-start justify-between gap-3">
-                        <div className="flex-1 min-w-0 space-y-1">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
-                              {tip.category}
-                            </span>
-                            <span className="font-semibold text-sm text-foreground truncate">{tip.title}</span>
+                        <div className="flex-1 min-w-0 flex items-start gap-3">
+                          {tip.imageUrl && (
+                            <img
+                              src={`/api/storage/objects/${tip.imageUrl}`}
+                              className="w-12 h-12 rounded-lg object-cover border border-border flex-shrink-0"
+                              alt=""
+                            />
+                          )}
+                          <div className="flex-1 min-w-0 space-y-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
+                                {tip.category}
+                              </span>
+                              <span className="font-semibold text-sm text-foreground truncate">{tip.title}</span>
+                            </div>
+                            <p className="text-xs text-muted-foreground line-clamp-2">{tip.description}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {new Date(tip.createdAt).toLocaleDateString(lang === "it" ? "it-IT" : "en-GB", {
+                                day: "2-digit", month: "short", year: "numeric",
+                              })}
+                            </p>
                           </div>
-                          <p className="text-xs text-muted-foreground line-clamp-2">{tip.description}</p>
-                          <p className="text-xs text-muted-foreground">
-                            {new Date(tip.createdAt).toLocaleDateString(lang === "it" ? "it-IT" : "en-GB", {
-                              day: "2-digit", month: "short", year: "numeric",
-                            })}
-                          </p>
                         </div>
                         <div className="flex items-center gap-2 flex-shrink-0">
                           <button
-                            onClick={() => { setEditingTip(tip); setTipForm({ title: tip.title, description: tip.description, category: tip.category }); }}
+                            onClick={() => { setEditingTip(tip); setTipForm({ title: tip.title, description: tip.description, category: tip.category, imageUrl: tip.imageUrl ?? "" }); }}
                             className="p-1.5 text-muted-foreground hover:text-primary transition-colors rounded-lg hover:bg-muted"
                             title={lang === "it" ? "Modifica" : "Edit"}
                           >

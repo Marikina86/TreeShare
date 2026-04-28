@@ -41,7 +41,7 @@ router.get("/tips", requireAuth, async (req, res) => {
 // ── POST /admin/tips — crea consiglio (admin) ────────────────────────────────
 router.post("/admin/tips", requireAuth, requireAdmin, async (req, res) => {
   const adminId = (req as AuthenticatedRequest).userId;
-  const { title, description, category } = req.body ?? {};
+  const { title, description, category, imageUrl } = req.body ?? {};
 
   if (typeof title !== "string" || !title.trim()) {
     res.status(400).json({ error: "title required" });
@@ -53,6 +53,7 @@ router.post("/admin/tips", requireAuth, requireAdmin, async (req, res) => {
   }
 
   const resolvedCategory = VALID_CATEGORIES.includes(category) ? category : "general";
+  const resolvedImageUrl = typeof imageUrl === "string" && imageUrl.trim() ? imageUrl.trim() : null;
 
   try {
     const [tip] = await db
@@ -61,7 +62,7 @@ router.post("/admin/tips", requireAuth, requireAdmin, async (req, res) => {
         title: title.trim().slice(0, 200),
         description: description.trim().slice(0, 3000),
         category: resolvedCategory,
-        createdBy: adminId,
+        imageUrl: resolvedImageUrl,
       })
       .returning();
 
@@ -86,7 +87,7 @@ router.patch("/admin/tips/:id", requireAuth, requireAdmin, async (req, res) => {
   const id = parseInt(req.params.id, 10);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
 
-  const { title, description, category } = req.body ?? {};
+  const { title, description, category, imageUrl } = req.body ?? {};
 
   const updates: Partial<typeof tipsTable.$inferInsert> = {
     updatedAt: new Date(),
@@ -94,6 +95,9 @@ router.patch("/admin/tips/:id", requireAuth, requireAdmin, async (req, res) => {
   if (typeof title === "string" && title.trim()) updates.title = title.trim().slice(0, 200);
   if (typeof description === "string" && description.trim()) updates.description = description.trim().slice(0, 3000);
   if (VALID_CATEGORIES.includes(category)) updates.category = category;
+  if (imageUrl !== undefined) {
+    updates.imageUrl = typeof imageUrl === "string" && imageUrl.trim() ? imageUrl.trim() : null;
+  }
 
   try {
     const [updated] = await db

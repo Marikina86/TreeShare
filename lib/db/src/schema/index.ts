@@ -109,6 +109,7 @@ export const tipsTable = pgTable("tips", {
   title: text("title").notNull(),
   description: text("description").notNull(),
   category: text("category").notNull(),
+  imageUrl: text("image_url"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
