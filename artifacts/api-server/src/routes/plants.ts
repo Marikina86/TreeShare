@@ -2,12 +2,18 @@ import { Router } from "express";
 
 const router = Router();
 
-const MODELS_FALLBACK = [
-  "gemini-2.0-flash-lite",
-  "gemini-2.0-flash",
-  "gemini-1.5-flash",
-  "gemini-1.5-flash-8b",
-  "gemini-1.5-pro",
+// Each entry: model name + API version to use.
+// 2.x models use v1beta; 1.5 models need v1 (no longer available on v1beta).
+// 2.5 preview models have an independent quota from 2.0.
+const MODELS_FALLBACK: Array<{ model: string; apiVersion: "v1" | "v1beta" }> = [
+  { model: "gemini-2.5-flash-preview-04-17", apiVersion: "v1beta" },
+  { model: "gemini-2.0-flash-lite",          apiVersion: "v1beta" },
+  { model: "gemini-2.0-flash",               apiVersion: "v1beta" },
+  { model: "gemini-2.0-flash-001",           apiVersion: "v1beta" },
+  { model: "gemini-1.5-flash",               apiVersion: "v1"     },
+  { model: "gemini-1.5-flash-002",           apiVersion: "v1"     },
+  { model: "gemini-1.5-flash-8b",            apiVersion: "v1"     },
+  { model: "gemini-1.5-pro",                 apiVersion: "v1"     },
 ];
 
 const PROMPT = `Analizza l'immagine fornita.
@@ -48,9 +54,9 @@ function extractJson(raw: string): { valid?: boolean; reason?: string } {
   return JSON.parse(stripped);
 }
 
-async function callGemini(apiKey: string, model: string, mimeType: string, base64: string): Promise<Response> {
+async function callGemini(apiKey: string, model: string, apiVersion: string, mimeType: string, base64: string): Promise<Response> {
   return fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+    `https://generativelanguage.googleapis.com/${apiVersion}/models/${model}:generateContent?key=${apiKey}`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -93,14 +99,14 @@ router.post("/plants/verify", async (req, res) => {
 
   const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-  for (const model of MODELS_FALLBACK) {
+  for (const { model, apiVersion } of MODELS_FALLBACK) {
     try {
-      let apiRes = await callGemini(apiKey, model, mimeType, base64);
+      let apiRes = await callGemini(apiKey, model, apiVersion, mimeType, base64);
 
       // 503 = temporaneamente sovraccarico: aspetta 1s e riprova una volta
       if (apiRes.status === 503) {
         await sleep(1000);
-        apiRes = await callGemini(apiKey, model, mimeType, base64);
+        apiRes = await callGemini(apiKey, model, apiVersion, mimeType, base64);
       }
 
       if (apiRes.status === 429) {
@@ -121,7 +127,7 @@ router.post("/plants/verify", async (req, res) => {
       };
 
       const raw = (data.candidates?.[0]?.content?.parts?.[0]?.text ?? "").trim();
-      console.info(`[plants/verify] Modello ${model} risposta: ${raw.slice(0, 100)}`);
+      console.info(`[plants/verify] Modello ${model} (${apiVersion}) risposta: ${raw.slice(0, 100)}`);
 
       let parsed: { valid?: boolean; reason?: string };
       try {
