@@ -15,7 +15,7 @@ export default function TermsPage() {
 
       <main className="max-w-3xl mx-auto px-6 py-12">
         <h1 className="text-3xl font-bold text-foreground mb-2">Termini e Condizioni di Utilizzo</h1>
-        <p className="text-sm text-muted-foreground mb-10">Ultimo aggiornamento: 20/04/2026</p>
+        <p className="text-sm text-muted-foreground mb-10">Ultimo aggiornamento: 28/04/2026</p>
 
         <p className="text-sm text-muted-foreground leading-relaxed mb-10">
           Benvenuto/a su TreeShare, una piattaforma social dedicata alla condivisione di alberi piantati, iniziative ambientali e attività legate alla sostenibilità.{" "}
@@ -33,8 +33,8 @@ export default function TermsPage() {
               <li>Condividere foto e informazioni relative agli alberi piantati</li>
               <li>Visualizzare alberi su mappa geolocalizzata</li>
               <li>Partecipare e condividere eventi ambientali</li>
-              <li>Promuovere e aderire a campagne (secondo le condizioni di cui all'art. 8)</li>
-              <li>Adottare alberi (secondo le condizioni di cui all'art. 9)</li>
+              <li>Promuovere e aderire a campagne (secondo le condizioni di cui all'art. 10)</li>
+              <li>Adottare alberi (secondo le condizioni di cui all'art. 11)</li>
               <li>Ricevere notifiche (accessi, consigli, aggiornamenti)</li>
             </ul>
           </section>
@@ -91,35 +91,70 @@ export default function TermsPage() {
           <section>
             <h2 className="text-lg font-semibold mb-3 text-foreground">5. Contenuti degli utenti</h2>
             <p className="text-muted-foreground mb-3">
-              L'utente mantiene la proprietà dei contenuti pubblicati.
+              L'utente mantiene la titolarità dei contenuti pubblicati sulla piattaforma.
             </p>
             <p className="text-muted-foreground mb-3">
-              Con il caricamento, concede a TreeShare una licenza non esclusiva, gratuita e globale per l'utilizzo dei contenuti sulla piattaforma.
+              Con il caricamento, concede a TreeShare una <strong className="text-foreground">licenza non esclusiva</strong>, gratuita e globale per visualizzare i contenuti sulla piattaforma e per consentirne la condivisione tramite le funzionalità disponibili.
             </p>
             <p className="text-muted-foreground">
-              TreeShare può rimuovere contenuti, anche senza preavviso, qualora ritenuti non conformi.
+              TreeShare può rimuovere contenuti, anche senza preavviso, qualora ritenuti non conformi ai presenti Termini.
             </p>
           </section>
 
-          {/* 6 */}
+          {/* 6 — NEW */}
           <section>
-            <h2 className="text-lg font-semibold mb-3 text-foreground">6. Verifica dei contenuti (AI)</h2>
+            <h2 className="text-lg font-semibold mb-3 text-foreground">6. Condivisione su servizi esterni e responsabilità</h2>
+
+            <div className="space-y-4">
+              <div>
+                <h3 className="font-medium text-foreground mb-1">Condivisione su piattaforme di terze parti</h3>
+                <p className="text-muted-foreground">
+                  La piattaforma consente la condivisione di contenuti su servizi di terze parti, tra cui a titolo esemplificativo Facebook e altri social network. Tale condivisione è effettuata <strong className="text-foreground">esclusivamente su iniziativa e richiesta dell'utente</strong>.
+                </p>
+              </div>
+
+              <div>
+                <h3 className="font-medium text-foreground mb-1">Responsabilità dell'utente nella condivisione</h3>
+                <p className="text-muted-foreground">
+                  L'utente è il <strong className="text-foreground">solo responsabile</strong> dei contenuti condivisi, inclusa la loro pubblicazione su piattaforme esterne. L'utente garantisce di disporre di tutti i diritti necessari per tale utilizzo, ivi inclusi i diritti d'autore e i diritti sull'immagine delle persone eventualmente ritratte.
+                </p>
+              </div>
+
+              <div>
+                <h3 className="font-medium text-foreground mb-1">Servizi di terze parti</h3>
+                <p className="text-muted-foreground">
+                  L'utilizzo di piattaforme esterne è regolato esclusivamente dai termini di servizio e dalle politiche dei rispettivi fornitori, inclusa Meta Platforms Inc. TreeShare non è responsabile per il funzionamento, i contenuti o le politiche di tali servizi.
+                </p>
+              </div>
+
+              <div className="bg-muted/40 border border-border rounded-xl px-5 py-4">
+                <h3 className="font-medium text-foreground mb-1">Limitazione di responsabilità</h3>
+                <p className="text-muted-foreground">
+                  TreeShare non è responsabile per eventuali utilizzi impropri dei contenuti da parte degli utenti o di terze parti, né per violazioni di diritti di proprietà intellettuale, diritti d'immagine o qualsiasi altro diritto derivanti dalla condivisione dei contenuti su piattaforme esterne.
+                </p>
+              </div>
+            </div>
+          </section>
+
+          {/* 7 */}
+          <section>
+            <h2 className="text-lg font-semibold mb-3 text-foreground">7. Verifica dei contenuti (AI)</h2>
             <p className="text-muted-foreground">
               La piattaforma può utilizzare sistemi di intelligenza artificiale per verificare autenticità e conformità dei contenuti.
             </p>
           </section>
 
-          {/* 7 */}
+          {/* 8 */}
           <section>
-            <h2 className="text-lg font-semibold mb-3 text-foreground">7. Geolocalizzazione</h2>
+            <h2 className="text-lg font-semibold mb-3 text-foreground">8. Geolocalizzazione</h2>
             <p className="text-muted-foreground">
               Alcune funzionalità utilizzano dati di geolocalizzazione. L'utente è responsabile della correttezza dei dati inseriti.
             </p>
           </section>
 
-          {/* 8 */}
+          {/* 9 */}
           <section>
-            <h2 className="text-lg font-semibold mb-3 text-foreground">8. Pagamenti</h2>
+            <h2 className="text-lg font-semibold mb-3 text-foreground">9. Pagamenti</h2>
             <p className="text-muted-foreground mb-3">
               I pagamenti sono gestiti da provider esterni (es. Stripe, PayPal).
             </p>
@@ -129,9 +164,9 @@ export default function TermsPage() {
             </ul>
           </section>
 
-          {/* 9 */}
+          {/* 10 */}
           <section>
-            <h2 className="text-lg font-semibold mb-3 text-foreground">9. Campagne (utenti con Partita IVA)</h2>
+            <h2 className="text-lg font-semibold mb-3 text-foreground">10. Campagne (utenti con Partita IVA)</h2>
             <p className="text-muted-foreground mb-3">
               La creazione di campagne è riservata a utenti con Partita IVA.
             </p>
@@ -144,9 +179,9 @@ export default function TermsPage() {
             <p className="text-muted-foreground">TreeShare non è parte delle transazioni.</p>
           </section>
 
-          {/* 10 */}
+          {/* 11 */}
           <section>
-            <h2 className="text-lg font-semibold mb-3 text-foreground">10. Adozione alberi (utenti con Partita IVA)</h2>
+            <h2 className="text-lg font-semibold mb-3 text-foreground">11. Adozione alberi (utenti con Partita IVA)</h2>
             <p className="text-muted-foreground mb-3">
               Solo utenti con Partita IVA possono proporre alberi in adozione.
             </p>
@@ -159,9 +194,9 @@ export default function TermsPage() {
             <p className="text-muted-foreground">TreeShare è solo intermediario tecnologico.</p>
           </section>
 
-          {/* 11 */}
+          {/* 12 */}
           <section>
-            <h2 className="text-lg font-semibold mb-3 text-foreground">11. Limitazione responsabilità su prodotti</h2>
+            <h2 className="text-lg font-semibold mb-3 text-foreground">12. Limitazione responsabilità su prodotti</h2>
             <ul className="list-disc list-outside ml-5 space-y-2 text-muted-foreground">
               <li>TreeShare non è responsabile per spedizione o qualità dei prodotti</li>
               <li>I beni alimentari non sono rimborsabili salvo difetti (rotti/scaduti)</li>
@@ -169,9 +204,9 @@ export default function TermsPage() {
             </ul>
           </section>
 
-          {/* 12 */}
+          {/* 13 */}
           <section>
-            <h2 className="text-lg font-semibold mb-3 text-foreground">12. Limitazione responsabilità su eventi e campagne</h2>
+            <h2 className="text-lg font-semibold mb-3 text-foreground">13. Limitazione responsabilità su eventi e campagne</h2>
             <p className="text-muted-foreground mb-2">
               TreeShare non organizza né controlla eventi o campagne.
             </p>
@@ -183,9 +218,9 @@ export default function TermsPage() {
             </p>
           </section>
 
-          {/* 13 */}
+          {/* 14 */}
           <section>
-            <h2 className="text-lg font-semibold mb-3 text-foreground">13. Diritto di recesso</h2>
+            <h2 className="text-lg font-semibold mb-3 text-foreground">14. Diritto di recesso</h2>
             <p className="text-muted-foreground mb-3">Ai sensi della normativa UE:</p>
             <ul className="list-disc list-outside ml-5 space-y-2 text-muted-foreground">
               <li>Il diritto di recesso può non applicarsi a contenuti digitali già fruiti</li>
@@ -193,9 +228,9 @@ export default function TermsPage() {
             </ul>
           </section>
 
-          {/* 14 */}
+          {/* 15 */}
           <section>
-            <h2 className="text-lg font-semibold mb-3 text-foreground">14. Servizio fornito "così com'è"</h2>
+            <h2 className="text-lg font-semibold mb-3 text-foreground">15. Servizio fornito "così com'è"</h2>
             <div className="bg-muted/40 border border-border rounded-xl px-5 py-4">
               <p className="text-muted-foreground">
                 La piattaforma è fornita <strong className="text-foreground">"così com'è"</strong> senza garanzie di continuità, affidabilità o assenza di errori.
@@ -203,9 +238,9 @@ export default function TermsPage() {
             </div>
           </section>
 
-          {/* 15 */}
+          {/* 16 */}
           <section>
-            <h2 className="text-lg font-semibold mb-3 text-foreground">15. Sospensione e interruzione del servizio</h2>
+            <h2 className="text-lg font-semibold mb-3 text-foreground">16. Sospensione e interruzione del servizio</h2>
             <p className="text-muted-foreground mb-3">TreeShare può:</p>
             <ul className="list-disc list-outside ml-5 space-y-2 text-muted-foreground mb-3">
               <li>Sospendere account senza preavviso</li>
@@ -214,62 +249,62 @@ export default function TermsPage() {
             <p className="text-muted-foreground">Senza obbligo di indennizzo.</p>
           </section>
 
-          {/* 16 */}
+          {/* 17 */}
           <section>
-            <h2 className="text-lg font-semibold mb-3 text-foreground">16. Manleva</h2>
+            <h2 className="text-lg font-semibold mb-3 text-foreground">17. Manleva</h2>
             <p className="text-muted-foreground mb-3">
               L'utente si impegna a manlevare TreeShare da qualsiasi responsabilità derivante da:
             </p>
             <ul className="list-disc list-outside ml-5 space-y-2 text-muted-foreground">
               <li>Uso improprio della piattaforma</li>
               <li>Violazioni di legge</li>
-              <li>Contenuti pubblicati</li>
+              <li>Contenuti pubblicati o condivisi su piattaforme esterne</li>
             </ul>
           </section>
 
-          {/* 17 */}
+          {/* 18 */}
           <section>
-            <h2 className="text-lg font-semibold mb-3 text-foreground">17. Dati e responsabilità utenti business</h2>
+            <h2 className="text-lg font-semibold mb-3 text-foreground">18. Dati e responsabilità utenti business</h2>
             <p className="text-muted-foreground">
               Gli utenti con Partita IVA agiscono come titolari autonomi dei dati trattati nell'ambito delle loro attività.
             </p>
           </section>
 
-          {/* 18 */}
+          {/* 19 */}
           <section>
-            <h2 className="text-lg font-semibold mb-3 text-foreground">18. Trasferimento dati</h2>
+            <h2 className="text-lg font-semibold mb-3 text-foreground">19. Trasferimento dati</h2>
             <p className="text-muted-foreground">
               Alcuni servizi possono comportare trasferimento di dati fuori dall'Unione Europea.
             </p>
           </section>
 
-          {/* 19 */}
+          {/* 20 */}
           <section>
-            <h2 className="text-lg font-semibold mb-3 text-foreground">19. Proprietà intellettuale</h2>
+            <h2 className="text-lg font-semibold mb-3 text-foreground">20. Proprietà intellettuale</h2>
             <p className="text-muted-foreground">
               Tutti i diritti sulla piattaforma appartengono a TreeShare.
             </p>
           </section>
 
-          {/* 20 */}
+          {/* 21 */}
           <section>
-            <h2 className="text-lg font-semibold mb-3 text-foreground">20. Modifiche ai Termini</h2>
+            <h2 className="text-lg font-semibold mb-3 text-foreground">21. Modifiche ai Termini</h2>
             <p className="text-muted-foreground">
               I Termini possono essere modificati in qualsiasi momento.
             </p>
           </section>
 
-          {/* 21 */}
+          {/* 22 */}
           <section>
-            <h2 className="text-lg font-semibold mb-3 text-foreground">21. Legge applicabile</h2>
+            <h2 className="text-lg font-semibold mb-3 text-foreground">22. Legge applicabile</h2>
             <p className="text-muted-foreground">
               Legge italiana – Foro competente: Cuneo.
             </p>
           </section>
 
-          {/* 22 */}
+          {/* 23 */}
           <section>
-            <h2 className="text-lg font-semibold mb-3 text-foreground">22. Contatti</h2>
+            <h2 className="text-lg font-semibold mb-3 text-foreground">23. Contatti</h2>
             <p className="text-muted-foreground">
               Email:{" "}
               <a href="mailto:treeshare@treeshareapp.com" className="text-primary hover:underline">
