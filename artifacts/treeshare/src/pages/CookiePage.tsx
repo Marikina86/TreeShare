@@ -292,8 +292,9 @@ export default function CookiePage() {
         </div>
       </main>
 
-      <footer className="px-6 py-6 text-center border-t border-border text-xs text-muted-foreground">
-        © {new Date().getFullYear()} TreeShare — Tutti i diritti riservati
+      <footer className="px-6 py-6 text-center border-t border-border text-xs text-muted-foreground space-y-1">
+        <p>© {new Date().getFullYear()} TreeShare — Tutti i diritti riservati.</p>
+        <p>È vietata la riproduzione, distribuzione o modifica senza autorizzazione.</p>
       </footer>
     </div>
   );

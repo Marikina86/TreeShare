@@ -365,6 +365,10 @@ export default function LandingPage() {
             {({ it: "Cookie Policy", en: "Cookie Policy", fr: "Politique de cookies", pt: "Política de Cookies", es: "Política de Cookies", ja: "クッキーポリシー" } as Record<string, string>)[lang]}
           </Link>
         </div>
+        <p className="text-xs text-muted-foreground/70">
+          © {new Date().getFullYear()} TreeShare — Tutti i diritti riservati.{" "}
+          È vietata la riproduzione, distribuzione o modifica senza autorizzazione.
+        </p>
       </footer>
     </div>
   );
