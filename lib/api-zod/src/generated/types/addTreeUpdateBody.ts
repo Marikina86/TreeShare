@@ -5,8 +5,10 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { AddTreeUpdateBodyPhotoStatus } from "./addTreeUpdateBodyPhotoStatus";
 
 export interface AddTreeUpdateBody {
   photoUrl?: string | null;
   note?: string | null;
+  photoStatus?: AddTreeUpdateBodyPhotoStatus;
 }

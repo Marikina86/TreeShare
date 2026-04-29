@@ -1298,6 +1298,12 @@ components:
         note:
           type: string
           nullable: true
+        photoStatus:
+          type: string
+          enum:
+            - approved
+            - pending
+          nullable: true
       required: []
 
     UserProfile:

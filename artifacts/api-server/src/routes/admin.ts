@@ -512,9 +512,22 @@ router.patch("/admin/tree-updates/:updateId/approve", requireAuth, requireAdmin,
       .update(treeUpdatesTable)
       .set({ photoStatus: "approved" })
       .where(eq(treeUpdatesTable.id, updateId))
-      .returning({ id: treeUpdatesTable.id, photoStatus: treeUpdatesTable.photoStatus });
+      .returning({ id: treeUpdatesTable.id, photoStatus: treeUpdatesTable.photoStatus, userId: treeUpdatesTable.userId, treeId: treeUpdatesTable.treeId });
     if (!updated) { res.status(404).json({ error: "Update not found" }); return; }
-    res.json(updated);
+
+    // Notifica il proprietario della pianta
+    const [treeRow] = await db.select({ plantName: treesTable.plantName }).from(treesTable).where(eq(treesTable.id, updated.treeId));
+    const label = treeRow?.plantName ? `"${treeRow.plantName}"` : `#${updated.treeId}`;
+    await db.insert(userNotificationsTable).values({
+      userId: updated.userId,
+      title: "Foto approvata ✓",
+      message: `La tua foto di aggiornamento per la pianta ${label} è stata approvata e pubblicata.`,
+      type: "tree_update_approved",
+      relatedId: updated.id,
+      isRead: false,
+    });
+
+    res.json({ id: updated.id, photoStatus: updated.photoStatus });
   } catch (err) {
     req.log.error({ err }, "Error approving tree update");
     res.status(500).json({ error: "Internal server error" });
@@ -526,11 +539,25 @@ router.patch("/admin/tree-updates/:updateId/reject", requireAuth, requireAdmin, 
   const updateId = parseInt(req.params.updateId, 10);
   if (isNaN(updateId)) { res.status(400).json({ error: "Invalid updateId" }); return; }
   try {
-    const [deleted] = await db
-      .delete(treeUpdatesTable)
-      .where(eq(treeUpdatesTable.id, updateId))
-      .returning({ id: treeUpdatesTable.id });
-    if (!deleted) { res.status(404).json({ error: "Update not found" }); return; }
+    // Recupera prima i dati prima di eliminare
+    const [existing] = await db.select({ userId: treeUpdatesTable.userId, treeId: treeUpdatesTable.treeId })
+      .from(treeUpdatesTable).where(eq(treeUpdatesTable.id, updateId));
+    if (!existing) { res.status(404).json({ error: "Update not found" }); return; }
+
+    await db.delete(treeUpdatesTable).where(eq(treeUpdatesTable.id, updateId));
+
+    // Notifica il proprietario della pianta
+    const [treeRow] = await db.select({ plantName: treesTable.plantName }).from(treesTable).where(eq(treesTable.id, existing.treeId));
+    const label = treeRow?.plantName ? `"${treeRow.plantName}"` : `#${existing.treeId}`;
+    await db.insert(userNotificationsTable).values({
+      userId: existing.userId,
+      title: "Foto rifiutata",
+      message: `La tua foto di aggiornamento per la pianta ${label} non è stata approvata dall'amministratore.`,
+      type: "tree_update_rejected",
+      relatedId: updateId,
+      isRead: false,
+    });
+
     res.status(204).send();
   } catch (err) {
     req.log.error({ err }, "Error rejecting tree update");

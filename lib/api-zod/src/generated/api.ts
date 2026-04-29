@@ -221,6 +221,7 @@ export const AddTreeUpdateParams = zod.object({
 export const AddTreeUpdateBody = zod.object({
   photoUrl: zod.string().nullish(),
   note: zod.string().nullish(),
+  photoStatus: zod.enum(["approved", "pending"]).nullish(),
 });
 
 /**

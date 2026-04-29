@@ -7,6 +7,7 @@
  */
 
 export * from "./addTreeUpdateBody";
+export * from "./addTreeUpdateBodyPhotoStatus";
 export * from "./adminStats";
 export * from "./adminUser";
 export * from "./alert";

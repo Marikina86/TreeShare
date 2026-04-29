@@ -78,9 +78,19 @@ export interface PatchTreeBody {
   longitude?: number;
 }
 
+export type AddTreeUpdateBodyPhotoStatus =
+  | (typeof AddTreeUpdateBodyPhotoStatus)[keyof typeof AddTreeUpdateBodyPhotoStatus]
+  | null;
+
+export const AddTreeUpdateBodyPhotoStatus = {
+  approved: "approved",
+  pending: "pending",
+} as const;
+
 export interface AddTreeUpdateBody {
   photoUrl?: string | null;
   note?: string | null;
+  photoStatus?: AddTreeUpdateBodyPhotoStatus;
 }
 
 export interface UserProfile {

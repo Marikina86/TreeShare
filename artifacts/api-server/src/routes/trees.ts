@@ -1,9 +1,10 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { treesTable, treeUpdatesTable, usersTable, treeSunsTable } from "@workspace/db";
+import { treesTable, treeUpdatesTable, usersTable, treeSunsTable, userNotificationsTable } from "@workspace/db";
 import { eq, desc, count, sql, and, ne, inArray } from "drizzle-orm";
 import { getCurrentWinnerIds } from "../lib/weeklyWinnerJob";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth";
+import { getAdminIds } from "../middlewares/requireAdmin";
 import {
   CreateTreeBody,
   ListTreesQueryParams,
@@ -496,10 +497,31 @@ router.post("/trees/:treeId/updates", requireAuth, async (req, res) => {
       res.status(422).json({ error: "Limite raggiunto: puoi aggiungere al massimo 9 aggiornamenti per pianta (10 foto in totale)." });
       return;
     }
+    const finalStatus = photoStatus ?? "approved";
     const [update] = await db
       .insert(treeUpdatesTable)
-      .values({ treeId, userId, photoUrl, note: note ?? null, photoStatus: photoStatus ?? "approved" })
+      .values({ treeId, userId, photoUrl, note: note ?? null, photoStatus: finalStatus })
       .returning();
+
+    // Se la foto richiede approvazione manuale → notifica tutti gli admin
+    if (finalStatus === "pending") {
+      const adminIds = getAdminIds();
+      if (adminIds.length > 0) {
+        const [treeRow] = await db.select({ plantName: treesTable.plantName }).from(treesTable).where(eq(treesTable.id, treeId));
+        const label = treeRow?.plantName ? `"${treeRow.plantName}"` : `#${treeId}`;
+        await db.insert(userNotificationsTable).values(
+          adminIds.map((adminId) => ({
+            userId: adminId,
+            title: "Aggiornamento foto in attesa",
+            message: `Una nuova foto per la pianta ${label} richiede approvazione. Vai nel pannello admin → Aggiorn. in attesa.`,
+            type: "pending_tree_update",
+            relatedId: update!.id,
+            isRead: false,
+          }))
+        );
+      }
+    }
+
     res.status(201).json({
       id: update!.id,
       treeId: update!.treeId,
