@@ -155,10 +155,10 @@ router.get("/trees", async (req, res) => {
     const treeIds = trees.map((t) => t.id);
     const [userMap, updates] = await Promise.all([
       batchLoadUsers(trees.map((t) => t.userId)),
-      // GROUP BY scoped ai soli ID della pagina (non a tutta la tabella)
+      // GROUP BY scoped ai soli ID della pagina (non a tutta la tabella) — solo aggiornamenti approvati
       db.select({ treeId: treeUpdatesTable.treeId, cnt: count() })
         .from(treeUpdatesTable)
-        .where(inArray(treeUpdatesTable.treeId, treeIds))
+        .where(and(inArray(treeUpdatesTable.treeId, treeIds), eq(treeUpdatesTable.photoStatus, "approved")))
         .groupBy(treeUpdatesTable.treeId),
     ]);
 
@@ -210,7 +210,7 @@ router.get("/trees/recent", async (req, res) => {
       batchLoadUsers(trees.map((t) => t.userId)),
       db.select({ treeId: treeUpdatesTable.treeId, cnt: count() })
         .from(treeUpdatesTable)
-        .where(inArray(treeUpdatesTable.treeId, treeIds))
+        .where(and(inArray(treeUpdatesTable.treeId, treeIds), eq(treeUpdatesTable.photoStatus, "approved")))
         .groupBy(treeUpdatesTable.treeId),
     ]);
 
@@ -445,7 +445,7 @@ router.get("/trees/:treeId/updates", async (req, res) => {
     const updates = await db
       .select()
       .from(treeUpdatesTable)
-      .where(eq(treeUpdatesTable.treeId, treeId))
+      .where(and(eq(treeUpdatesTable.treeId, treeId), eq(treeUpdatesTable.photoStatus, "approved")))
       .orderBy(treeUpdatesTable.createdAt);
     res.json(
       updates.map((u) => ({

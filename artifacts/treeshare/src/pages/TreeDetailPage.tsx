@@ -611,17 +611,10 @@ export default function TreeDetailPage() {
                     <div className="text-xs text-muted-foreground flex items-center gap-2 flex-wrap">
                       {new Date(photo.createdAt).toLocaleDateString("it-IT", { year: "numeric", month: "long", day: "numeric" })}
                       {photo.isMain && <span className="text-primary font-medium">Piantagione iniziale</span>}
-                      {/* Badge stato foto aggiornamento */}
-                      {!photo.isMain && photo.photoStatus === "pending" && (
-                        <span className="inline-flex items-center gap-1 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 text-[10px] font-bold px-1.5 py-0.5 rounded-full">
-                          <svg width="8" height="8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12" strokeLinecap="round"/><line x1="12" y1="16" x2="12.01" y2="16" strokeLinecap="round"/></svg>
-                          In revisione
-                        </span>
-                      )}
                     </div>
                     <div className="flex items-center gap-1.5 flex-shrink-0">
                       {/* Segnala aggiornamento (altri utenti, non owner, non foto principale) */}
-                      {canReport && !photo.isMain && photo.photoStatus !== "pending" && (
+                      {canReport && !photo.isMain && (
                         <button
                           onClick={() => { setReportUpdateId(photo.id); setShowReportUpdate(true); }}
                           title="Segnala aggiornamento"
@@ -652,22 +645,13 @@ export default function TreeDetailPage() {
                       )}
                     </div>
                   </div>
-                  <div className={`rounded-xl overflow-hidden border ${!photo.isMain && photo.photoStatus === "pending" ? "border-amber-300 dark:border-amber-700" : "border-border"}`}>
-                    {!photo.isMain && photo.photoStatus === "pending" ? (
-                      <div className="relative">
-                        <img src={photoSrc(photo.photoUrl)} alt={`Foto ${index + 1}`} className="w-full aspect-video object-cover bg-black/5 dark:bg-white/5 opacity-60 blur-sm" />
-                        <div className="absolute inset-0 flex items-center justify-center">
-                          <span className="bg-amber-500/90 text-white text-xs font-semibold px-3 py-1.5 rounded-full">In attesa di revisione</span>
-                        </div>
-                      </div>
-                    ) : (
-                      <img
-                        src={photoSrc(photo.photoUrl)}
-                        alt={`Foto ${index + 1}`}
-                        className="w-full aspect-video object-cover bg-black/5 dark:bg-white/5 cursor-zoom-in"
-                        onClick={() => setLightboxUrl(photoSrc(photo.photoUrl))}
-                      />
-                    )}
+                  <div className="rounded-xl overflow-hidden border border-border">
+                    <img
+                      src={photoSrc(photo.photoUrl)}
+                      alt={`Foto ${index + 1}`}
+                      className="w-full aspect-video object-cover bg-black/5 dark:bg-white/5 cursor-zoom-in"
+                      onClick={() => setLightboxUrl(photoSrc(photo.photoUrl))}
+                    />
                   </div>
                   {photo.note && <p className="mt-2 text-sm text-foreground">{photo.note}</p>}
                 </div>
