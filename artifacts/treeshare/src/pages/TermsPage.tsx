@@ -287,7 +287,7 @@ export default function TermsPage() {
           <section>
             <h2 className="text-lg font-semibold mb-3 text-foreground">20. Proprietà intellettuale</h2>
             <p className="text-muted-foreground">
-              Tutti i diritti sulla piattaforma appartengono a TreeShare.
+              Tutti i diritti sulla piattaforma appartengono a TreeShareapp.
             </p>
           </section>
 
@@ -360,7 +360,7 @@ export default function TermsPage() {
       </main>
 
       <footer className="px-6 py-6 text-center border-t border-border text-xs text-muted-foreground space-y-1">
-        <p>© {new Date().getFullYear()} TreeShare — Tutti i diritti riservati.</p>
+        <p>© {new Date().getFullYear()} TreeShareapp — Tutti i diritti riservati.</p>
         <p>È vietata la riproduzione, distribuzione o modifica senza autorizzazione.</p>
       </footer>
     </div>

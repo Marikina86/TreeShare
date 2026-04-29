@@ -366,7 +366,7 @@ export default function LandingPage() {
           </Link>
         </div>
         <p className="text-xs text-muted-foreground/70">
-          © {new Date().getFullYear()} TreeShare — Tutti i diritti riservati.{" "}
+          © {new Date().getFullYear()} TreeShareapp — Tutti i diritti riservati.{" "}
           È vietata la riproduzione, distribuzione o modifica senza autorizzazione.
         </p>
       </footer>
