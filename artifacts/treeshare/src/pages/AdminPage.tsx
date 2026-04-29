@@ -7,6 +7,10 @@ import { useToast } from "@/hooks/use-toast";
 import AdminDiscountSection from "@/components/AdminDiscountSection";
 import { resolveImg } from "@/lib/imageUtils";
 
+// Flag sessione: i contatori pending vengono caricati solo alla prima apertura
+// o su pull-to-refresh — nessun polling automatico.
+let _adminCountsFetchedOnce = false;
+
 interface AdminUser {
   id: number;
   clerkUserId: string;
@@ -614,7 +618,10 @@ export default function AdminPage() {
   async function loadPendingCounts() {
     try {
       const res = await authFetch("/api/admin/pending-counts");
-      if (res.ok) setPendingCounts(await res.json());
+      if (res.ok) {
+        setPendingCounts(await res.json());
+        _adminCountsFetchedOnce = true;
+      }
     } catch {}
   }
 
@@ -1111,7 +1118,17 @@ export default function AdminPage() {
   useEffect(() => { if (activeTab === "tips") loadAdminTips(); }, [activeTab]);
   useEffect(() => { if (activeTab === "ledger") loadLedger(); }, [activeTab]);
   useEffect(() => { loadProblemReports(); }, []);
-  useEffect(() => { loadPendingCounts(); }, []);
+
+  // Carica i contatori pending solo se non già caricati in questa sessione (no polling)
+  useEffect(() => {
+    if (!_adminCountsFetchedOnce) {
+      loadPendingCounts();
+    }
+    // Aggiorna i contatori anche su pull-to-refresh (scroll-down nella feed)
+    const onRefresh = () => loadPendingCounts();
+    window.addEventListener("treeshare:refresh-inbox", onRefresh);
+    return () => window.removeEventListener("treeshare:refresh-inbox", onRefresh);
+  }, []);
 
   useEffect(() => {
     if (activeTab !== "pending_photos" || !pendingTreesHasMore || pendingLoading) return;
