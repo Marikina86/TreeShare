@@ -195,7 +195,11 @@ export default function TreeDetailPage() {
           const speciesRes = await fetch("/api/plants/verify-update", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ newImageBase64: base64, referencePhotoUrl }),
+            body: JSON.stringify({
+              newImageBase64: base64,
+              referencePhotoUrl,
+              species: tree.data?.species ?? null,
+            }),
           });
           if (speciesRes.ok) {
             const speciesData = await speciesRes.json() as { sameSpecies?: boolean | null; aiUnavailable?: boolean; reason?: string };

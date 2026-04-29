@@ -155,28 +155,38 @@ router.post("/plants/verify", async (req, res) => {
 });
 
 // ── POST /plants/verify-update — confronta specie tra foto originale e aggiornamento ─────
-const PROMPT_UPDATE = `Analizza le due immagini fornite.
+function buildPromptUpdate(species?: string | null): string {
+  const speciesLine = species
+    ? `\nSpecie dichiarata dall'utente per la pianta originale: "${species}".`
+    : "";
+  return `Analizza le due immagini fornite.
 
-Immagine 1: Foto originale di una pianta/albero registrata su TreeShare.
-Immagine 2: Nuova foto proposta come aggiornamento fotografico della stessa pianta.
+Immagine 1: Foto originale della pianta registrata su TreeShare.${speciesLine}
+Immagine 2: Nuova foto proposta come aggiornamento fotografico.
 
-Obiettivo: verificare se le due immagini mostrano la STESSA SPECIE di pianta o albero.
+COMPITO IN DUE PASSI:
 
-Regole:
-- Se le due piante appartengono CHIARAMENTE a specie diverse e incompatibili (es. una palma e una quercia, un cactus e un abete, una pianta erbacea e un albero da frutto), rispondi con valid: false.
-- Se le specie sembrano compatibili, simili, o se non sei abbastanza sicuro, rispondi con valid: true.
-- Considera variazioni stagionali: la stessa pianta in estate vs inverno può sembrare molto diversa — in caso di dubbio ACCETTA.
-- Non è richiesto che sia fisicamente la stessa pianta individuale, solo la stessa specie o specie compatibili.
-- In caso di dubbio, ACCETTA (valid: true).
+PASSO 1 — Identifica la specie (o categoria) di pianta in ciascuna immagine separatamente.
+Esempi di categorie: quercia/faggio/castagno (latifoglie decidue), pino/abete/cipresso (aghifoglie), palma, cactus/succulenta, bambù, ulivo, arbusto fiorito, erba/erbacea, ecc.
 
-Output richiesto (OBBLIGATORIO in JSON):
+PASSO 2 — Confronta le due specie identificate:
+- Rispondi valid: false se le specie identificate appartengono a CATEGORIE DIVERSE (es. aghifoglia vs latifoglia, palma vs qualsiasi altro albero, cactus vs altra pianta, bambù vs altra pianta).
+- Rispondi valid: false se la specie nell'Immagine 2 NON corrisponde alla specie dichiarata (se fornita).
+- Rispondi valid: true SOLO SE le specie sono nella stessa categoria o identiche.
+
+IMPORTANTE:
+- In caso di dubbio sulla specie, rispondi valid: false.
+- Non fare affidamento su caratteristiche generiche come "entrambe hanno foglie verdi".
+- Variazioni stagionali (stessa pianta in inverno vs estate) sono ammesse SOLO se la categoria è la stessa.
+
+Output OBBLIGATORIO in JSON (senza testo extra):
 {
   "valid": true | false,
-  "reason": "breve spiegazione in italiano"
+  "species1": "specie/categoria identificata nell'Immagine 1",
+  "species2": "specie/categoria identificata nell'Immagine 2",
+  "reason": "spiegazione breve in italiano"
+}`;
 }
-
-Importante:
-- Rispondi SOLO con JSON valido, senza testo extra.`;
 
 async function fetchImageAsBase64(photoUrl: string): Promise<{ base64: string; mimeType: string } | null> {
   try {
@@ -205,10 +215,21 @@ async function fetchImageAsBase64(photoUrl: string): Promise<{ base64: string; m
   }
 }
 
+// Modelli per il confronto specie: preferire modelli più accurati
+const MODELS_UPDATE: Array<{ model: string; apiVersion: "v1" | "v1beta" }> = [
+  { model: "gemini-2.5-flash",          apiVersion: "v1beta" },
+  { model: "gemini-2.5-flash-lite",     apiVersion: "v1beta" },
+  { model: "gemini-2.0-flash",          apiVersion: "v1beta" },
+  { model: "gemini-2.0-flash-001",      apiVersion: "v1beta" },
+  { model: "gemini-2.0-flash-lite",     apiVersion: "v1beta" },
+  { model: "gemini-2.0-flash-lite-001", apiVersion: "v1beta" },
+];
+
 async function callGeminiTwoImages(
   apiKey: string, model: string, apiVersion: string,
   ref: { base64: string; mimeType: string },
   newImg: { base64: string; mimeType: string },
+  prompt: string,
 ): Promise<Response> {
   return fetch(
     `https://generativelanguage.googleapis.com/${apiVersion}/models/${model}:generateContent?key=${apiKey}`,
@@ -220,19 +241,20 @@ async function callGeminiTwoImages(
           parts: [
             { inline_data: { mime_type: ref.mimeType,    data: ref.base64 } },
             { inline_data: { mime_type: newImg.mimeType, data: newImg.base64 } },
-            { text: PROMPT_UPDATE },
+            { text: prompt },
           ],
         }],
-        generationConfig: { maxOutputTokens: 200, temperature: 0 },
+        generationConfig: { maxOutputTokens: 300, temperature: 0 },
       }),
     }
   );
 }
 
 router.post("/plants/verify-update", async (req, res) => {
-  const { newImageBase64, referencePhotoUrl } = req.body as {
+  const { newImageBase64, referencePhotoUrl, species } = req.body as {
     newImageBase64?: string;
     referencePhotoUrl?: string;
+    species?: string | null;
   };
 
   if (!newImageBase64 || typeof newImageBase64 !== "string") {
@@ -264,16 +286,17 @@ router.post("/plants/verify-update", async (req, res) => {
   const newMimeMatch = newDataUrl.match(/^data:([^;]+);/);
   const newMimeType = newMimeMatch?.[1] ?? "image/jpeg";
 
+  const prompt = buildPromptUpdate(species);
   const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
   let lastError = "";
 
-  for (const { model, apiVersion } of MODELS_FALLBACK) {
+  for (const { model, apiVersion } of MODELS_UPDATE) {
     try {
-      let apiRes = await callGeminiTwoImages(apiKey, model, apiVersion, refImage, { base64: newBase64, mimeType: newMimeType });
+      let apiRes = await callGeminiTwoImages(apiKey, model, apiVersion, refImage, { base64: newBase64, mimeType: newMimeType }, prompt);
 
       if (apiRes.status === 503) {
         await sleep(1000);
-        apiRes = await callGeminiTwoImages(apiKey, model, apiVersion, refImage, { base64: newBase64, mimeType: newMimeType });
+        apiRes = await callGeminiTwoImages(apiKey, model, apiVersion, refImage, { base64: newBase64, mimeType: newMimeType }, prompt);
       }
 
       if (apiRes.status === 429) {
@@ -294,9 +317,8 @@ router.post("/plants/verify-update", async (req, res) => {
       };
 
       const raw = (data.candidates?.[0]?.content?.parts?.[0]?.text ?? "").trim();
-      console.info(`[plants/verify-update] Modello ${model} risposta: ${raw.slice(0, 100)}`);
 
-      let parsed: { valid?: boolean; reason?: string };
+      let parsed: { valid?: boolean; species1?: string; species2?: string; reason?: string };
       try {
         parsed = extractJson(raw);
       } catch {
@@ -305,8 +327,12 @@ router.post("/plants/verify-update", async (req, res) => {
         return;
       }
 
+      console.info(`[plants/verify-update] Modello ${model} — specie1="${parsed.species1 ?? "?"}" specie2="${parsed.species2 ?? "?"}" valid=${parsed.valid} — ${parsed.reason?.slice(0, 80) ?? ""}`);
+
       res.json({
         sameSpecies: parsed.valid === true,
+        species1: parsed.species1 ?? null,
+        species2: parsed.species2 ?? null,
         reason: parsed.reason ?? "",
         model,
       });
