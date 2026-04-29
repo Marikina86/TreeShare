@@ -204,6 +204,7 @@ export default function TreeDetailPage() {
           if (speciesRes.ok) {
             const speciesData = await speciesRes.json() as { sameSpecies?: boolean | null; aiUnavailable?: boolean; reason?: string };
             if (!speciesData.aiUnavailable && speciesData.sameSpecies === false) {
+              // Specie diversa → rifiuta
               setVerifyState("rejected");
               setVerifyReason(speciesData.reason ?? "La specie della pianta non corrisponde a quella originale.");
               setUpdatePhotoFile(null);
@@ -211,10 +212,21 @@ export default function TreeDetailPage() {
               if (fileInputRef.current) fileInputRef.current.value = "";
               return;
             }
+            if (speciesData.aiUnavailable) {
+              // AI non ha potuto verificare la specie → revisione manuale
+              setVerifyState("pending");
+              setPhotoStatusForUpload("pending");
+              return;
+            }
+          } else {
+            // Errore di rete sul check specie → revisione manuale
+            setVerifyState("pending");
+            setPhotoStatusForUpload("pending");
+            return;
           }
         }
 
-        // Tutto ok (o AI non disponibile)
+        // Tutto ok
         if (verData.aiUnavailable) {
           setVerifyState("pending");
           setPhotoStatusForUpload("pending");

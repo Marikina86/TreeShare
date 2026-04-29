@@ -48,9 +48,26 @@ Output richiesto (OBBLIGATORIO in JSON):
 Importante:
 - Rispondi SOLO con JSON valido, senza testo extra.`;
 
-function extractJson(raw: string): { valid?: boolean; reason?: string } {
+function extractJson(raw: string): { valid?: boolean; reason?: string; species1?: string; species2?: string } {
   const stripped = raw.replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/, "").trim();
   return JSON.parse(stripped);
+}
+
+type GeminiResponse = {
+  candidates?: Array<{
+    content?: {
+      parts?: Array<{ thought?: boolean; text?: string }>;
+    };
+  }>;
+};
+
+/** Legge il testo effettivo dalla risposta Gemini saltando eventuali parti di "thinking" */
+function extractResponseText(data: GeminiResponse): string {
+  const parts = data.candidates?.[0]?.content?.parts ?? [];
+  // I modelli "thinking" (es. 2.5-flash) emettono prima una parte con thought:true,
+  // poi quella col testo effettivo. Troviamo la prima parte senza thought:true.
+  const textPart = parts.find((p) => !p.thought && typeof p.text === "string");
+  return (textPart?.text ?? "").trim();
 }
 
 async function callGemini(apiKey: string, model: string, apiVersion: string, mimeType: string, base64: string): Promise<Response> {
@@ -121,11 +138,8 @@ router.post("/plants/verify", async (req, res) => {
         continue;
       }
 
-      const data = await apiRes.json() as {
-        candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
-      };
-
-      const raw = (data.candidates?.[0]?.content?.parts?.[0]?.text ?? "").trim();
+      const data = await apiRes.json() as GeminiResponse;
+      const raw = extractResponseText(data);
       console.info(`[plants/verify] Modello ${model} (${apiVersion}) risposta: ${raw.slice(0, 100)}`);
 
       let parsed: { valid?: boolean; reason?: string };
@@ -312,11 +326,8 @@ router.post("/plants/verify-update", async (req, res) => {
         continue;
       }
 
-      const data = await apiRes.json() as {
-        candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
-      };
-
-      const raw = (data.candidates?.[0]?.content?.parts?.[0]?.text ?? "").trim();
+      const data = await apiRes.json() as GeminiResponse;
+      const raw = extractResponseText(data);
 
       let parsed: { valid?: boolean; species1?: string; species2?: string; reason?: string };
       try {
