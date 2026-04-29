@@ -169,6 +169,8 @@ export default function TreeDetailPage() {
       setVerifyState("verifying");
       try {
         const base64 = dataUrl.includes(",") ? dataUrl.split(",")[1] : dataUrl;
+
+        // 1️⃣ Check: è una pianta?
         const verRes = await fetch("/api/plants/verify", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -176,20 +178,45 @@ export default function TreeDetailPage() {
         });
         if (!verRes.ok) throw new Error("verify failed");
         const verData = await verRes.json() as { isPlant?: boolean | null; aiUnavailable?: boolean; reason?: string };
-        if (verData.aiUnavailable) {
-          // AI non disponibile: carica comunque, admin la rivede
-          setVerifyState("pending");
-          setPhotoStatusForUpload("pending");
-        } else if (verData.isPlant === true) {
-          setVerifyState("ok");
-          setPhotoStatusForUpload("approved");
-        } else {
-          // Rifiutata dall'AI
+
+        if (verData.isPlant === false) {
+          // Non è una pianta → rifiuta subito
           setVerifyState("rejected");
           setVerifyReason(verData.reason ?? "L'immagine non sembra contenere una pianta.");
           setUpdatePhotoFile(null);
           setUpdatePhotoPreview(null);
           if (fileInputRef.current) fileInputRef.current.value = "";
+          return;
+        }
+
+        // 2️⃣ Check: stessa specie dell'originale? (solo se l'AI è disponibile e abbiamo la foto originale)
+        const referencePhotoUrl = tree.data?.photoUrl;
+        if (!verData.aiUnavailable && referencePhotoUrl) {
+          const speciesRes = await fetch("/api/plants/verify-update", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ newImageBase64: base64, referencePhotoUrl }),
+          });
+          if (speciesRes.ok) {
+            const speciesData = await speciesRes.json() as { sameSpecies?: boolean | null; aiUnavailable?: boolean; reason?: string };
+            if (!speciesData.aiUnavailable && speciesData.sameSpecies === false) {
+              setVerifyState("rejected");
+              setVerifyReason(speciesData.reason ?? "La specie della pianta non corrisponde a quella originale.");
+              setUpdatePhotoFile(null);
+              setUpdatePhotoPreview(null);
+              if (fileInputRef.current) fileInputRef.current.value = "";
+              return;
+            }
+          }
+        }
+
+        // Tutto ok (o AI non disponibile)
+        if (verData.aiUnavailable) {
+          setVerifyState("pending");
+          setPhotoStatusForUpload("pending");
+        } else {
+          setVerifyState("ok");
+          setPhotoStatusForUpload("approved");
         }
       } catch {
         // Errore di rete: procedi in pending
