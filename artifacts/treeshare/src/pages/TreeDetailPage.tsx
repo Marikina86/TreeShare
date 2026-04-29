@@ -189,37 +189,61 @@ export default function TreeDetailPage() {
           return;
         }
 
-        // 2️⃣ Check: stessa specie dell'originale? (solo se l'AI è disponibile e abbiamo la foto originale)
+        // 2️⃣ Check: stessa specie dell'originale?
+        // Il frontend carica direttamente la foto originale come base64 per evitare
+        // problemi di lettura file lato server.
         const referencePhotoUrl = tree.data?.photoUrl;
         if (!verData.aiUnavailable && referencePhotoUrl) {
-          const speciesRes = await fetch("/api/plants/verify-update", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              newImageBase64: base64,
-              referencePhotoUrl,
-              species: tree.data?.species ?? null,
-            }),
-          });
-          if (speciesRes.ok) {
-            const speciesData = await speciesRes.json() as { sameSpecies?: boolean | null; aiUnavailable?: boolean; reason?: string };
-            if (!speciesData.aiUnavailable && speciesData.sameSpecies === false) {
-              // Specie diversa → rifiuta
-              setVerifyState("rejected");
-              setVerifyReason(speciesData.reason ?? "La specie della pianta non corrisponde a quella originale.");
-              setUpdatePhotoFile(null);
-              setUpdatePhotoPreview(null);
-              if (fileInputRef.current) fileInputRef.current.value = "";
-              return;
-            }
-            if (speciesData.aiUnavailable) {
-              // AI non ha potuto verificare la specie → revisione manuale
+          try {
+            // Carica la foto originale della pianta e convertila in base64
+            const refSrc = referencePhotoUrl.startsWith("/objects/")
+              ? `/api/storage${referencePhotoUrl}`
+              : referencePhotoUrl;
+            const refResp = await fetch(refSrc);
+            if (!refResp.ok) throw new Error("ref fetch failed");
+            const refBlob = await refResp.blob();
+            const referenceImageBase64 = await new Promise<string>((resolve, reject) => {
+              const r = new FileReader();
+              r.onload = () => resolve(r.result as string);
+              r.onerror = reject;
+              r.readAsDataURL(refBlob);
+            });
+
+            const speciesRes = await fetch("/api/plants/verify-update", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                newImageBase64: base64,
+                referenceImageBase64,
+                species: tree.data?.species ?? null,
+              }),
+            });
+
+            if (speciesRes.ok) {
+              const speciesData = await speciesRes.json() as { sameSpecies?: boolean | null; aiUnavailable?: boolean; reason?: string };
+              if (!speciesData.aiUnavailable && speciesData.sameSpecies === false) {
+                // Specie diversa → rifiuta
+                setVerifyState("rejected");
+                setVerifyReason(speciesData.reason ?? "La specie della pianta non corrisponde a quella originale.");
+                setUpdatePhotoFile(null);
+                setUpdatePhotoPreview(null);
+                if (fileInputRef.current) fileInputRef.current.value = "";
+                return;
+              }
+              if (speciesData.aiUnavailable) {
+                // AI non ha potuto verificare la specie → revisione manuale
+                setVerifyState("pending");
+                setPhotoStatusForUpload("pending");
+                return;
+              }
+            } else {
+              // Errore HTTP sul check specie → revisione manuale
               setVerifyState("pending");
               setPhotoStatusForUpload("pending");
               return;
             }
-          } else {
-            // Errore di rete sul check specie → revisione manuale
+          } catch {
+            // Errore caricamento foto originale o rete → revisione manuale
             setVerifyState("pending");
             setPhotoStatusForUpload("pending");
             return;

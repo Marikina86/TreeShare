@@ -1,6 +1,4 @@
 import { Router } from "express";
-import { readFileSync, existsSync } from "fs";
-import { join } from "path";
 
 const router = Router();
 
@@ -202,31 +200,12 @@ Output OBBLIGATORIO in JSON (senza testo extra):
 }`;
 }
 
-async function fetchImageAsBase64(photoUrl: string): Promise<{ base64: string; mimeType: string } | null> {
-  try {
-    // File locale: /objects/uploads/<filename>
-    if (photoUrl.startsWith("/objects/uploads/")) {
-      const filename = photoUrl.replace("/objects/uploads/", "");
-      const filePath = join(process.cwd(), "uploads", filename);
-      if (!existsSync(filePath)) return null;
-      const buf = readFileSync(filePath);
-      const ext = filename.split(".").pop()?.toLowerCase() ?? "jpg";
-      const mimeType = ext === "webp" ? "image/webp" : ext === "png" ? "image/png" : "image/jpeg";
-      return { base64: buf.toString("base64"), mimeType };
-    }
-    // URL remoto (Cloudinary o altro HTTPS)
-    if (photoUrl.startsWith("http")) {
-      const resp = await fetch(photoUrl);
-      if (!resp.ok) return null;
-      const contentType = resp.headers.get("content-type") ?? "image/jpeg";
-      const mimeType = contentType.split(";")[0]?.trim() ?? "image/jpeg";
-      const arrayBuf = await resp.arrayBuffer();
-      return { base64: Buffer.from(arrayBuf).toString("base64"), mimeType };
-    }
-    return null;
-  } catch {
-    return null;
-  }
+function parseBase64Image(dataUrl: string): { base64: string; mimeType: string } {
+  const full = dataUrl.startsWith("data:") ? dataUrl : `data:image/jpeg;base64,${dataUrl}`;
+  const mimeMatch = full.match(/^data:([^;]+);/);
+  const mimeType = mimeMatch?.[1] ?? "image/jpeg";
+  const base64 = full.includes(",") ? full.split(",")[1]! : full;
+  return { base64, mimeType };
 }
 
 // Modelli per il confronto specie: preferire modelli più accurati
@@ -265,9 +244,9 @@ async function callGeminiTwoImages(
 }
 
 router.post("/plants/verify-update", async (req, res) => {
-  const { newImageBase64, referencePhotoUrl, species } = req.body as {
+  const { newImageBase64, referenceImageBase64, species } = req.body as {
     newImageBase64?: string;
-    referencePhotoUrl?: string;
+    referenceImageBase64?: string;
     species?: string | null;
   };
 
@@ -275,8 +254,8 @@ router.post("/plants/verify-update", async (req, res) => {
     res.status(400).json({ error: "newImageBase64 is required" });
     return;
   }
-  if (!referencePhotoUrl || typeof referencePhotoUrl !== "string") {
-    res.status(400).json({ error: "referencePhotoUrl is required" });
+  if (!referenceImageBase64 || typeof referenceImageBase64 !== "string") {
+    res.status(400).json({ error: "referenceImageBase64 is required" });
     return;
   }
 
@@ -286,19 +265,8 @@ router.post("/plants/verify-update", async (req, res) => {
     return;
   }
 
-  // Ottieni la foto di riferimento
-  const refImage = await fetchImageAsBase64(referencePhotoUrl);
-  if (!refImage) {
-    // Non riesce a caricare la foto originale → approva senza bloccare
-    res.json({ sameSpecies: null, aiUnavailable: true, reason: "Impossibile caricare la foto originale per il confronto." });
-    return;
-  }
-
-  // Prepara la nuova immagine
-  const newDataUrl = newImageBase64.startsWith("data:") ? newImageBase64 : `data:image/jpeg;base64,${newImageBase64}`;
-  const newBase64 = newDataUrl.includes(",") ? newDataUrl.split(",")[1]! : newDataUrl;
-  const newMimeMatch = newDataUrl.match(/^data:([^;]+);/);
-  const newMimeType = newMimeMatch?.[1] ?? "image/jpeg";
+  const refImage  = parseBase64Image(referenceImageBase64);
+  const { base64: newBase64, mimeType: newMimeType } = parseBase64Image(newImageBase64);
 
   const prompt = buildPromptUpdate(species);
   const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
