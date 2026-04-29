@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { reportsTable, usersTable, treesTable, eventsTable } from "@workspace/db";
+import { reportsTable, usersTable, treesTable, eventsTable, treeUpdatesTable } from "@workspace/db";
 import { eq, and, desc } from "drizzle-orm";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth";
 import { requireAdmin } from "../middlewares/requireAdmin";
@@ -15,25 +15,27 @@ const VALID_REASONS = [
   "foto_non_vegetale",
   "evento_inappropriato",
   "evento_falso",
+  "aggiornamento_non_reale",
   "altro",
 ];
 
-// POST /reports — submit a report (user, tree, or event)
+// POST /reports — submit a report (user, tree, tree_update, or event)
 router.post("/reports", requireAuth, async (req, res) => {
   const reporterUserId = (req as AuthenticatedRequest).userId;
-  const { reportedUserId, treeId, eventId, reason, notes } = req.body ?? {};
+  const { reportedUserId, treeId, treeUpdateId, eventId, reason, notes } = req.body ?? {};
 
   if (!reason || !VALID_REASONS.includes(reason)) {
     res.status(400).json({ error: "Invalid reason" });
     return;
   }
 
-  // Event report: eventId provided, reportedUserId optional (we'll derive it)
   const parsedEventId = eventId != null ? parseInt(String(eventId), 10) : null;
   const parsedTreeId = treeId != null ? parseInt(String(treeId), 10) : null;
+  const parsedTreeUpdateId = treeUpdateId != null ? parseInt(String(treeUpdateId), 10) : null;
 
   if (treeId != null && isNaN(parsedTreeId!)) { res.status(400).json({ error: "Invalid treeId" }); return; }
   if (eventId != null && isNaN(parsedEventId!)) { res.status(400).json({ error: "Invalid eventId" }); return; }
+  if (treeUpdateId != null && isNaN(parsedTreeUpdateId!)) { res.status(400).json({ error: "Invalid treeUpdateId" }); return; }
 
   try {
     let resolvedReportedUserId = typeof reportedUserId === "string" ? reportedUserId : null;
@@ -53,14 +55,12 @@ router.post("/reports", requireAuth, async (req, res) => {
       resolvedReportedUserId = event.userId;
       resolvedEventTitle = event.title;
 
-      // Resolve organizer username
       const [organizer] = await db
         .select({ username: usersTable.username })
         .from(usersTable)
         .where(eq(usersTable.clerkUserId, event.userId));
       resolvedReportedUsername = organizer?.username ?? null;
 
-      // Prevent duplicate pending reports
       const existing = await db
         .select({ id: reportsTable.id })
         .from(reportsTable)
@@ -82,6 +82,55 @@ router.post("/reports", requireAuth, async (req, res) => {
           reportedUsername: resolvedReportedUsername,
           eventId: parsedEventId,
           eventTitle: resolvedEventTitle,
+          reason,
+          notes: typeof notes === "string" && notes.trim() ? notes.trim().slice(0, 500) : null,
+          status: "pending",
+        })
+        .returning();
+
+      res.status(201).json({ id: report.id, status: report.status });
+      return;
+    }
+
+    // --- Tree update report ---
+    if (parsedTreeUpdateId != null) {
+      const [update] = await db
+        .select({ id: treeUpdatesTable.id, userId: treeUpdatesTable.userId, treeId: treeUpdatesTable.treeId })
+        .from(treeUpdatesTable)
+        .where(eq(treeUpdatesTable.id, parsedTreeUpdateId));
+
+      if (!update) { res.status(404).json({ error: "Tree update not found" }); return; }
+      if (update.userId === reporterUserId) { res.status(400).json({ error: "Cannot report your own update" }); return; }
+
+      resolvedReportedUserId = update.userId;
+
+      const [owner] = await db
+        .select({ username: usersTable.username })
+        .from(usersTable)
+        .where(eq(usersTable.clerkUserId, update.userId));
+      resolvedReportedUsername = owner?.username ?? null;
+
+      const existing = await db
+        .select({ id: reportsTable.id })
+        .from(reportsTable)
+        .where(and(
+          eq(reportsTable.reporterUserId, reporterUserId),
+          eq(reportsTable.treeUpdateId, parsedTreeUpdateId),
+          eq(reportsTable.status, "pending"),
+        ));
+      if (existing.length > 0) {
+        res.status(409).json({ error: "already_reported", message: "Already reported" });
+        return;
+      }
+
+      const [report] = await db
+        .insert(reportsTable)
+        .values({
+          reporterUserId,
+          reportedUserId: resolvedReportedUserId,
+          reportedUsername: resolvedReportedUsername,
+          treeId: update.treeId,
+          treeUpdateId: parsedTreeUpdateId,
           reason,
           notes: typeof notes === "string" && notes.trim() ? notes.trim().slice(0, 500) : null,
           status: "pending",
@@ -198,7 +247,6 @@ router.delete("/admin/events/:eventId", requireAuth, requireAdmin, async (req, r
   try {
     const [deleted] = await db.delete(eventsTable).where(eq(eventsTable.id, eventId)).returning({ id: eventsTable.id });
     if (!deleted) { res.status(404).json({ error: "Event not found" }); return; }
-    // Mark related pending reports as reviewed
     await db.update(reportsTable).set({ status: "reviewed" }).where(
       and(eq(reportsTable.eventId, eventId), eq(reportsTable.status, "pending"))
     );

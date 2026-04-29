@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
 import { usersTable, treesTable, reportsTable, treeUpdatesTable, treeSunsTable, eventsTable, eventParticipantsTable, problemReportsTable, userConsentsTable, cookieConsentsTable, userNotificationsTable, donationCampaignsTable, weeklyWinnersTable, organizationsTable, alertsTable, adoptableTreesTable } from "@workspace/db";
-import { eq, desc, sql, count, ilike, or, inArray } from "drizzle-orm";
+import { eq, desc, sql, count, ilike, or, inArray, and } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
 import { requireAdmin } from "../middlewares/requireAdmin";
 import { createClient } from "@supabase/supabase-js";
@@ -566,6 +566,43 @@ router.delete("/admin/reports/:id/delete-tree", requireAuth, requireAdmin, async
     res.json({ ...updated, createdAt: updated.createdAt.toISOString() });
   } catch (err) {
     req.log.error({ err }, "Error deleting tree from report");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// DELETE /admin/reports/:id/delete-tree-update — remove a tree update photo from report and mark reviewed
+router.delete("/admin/reports/:id/delete-tree-update", requireAuth, requireAdmin, async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+  try {
+    const [report] = await db.select().from(reportsTable).where(eq(reportsTable.id, id));
+    if (!report) { res.status(404).json({ error: "Report not found" }); return; }
+
+    if (report.treeUpdateId != null) {
+      const [update] = await db
+        .select({ photoUrl: treeUpdatesTable.photoUrl })
+        .from(treeUpdatesTable)
+        .where(eq(treeUpdatesTable.id, report.treeUpdateId));
+      if (update) {
+        if (update.photoUrl) await deletePhotoFromStorage(update.photoUrl);
+        await db.delete(treeUpdatesTable).where(eq(treeUpdatesTable.id, report.treeUpdateId));
+        // Mark all pending reports for this update as reviewed
+        await db
+          .update(reportsTable)
+          .set({ status: "reviewed" })
+          .where(and(eq(reportsTable.treeUpdateId, report.treeUpdateId), eq(reportsTable.status, "pending")));
+      }
+    }
+
+    const [updated] = await db
+      .update(reportsTable)
+      .set({ status: "reviewed" })
+      .where(eq(reportsTable.id, id))
+      .returning();
+
+    res.json({ ...updated, createdAt: updated.createdAt.toISOString() });
+  } catch (err) {
+    req.log.error({ err }, "Error deleting tree update from report");
     res.status(500).json({ error: "Internal server error" });
   }
 });

@@ -169,6 +169,7 @@ export const reportsTable = pgTable("reports", {
   reportedUserId: text("reported_user_id"),
   reportedUsername: text("reported_username"),
   treeId: integer("tree_id"),
+  treeUpdateId: integer("tree_update_id"),
   eventId: integer("event_id"),
   eventTitle: text("event_title"),
   reason: text("reason").notNull(),

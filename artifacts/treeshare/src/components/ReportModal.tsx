@@ -3,20 +3,22 @@ import { useAuth } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
 
 interface ReportModalProps {
-  targetType: "user" | "tree";
+  targetType: "user" | "tree" | "tree_update";
   reportedUserId: string;
   reportedUsername?: string;
   treeId?: number;
+  treeUpdateId?: number;
   onClose: () => void;
 }
 
-const REASONS = [
-  { value: "foto_non_vegetale",          it: "Foto non è una pianta/albero",         en: "Photo is not a plant/tree" },
-  { value: "contenuto_falso",            it: "Contenuto falso o fuorviante",          en: "False or misleading content" },
-  { value: "spam",                       it: "Spam o contenuto ripetitivo",           en: "Spam or repetitive content" },
-  { value: "comportamento_inappropriato", it: "Comportamento inappropriato",          en: "Inappropriate behaviour" },
-  { value: "violazione_privacy",         it: "Violazione della privacy",              en: "Privacy violation" },
-  { value: "altro",                      it: "Altro",                                 en: "Other" },
+const ALL_REASONS = [
+  { value: "aggiornamento_non_reale",     it: "L'aggiornamento non corrisponde alla realtà",  en: "Update doesn't match reality",      forTypes: ["tree_update"] },
+  { value: "foto_non_vegetale",           it: "Foto non è una pianta/albero",                  en: "Photo is not a plant/tree",         forTypes: ["tree", "tree_update"] },
+  { value: "contenuto_falso",             it: "Contenuto falso o fuorviante",                  en: "False or misleading content",       forTypes: ["user", "tree", "tree_update"] },
+  { value: "spam",                        it: "Spam o contenuto ripetitivo",                   en: "Spam or repetitive content",        forTypes: ["user", "tree", "tree_update"] },
+  { value: "comportamento_inappropriato", it: "Comportamento inappropriato",                   en: "Inappropriate behaviour",           forTypes: ["user"] },
+  { value: "violazione_privacy",          it: "Violazione della privacy",                      en: "Privacy violation",                 forTypes: ["user", "tree", "tree_update"] },
+  { value: "altro",                       it: "Altro",                                         en: "Other",                             forTypes: ["user", "tree", "tree_update"] },
 ];
 
 export default function ReportModal({
@@ -24,6 +26,7 @@ export default function ReportModal({
   reportedUserId,
   reportedUsername,
   treeId,
+  treeUpdateId,
   onClose,
 }: ReportModalProps) {
   const { getToken } = useAuth();
@@ -33,15 +36,21 @@ export default function ReportModal({
   const [loading, setLoading] = useState(false);
 
   const lang = (navigator.language || "it").startsWith("it") ? "it" : "en";
+
+  const titleMap = {
+    tree_update: lang === "it" ? "Segnala aggiornamento foto" : "Report photo update",
+    tree:        lang === "it" ? "Segnala foto" : "Report photo",
+    user:        lang === "it" ? "Segnala utente" : "Report user",
+  };
+
   const t = {
-    title:      lang === "it" ? (targetType === "tree" ? "Segnala foto" : "Segnala utente") : (targetType === "tree" ? "Report photo" : "Report user"),
-    subtitle:   lang === "it" ? `@${reportedUsername ?? reportedUserId}` : `@${reportedUsername ?? reportedUserId}`,
-    reasonLabel: lang === "it" ? "Motivo *" : "Reason *",
-    notesLabel:  lang === "it" ? "Note aggiuntive (opzionale)" : "Additional notes (optional)",
-    notesPlh:    lang === "it" ? "Descrivi il problema..." : "Describe the issue...",
-    send:        lang === "it" ? "Invia segnalazione" : "Send report",
-    cancel:      lang === "it" ? "Annulla" : "Cancel",
-    selectReason: lang === "it" ? "Seleziona un motivo" : "Select a reason",
+    title:        titleMap[targetType],
+    subtitle:     `@${reportedUsername ?? reportedUserId}`,
+    reasonLabel:  lang === "it" ? "Motivo *" : "Reason *",
+    notesLabel:   lang === "it" ? "Note aggiuntive (opzionale)" : "Additional notes (optional)",
+    notesPlh:     lang === "it" ? "Descrivi il problema..." : "Describe the issue...",
+    send:         lang === "it" ? "Invia segnalazione" : "Send report",
+    cancel:       lang === "it" ? "Annulla" : "Cancel",
     successTitle: lang === "it" ? "Segnalazione inviata" : "Report sent",
     successDesc:  lang === "it" ? "Grazie. Il nostro team esaminerà la segnalazione." : "Thank you. Our team will review the report.",
     alreadyTitle: lang === "it" ? "Già segnalato" : "Already reported",
@@ -50,24 +59,29 @@ export default function ReportModal({
     errorDesc:    lang === "it" ? "Impossibile inviare la segnalazione. Riprova." : "Unable to send the report. Try again.",
   };
 
+  const reasons = ALL_REASONS.filter((r) => r.forTypes.includes(targetType));
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!reason) return;
     setLoading(true);
     try {
       const token = await getToken();
+      const body: Record<string, unknown> = {
+        reportedUserId,
+        reason,
+        notes: notes.trim() || null,
+      };
+      if (treeUpdateId != null) body.treeUpdateId = treeUpdateId;
+      else if (treeId != null) body.treeId = treeId;
+
       const res = await fetch("/api/reports", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify({
-          reportedUserId,
-          ...(treeId != null ? { treeId } : {}),
-          reason,
-          notes: notes.trim() || null,
-        }),
+        body: JSON.stringify(body),
       });
 
       if (res.status === 409) {
@@ -112,7 +126,7 @@ export default function ReportModal({
           <div>
             <label className="block text-sm font-medium text-foreground mb-2">{t.reasonLabel}</label>
             <div className="space-y-2">
-              {REASONS.map((r) => (
+              {reasons.map((r) => (
                 <label
                   key={r.value}
                   className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-colors ${

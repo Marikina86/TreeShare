@@ -31,6 +31,7 @@ interface Report {
   reportedUserId: string;
   reportedUsername: string | null;
   treeId: number | null;
+  treeUpdateId: number | null;
   eventId: number | null;
   eventTitle: string | null;
   reason: string;
@@ -128,6 +129,7 @@ type UserFilter = "all" | "active" | "blocked";
 type ReportFilter = "all" | "pending" | "reviewed" | "dismissed";
 
 const REASON_LABELS: Record<string, { it: string; en: string }> = {
+  aggiornamento_non_reale:      { it: "Aggiornamento non reale",     en: "Update doesn't match reality" },
   foto_non_vegetale:            { it: "Foto non è una pianta",       en: "Photo is not a plant" },
   contenuto_falso:              { it: "Contenuto falso",             en: "False content" },
   spam:                         { it: "Spam",                        en: "Spam" },
@@ -577,6 +579,20 @@ export default function AdminPage() {
       setReports((p) => p.map((r) => r.id === report.id ? { ...r, status: "reviewed" } : r));
       setStats((s) => s ? { ...s, totalTrees: Math.max(0, s.totalTrees - 1) } : s);
       toast({ title: lang === "it" ? "Foto eliminata e segnalazione esaminata" : "Photo deleted and report reviewed" });
+    } catch { toast({ title: T.errors.deleteTree, variant: "destructive" }); }
+    finally { setActionLoading(null); }
+  }
+
+  async function handleDeleteUpdateFromReport(report: Report) {
+    if (!report.treeUpdateId) return;
+    setActionLoading(`report:${report.id}:delete-update`);
+    try {
+      const res = await authFetch(`/api/admin/reports/${report.id}/delete-tree-update`, { method: "DELETE" });
+      if (!res.ok && res.status !== 204) throw new Error();
+      setReports((p) => p.map((r) =>
+        r.treeUpdateId === report.treeUpdateId ? { ...r, status: "reviewed" } : r
+      ));
+      toast({ title: lang === "it" ? "Aggiornamento rimosso e segnalazione esaminata" : "Update removed and report reviewed" });
     } catch { toast({ title: T.errors.deleteTree, variant: "destructive" }); }
     finally { setActionLoading(null); }
   }
@@ -1506,16 +1522,21 @@ export default function AdminPage() {
                   {filteredReports.map((report) => {
                     const isActing = actionLoading?.startsWith(`report:${report.id}`);
                     const reasonLabel = REASON_LABELS[report.reason];
-                    const isTreeReport = report.treeId != null;
+                    const isTreeUpdateReport = report.treeUpdateId != null;
+                    const isTreeReport = !isTreeUpdateReport && report.treeId != null;
                     const isEventReport = report.eventId != null;
                     const badgeClass = isEventReport
                       ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
-                      : isTreeReport
-                        ? "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400"
-                        : "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400";
+                      : isTreeUpdateReport
+                        ? "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400"
+                        : isTreeReport
+                          ? "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400"
+                          : "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400";
                     const typeLabel = isEventReport
                       ? (lang === "it" ? "Evento" : "Event")
-                      : isTreeReport ? T.reportType.tree : T.reportType.user;
+                      : isTreeUpdateReport
+                        ? (lang === "it" ? "Aggiorn. foto" : "Photo update")
+                        : isTreeReport ? T.reportType.tree : T.reportType.user;
                     return (
                       <div key={report.id} className="px-5 py-4 space-y-3">
                         <div className="flex items-start justify-between gap-3 flex-wrap">
@@ -1533,6 +1554,11 @@ export default function AdminPage() {
                               )}
                               {isEventReport && (
                                 <span className="text-xs text-muted-foreground">organizzato da @{report.reportedUsername ?? report.reportedUserId}</span>
+                              )}
+                              {isTreeUpdateReport && (
+                                <a href={`/tree/${report.treeId}`} target="_blank" rel="noopener noreferrer" className="text-xs text-primary underline">
+                                  {lang === "it" ? `Aggiorn. #${report.treeUpdateId} (pianta #${report.treeId})` : `Update #${report.treeUpdateId} (tree #${report.treeId})`}
+                                </a>
                               )}
                               {isTreeReport && (
                                 <a href={`/tree/${report.treeId}`} target="_blank" rel="noopener noreferrer" className="text-xs text-primary underline">
@@ -1562,6 +1588,11 @@ export default function AdminPage() {
                                 <button onClick={() => handleDeleteEventFromReport(report)} disabled={!!isActing}
                                   className="px-3 py-1.5 text-xs font-semibold bg-destructive/10 text-destructive rounded-lg hover:bg-destructive/20 transition-colors disabled:opacity-50">
                                   {isActing ? "..." : (lang === "it" ? "Elimina evento" : "Delete event")}
+                                </button>
+                              ) : isTreeUpdateReport ? (
+                                <button onClick={() => handleDeleteUpdateFromReport(report)} disabled={!!isActing}
+                                  className="px-3 py-1.5 text-xs font-semibold bg-destructive/10 text-destructive rounded-lg hover:bg-destructive/20 transition-colors disabled:opacity-50">
+                                  {isActing ? "..." : (lang === "it" ? "Rimuovi aggiorn." : "Remove update")}
                                 </button>
                               ) : isTreeReport ? (
                                 <button onClick={() => handleDeleteTreeFromReport(report)} disabled={!!isActing}
