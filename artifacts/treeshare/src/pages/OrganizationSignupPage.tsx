@@ -21,7 +21,6 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   Building2,
   MapPin,
-  Phone,
   User,
   Lock,
   ChevronLeft,
@@ -82,7 +81,6 @@ const schema = z.object({
   indirizzoStato: z.string().min(2, "Stato obbligatorio").max(100),
 
   emailUfficiale: z.string().email("Email non valida"),
-  telefono: z.string().min(6, "Telefono obbligatorio").max(20),
   referenteNome: z.string().min(2, "Nome obbligatorio").max(100),
   referenteCognome: z.string().min(2, "Cognome obbligatorio").max(100),
 
@@ -613,20 +611,6 @@ export default function OrganizationSignupPage() {
                   className={errors.emailUfficiale ? "border-destructive" : ""}
                 />
                 <FieldError message={errors.emailUfficiale?.message} />
-              </div>
-
-              <div>
-                <Label htmlFor="telefono">
-                  Telefono <span className="text-destructive">*</span>
-                </Label>
-                <Input
-                  id="telefono"
-                  type="tel"
-                  placeholder="es. +39 06 1234567"
-                  {...register("telefono")}
-                  className={errors.telefono ? "border-destructive" : ""}
-                />
-                <FieldError message={errors.telefono?.message} />
               </div>
 
               <div className="grid grid-cols-2 gap-3">

@@ -18,7 +18,7 @@ export interface RegisterEnteBody {
   indirizzoCap: string;
   indirizzoStato: string;
   emailUfficiale: string;
-  telefono: string;
+  telefono?: string;
   referenteNome: string;
   referenteCognome: string;
   username: string;

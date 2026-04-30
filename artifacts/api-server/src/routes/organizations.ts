@@ -168,7 +168,7 @@ router.post("/register-ente", async (req, res) => {
             indirizzoCap: data.indirizzoCap,
             indirizzoStato: data.indirizzoStato,
             emailUfficiale: data.emailUfficiale,
-            telefono: data.telefono,
+            telefono: data.telefono ?? "",
             referenteNome: data.referenteNome,
             referenteCognome: data.referenteCognome,
             username: data.username,

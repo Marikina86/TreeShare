@@ -1763,7 +1763,6 @@ components:
         - indirizzoCap
         - indirizzoStato
         - emailUfficiale
-        - telefono
         - referenteNome
         - referenteCognome
         - username

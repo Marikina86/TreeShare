@@ -690,7 +690,7 @@ export const RegisterEnteBody = zod.object({
   indirizzoCap: zod.string(),
   indirizzoStato: zod.string(),
   emailUfficiale: zod.string(),
-  telefono: zod.string(),
+  telefono: zod.string().optional(),
   referenteNome: zod.string(),
   referenteCognome: zod.string(),
   username: zod.string(),

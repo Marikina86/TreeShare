@@ -456,7 +456,7 @@ export const registerEnteSchema = z.object({
   indirizzoCap: z.string().min(5).max(10),
   indirizzoStato: z.string().min(2).max(100),
   emailUfficiale: z.string().email(),
-  telefono: z.string().min(7).max(20),
+  telefono: z.string().max(20).optional(),
   referenteNome: z.string().min(2).max(100),
   referenteCognome: z.string().min(2).max(100),
   username: z.string().min(3).max(50).regex(/^[a-zA-Z0-9_.-]+$/),
