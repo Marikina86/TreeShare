@@ -175,11 +175,18 @@ export default function PrivateSignupPage() {
       if (error) {
         console.error("[SignUp] Supabase error:", error.message, error.status, error.code);
 
-        // 500 da Supabase = provider email interno esaurito/non configurato
-        if (error.status === 500 || error.message.toLowerCase().includes("unexpected failure") || error.message.toLowerCase().includes("internal server")) {
+        // Provider email disabilitato in Supabase
+        if (
+          error.status === 500 ||
+          (error as { code?: string }).code === "email_provider_disabled" ||
+          error.message.toLowerCase().includes("email signups are disabled") ||
+          error.message.toLowerCase().includes("provider_disabled") ||
+          error.message.toLowerCase().includes("unexpected failure") ||
+          error.message.toLowerCase().includes("internal server")
+        ) {
           setServerError(lang === "en"
-            ? "The email service is temporarily unavailable. Please try again in a few minutes or contact support."
-            : "Il servizio email è temporaneamente non disponibile. Riprova tra qualche minuto oppure contatta l'assistenza.");
+            ? "Email sign-up is currently disabled. Please contact support."
+            : "La registrazione via email è disabilitata. Contatta l'assistenza.");
           return;
         }
 
