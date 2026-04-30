@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { usersTable, treesTable, treeSunsTable, treeUpdatesTable, eventsTable, eventParticipantsTable, problemReportsTable, userConsentsTable, cookieConsentsTable, userNotificationsTable, donationCampaignsTable, weeklyWinnersTable, reportsTable, organizationsTable, bannedEmailsTable, alertsTable } from "@workspace/db";
+import { usersTable, treesTable, treeSunsTable, treeUpdatesTable, eventsTable, eventParticipantsTable, problemReportsTable, userConsentsTable, cookieConsentsTable, userNotificationsTable, donationCampaignsTable, weeklyWinnersTable, reportsTable, organizationsTable, alertsTable } from "@workspace/db";
 import { eq, desc, count, sql, inArray } from "drizzle-orm";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth";
 import { UpsertMyProfileBody } from "@workspace/api-zod";
@@ -222,25 +222,6 @@ router.delete("/users/me/delete", requireAuth, async (req, res) => {
     return;
   }
 
-  // Recupera l'email per il ban (da Supabase per utenti privati, da DB per org)
-  let userEmail: string | null = null;
-  try {
-    if (targetUser.accountType === "organization") {
-      const [org] = await db.select({ email: organizationsTable.emailUfficiale })
-        .from(organizationsTable)
-        .where(eq(organizationsTable.username, targetUser.username));
-      userEmail = org?.email ?? null;
-    } else {
-      const supabaseAdmin = getSupabaseAdmin();
-      if (supabaseAdmin) {
-        const { data } = await supabaseAdmin.auth.admin.getUserById(userId);
-        userEmail = data?.user?.email ?? null;
-      }
-    }
-  } catch (err) {
-    req.log.warn({ err, userId }, "Could not fetch email before self-delete");
-  }
-
   // Pulizia foto da Cloudinary / storage locale (non-transazionale, eseguita prima del DB)
   try {
     await collectAndDeleteUserPhotos(userId);
@@ -293,16 +274,6 @@ router.delete("/users/me/delete", requireAuth, async (req, res) => {
       }
 
       await tx.delete(usersTable).where(eq(usersTable.clerkUserId, userId));
-
-      // Registra l'email nella bannedEmailsTable per impedire re-registrazione
-      if (userEmail) {
-        await tx.insert(bannedEmailsTable)
-          .values({ email: userEmail.toLowerCase(), reason: "deleted", bannedBy: userId })
-          .onConflictDoUpdate({
-            target: bannedEmailsTable.email,
-            set: { reason: "deleted", bannedAt: sql`now()`, bannedBy: userId },
-          });
-      }
     });
 
     // Cancella l'account Supabase Auth (dopo la transazione DB riuscita)
