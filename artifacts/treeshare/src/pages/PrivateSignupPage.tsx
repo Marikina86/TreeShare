@@ -174,6 +174,15 @@ export default function PrivateSignupPage() {
 
       if (error) {
         console.error("[SignUp] Supabase error:", error.message, error.status, error.code);
+
+        // 500 da Supabase = provider email interno esaurito/non configurato
+        if (error.status === 500 || error.message.toLowerCase().includes("unexpected failure") || error.message.toLowerCase().includes("internal server")) {
+          setServerError(lang === "en"
+            ? "The email service is temporarily unavailable. Please try again in a few minutes or contact support."
+            : "Il servizio email è temporaneamente non disponibile. Riprova tra qualche minuto oppure contatta l'assistenza.");
+          return;
+        }
+
         const msg = error.message.toLowerCase();
         if (msg.includes("already registered") || msg.includes("already been registered") || error.code === "user_already_exists") {
           setServerError(lang === "en"
