@@ -173,27 +173,40 @@ export default function PrivateSignupPage() {
       }
 
       if (error) {
-        console.error("[SignUp] Supabase error:", error.message, error.status);
-        if (error.message.includes("already registered") || error.message.includes("already been registered")) {
+        console.error("[SignUp] Supabase error:", error.message, error.status, error.code);
+        const msg = error.message.toLowerCase();
+        if (msg.includes("already registered") || msg.includes("already been registered") || error.code === "user_already_exists") {
           setServerError(lang === "en"
             ? "This email is already registered. Sign in or reset your password."
             : "Questa email è già registrata. Accedi con le tue credenziali o recupera la password.");
-        } else if (error.message.toLowerCase().includes("password")) {
+        } else if (msg.includes("password")) {
           setServerError(lang === "en"
             ? "Password does not meet security requirements. Choose a stronger one."
             : "La password non soddisfa i requisiti di sicurezza. Scegli una password più forte.");
-        } else if (error.message.toLowerCase().includes("rate") || error.message.toLowerCase().includes("limit") || error.message.toLowerCase().includes("exceeded")) {
+        } else if (
+          msg.includes("rate") || msg.includes("limit") || msg.includes("exceeded") ||
+          msg.includes("60 second") || msg.includes("security purposes") || msg.includes("too many")
+        ) {
           setServerError(lang === "en"
-            ? "Too many signup attempts. Please wait a few minutes and try again."
-            : "Troppi tentativi di registrazione. Attendi qualche minuto e riprova.");
-        } else if (error.message.toLowerCase().includes("email") && error.message.toLowerCase().includes("disabled")) {
+            ? "Too many signup attempts. Please wait 60 seconds and try again."
+            : "Troppi tentativi. Attendi 60 secondi e riprova.");
+        } else if (msg.includes("email") && msg.includes("disabled")) {
           setServerError(lang === "en"
             ? "Email sign-up is currently disabled. Please contact support."
             : "La registrazione via email è disabilitata. Contatta l'assistenza.");
-        } else {
+        } else if (msg.includes("invalid") && (msg.includes("email") || msg.includes("address"))) {
           setServerError(lang === "en"
-            ? "Registration failed. Please try again or contact support."
-            : "Registrazione non riuscita. Riprova o contatta l'assistenza.");
+            ? "The email address is not valid."
+            : "L'indirizzo email non è valido.");
+        } else if (msg.includes("signup") && msg.includes("disabled")) {
+          setServerError(lang === "en"
+            ? "Sign-up is currently disabled. Please contact support."
+            : "Le registrazioni sono disabilitate. Contatta l'assistenza.");
+        } else {
+          setServerError(
+            (lang === "en" ? "Registration failed" : "Registrazione non riuscita") +
+            `: ${error.message}`
+          );
         }
         return;
       }
