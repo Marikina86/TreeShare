@@ -103,6 +103,27 @@ export default function PrivateSignupPage() {
     setServerError(null);
 
     try {
+      // Verifica se l'email è stata bannata (account eliminato o bloccato dall'admin)
+      const bannedRes = await fetch(`/api/auth/banned?email=${encodeURIComponent(fields.email.trim().toLowerCase())}`);
+      if (bannedRes.ok) {
+        const bannedData = await bannedRes.json();
+        if (bannedData.banned) {
+          setServerError(
+            bannedData.reason === "deleted"
+              ? (lang === "en"
+                  ? "This email address cannot be used to create an account."
+                  : "Questo indirizzo email non può essere utilizzato per registrarsi.")
+              : (lang === "en"
+                  ? "This account has been suspended. Please contact support."
+                  : "Questo account è stato sospeso. Contatta l'assistenza.")
+          );
+          setSubmitting(false);
+          return;
+        }
+      }
+    } catch { /* non bloccare il signup se il check fallisce */ }
+
+    try {
       const { data, error } = await supabase.auth.signUp({
         email: fields.email.trim(),
         password: fields.password,

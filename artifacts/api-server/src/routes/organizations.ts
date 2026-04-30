@@ -2,7 +2,7 @@ import { Router } from "express";
 import bcrypt from "bcryptjs";
 import { createClient } from "@supabase/supabase-js";
 import { db } from "@workspace/db";
-import { organizationsTable, registerEnteSchema, userConsentsTable, policiesTable, usersTable } from "@workspace/db";
+import { organizationsTable, registerEnteSchema, userConsentsTable, policiesTable, usersTable, bannedEmailsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 
 const router = Router();
@@ -44,6 +44,24 @@ router.post("/register-ente", async (req, res) => {
   const data = parsed.data;
 
   try {
+    // Blocca re-registrazione se l'email è stata bannata (account eliminato o bloccato)
+    const emailToCheck = data.emailUfficiale.toLowerCase();
+    const [bannedRow] = await db
+      .select({ reason: bannedEmailsTable.reason })
+      .from(bannedEmailsTable)
+      .where(eq(bannedEmailsTable.email, emailToCheck))
+      .limit(1);
+    if (bannedRow) {
+      res.status(403).json({
+        error: "Registrazione non consentita",
+        code: "EMAIL_BANNED",
+        fields: { emailUfficiale: bannedRow.reason === "deleted"
+          ? "Questo indirizzo email non può essere utilizzato per registrarsi."
+          : "Questo indirizzo email è stato sospeso. Contatta l'assistenza." },
+      });
+      return;
+    }
+
     const existing = await db
       .select({ id: organizationsTable.id })
       .from(organizationsTable)

@@ -23,6 +23,7 @@ import discountCodesRouter from "./discountCodes";
 import adoptionsRouter from "./adoptions";
 import adminLedgerRouter from "./adminLedger";
 import appSettingsRouter from "./appSettings";
+import authRouter from "./auth";
 
 const router: IRouter = Router();
 
@@ -50,5 +51,6 @@ router.use(discountCodesRouter);
 router.use(adoptionsRouter);
 router.use(adminLedgerRouter);
 router.use(appSettingsRouter);
+router.use(authRouter);
 
 export default router;

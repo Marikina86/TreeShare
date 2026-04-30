@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { usersTable, treesTable, reportsTable, treeUpdatesTable, treeSunsTable, eventsTable, eventParticipantsTable, problemReportsTable, userConsentsTable, cookieConsentsTable, userNotificationsTable, donationCampaignsTable, weeklyWinnersTable, organizationsTable, alertsTable, adoptableTreesTable } from "@workspace/db";
+import { usersTable, treesTable, reportsTable, treeUpdatesTable, treeSunsTable, eventsTable, eventParticipantsTable, problemReportsTable, userConsentsTable, cookieConsentsTable, userNotificationsTable, donationCampaignsTable, weeklyWinnersTable, organizationsTable, alertsTable, adoptableTreesTable, bannedEmailsTable } from "@workspace/db";
 import { eq, desc, sql, count, ilike, or, inArray, and } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
 import { requireAdmin } from "../middlewares/requireAdmin";
@@ -18,6 +18,22 @@ function getSupabaseAdmin() {
   return createClient(url, key, {
     auth: { autoRefreshToken: false, persistSession: false },
   });
+}
+
+/** Recupera l'email di un utente: per le org usa il DB; per i privati usa Supabase admin. */
+async function getUserEmail(clerkUserId: string, accountType: string, username: string | null): Promise<string | null> {
+  if (accountType === "organization" && username) {
+    const [org] = await db.select({ email: organizationsTable.emailUfficiale })
+      .from(organizationsTable)
+      .where(eq(organizationsTable.username, username));
+    return org?.email ?? null;
+  }
+  const supabase = getSupabaseAdmin();
+  if (!supabase) return null;
+  try {
+    const { data } = await supabase.auth.admin.getUserById(clerkUserId);
+    return data?.user?.email ?? null;
+  } catch { return null; }
 }
 
 function isCloudinaryConfigured(): boolean {
@@ -148,15 +164,36 @@ router.patch(
       return;
     }
     try {
+      const [target] = await db
+        .select({ clerkUserId: usersTable.clerkUserId, accountType: usersTable.accountType, username: usersTable.username })
+        .from(usersTable)
+        .where(eq(usersTable.clerkUserId, clerkUserId));
+      if (!target) {
+        res.status(404).json({ error: "User not found" });
+        return;
+      }
+
       const [updated] = await db
         .update(usersTable)
         .set({ isBlocked: true })
         .where(eq(usersTable.clerkUserId, clerkUserId))
         .returning({ clerkUserId: usersTable.clerkUserId, isBlocked: usersTable.isBlocked });
-      if (!updated) {
-        res.status(404).json({ error: "User not found" });
-        return;
+
+      // Registra l'email nella bannedEmailsTable per impedire re-registrazione
+      try {
+        const email = await getUserEmail(clerkUserId, target.accountType, target.username);
+        if (email) {
+          await db.insert(bannedEmailsTable)
+            .values({ email: email.toLowerCase(), reason: "blocked", bannedBy: adminId })
+            .onConflictDoUpdate({
+              target: bannedEmailsTable.email,
+              set: { reason: "blocked", bannedAt: sql`now()`, bannedBy: adminId },
+            });
+        }
+      } catch (err) {
+        req.log.warn({ err, clerkUserId }, "Could not record banned email on block (non-fatal)");
       }
+
       res.json(updated);
     } catch (err) {
       req.log.error({ err }, "Error blocking user");
@@ -173,6 +210,11 @@ router.patch(
   async (req, res) => {
     const { clerkUserId } = req.params;
     try {
+      const [target] = await db
+        .select({ accountType: usersTable.accountType, username: usersTable.username })
+        .from(usersTable)
+        .where(eq(usersTable.clerkUserId, clerkUserId));
+
       const [updated] = await db
         .update(usersTable)
         .set({ isBlocked: false })
@@ -182,6 +224,19 @@ router.patch(
         res.status(404).json({ error: "User not found" });
         return;
       }
+
+      // Rimuovi l'email dalla bannedEmailsTable: utente riabilitato
+      if (target) {
+        try {
+          const email = await getUserEmail(clerkUserId, target.accountType, target.username);
+          if (email) {
+            await db.delete(bannedEmailsTable).where(eq(bannedEmailsTable.email, email.toLowerCase()));
+          }
+        } catch (err) {
+          req.log.warn({ err, clerkUserId }, "Could not remove banned email on unblock (non-fatal)");
+        }
+      }
+
       res.json(updated);
     } catch (err) {
       req.log.error({ err }, "Error unblocking user");
@@ -208,6 +263,14 @@ router.delete(
     if (!targetUser) {
       res.status(404).json({ error: "User not found" });
       return;
+    }
+
+    // Recupera l'email PRIMA della cancellazione (org: da DB; privati: da Supabase)
+    let userEmailToBan: string | null = null;
+    try {
+      userEmailToBan = await getUserEmail(clerkUserId, targetUser.accountType, targetUser.username);
+    } catch (err) {
+      req.log.warn({ err, clerkUserId }, "Could not fetch email before delete (proceeding anyway)");
     }
 
     try {
@@ -260,6 +323,16 @@ router.delete(
         }
 
         await tx.delete(usersTable).where(eq(usersTable.clerkUserId, clerkUserId));
+
+        // Registra l'email come bannata dentro la transazione (rollback atomico se qualcosa va storto)
+        if (userEmailToBan) {
+          await tx.insert(bannedEmailsTable)
+            .values({ email: userEmailToBan.toLowerCase(), reason: "deleted", bannedBy: adminId })
+            .onConflictDoUpdate({
+              target: bannedEmailsTable.email,
+              set: { reason: "deleted", bannedAt: sql`now()`, bannedBy: adminId },
+            });
+        }
       });
 
       const supabase = getSupabaseAdmin();

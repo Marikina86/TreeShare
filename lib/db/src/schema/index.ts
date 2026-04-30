@@ -423,6 +423,19 @@ export const paymentLedgerTable = pgTable("payment_ledger", {
   index("payment_ledger_created_at_idx").on(table.createdAt),
 ]);
 
+// ── Banned emails — blocco re-registrazione utenti eliminati/bloccati ────────
+// Viene popolata quando l'admin blocca o elimina un account.
+// Viene svuotata (per email) quando l'admin sblocca un utente.
+// Verificata sul signup di utenti privati e organizzazioni.
+
+export const bannedEmailsTable = pgTable("banned_emails", {
+  id: serial("id").primaryKey(),
+  email: text("email").notNull().unique(),
+  reason: text("reason").notNull(), // "blocked" | "deleted"
+  bannedAt: timestamp("banned_at").notNull().defaultNow(),
+  bannedBy: text("banned_by"),
+});
+
 // ── App settings (key/value store for runtime feature flags) ─────────────────
 
 export const appSettingsTable = pgTable("app_settings", {
