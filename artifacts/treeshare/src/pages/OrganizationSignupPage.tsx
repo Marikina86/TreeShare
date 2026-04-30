@@ -256,10 +256,17 @@ export default function OrganizationSignupPage() {
     setResendMsg(null);
     setVerifyError(null);
     try {
+      const appOrigin = (() => {
+        const domains = __REPLIT_DOMAINS__?.split(",").filter(Boolean);
+        if (domains?.length) return `https://${domains[0]!.trim()}`;
+        if (__REPLIT_DEV_DOMAIN__) return `https://${__REPLIT_DEV_DOMAIN__}`;
+        return window.location.origin;
+      })();
+
       const { error } = await supabase.auth.resend({
         type: "signup",
         email: verifiedEmail.trim(),
-        options: { emailRedirectTo: `${window.location.origin}/feed` },
+        options: { emailRedirectTo: `${appOrigin}/feed` },
       });
       if (error) {
         const res = await fetch("/api/register-ente/resend-verification", {

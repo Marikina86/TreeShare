@@ -28,6 +28,11 @@ if (!basePath) {
 
 export default defineConfig({
   base: basePath,
+  define: {
+    // Espone i domini Replit al frontend come costanti compile-time (non sono segreti)
+    __REPLIT_DEV_DOMAIN__: JSON.stringify(process.env.REPLIT_DEV_DOMAIN ?? ""),
+    __REPLIT_DOMAINS__: JSON.stringify(process.env.REPLIT_DOMAINS ?? ""),
+  },
   plugins: [
     react(),
     tailwindcss(),

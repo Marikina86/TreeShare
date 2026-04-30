@@ -124,22 +124,53 @@ export default function PrivateSignupPage() {
     } catch { /* non bloccare il signup se il check fallisce */ }
 
     try {
-      const { data, error } = await supabase.auth.signUp({
+      // Costruisce l'URL di redirect dalla variabile d'ambiente Replit (iniettata dal Vite config).
+      // Usa window.location.origin come fallback solo se non ci sono domini Replit configurati.
+      const appOrigin = (() => {
+        const domains = __REPLIT_DOMAINS__?.split(",").filter(Boolean);
+        if (domains?.length) return `https://${domains[0]!.trim()}`;
+        if (__REPLIT_DEV_DOMAIN__) return `https://${__REPLIT_DEV_DOMAIN__}`;
+        return window.location.origin;
+      })();
+
+      const userMeta = {
+        first_name: fields.nome.trim(),
+        last_name: fields.cognome.trim(),
+        username: `${fields.nome.trim()}_${fields.cognome.trim()}`
+          .toLowerCase()
+          .replace(/\s+/g, "_")
+          .replace(/[^a-z0-9_.-]/g, "")
+          .slice(0, 30) || "user",
+      };
+
+      // Primo tentativo: con emailRedirectTo
+      let { data, error } = await supabase.auth.signUp({
         email: fields.email.trim(),
         password: fields.password,
         options: {
-          emailRedirectTo: `${window.location.origin}/feed`,
-          data: {
-            first_name: fields.nome.trim(),
-            last_name: fields.cognome.trim(),
-            username: `${fields.nome.trim()}_${fields.cognome.trim()}`
-              .toLowerCase()
-              .replace(/\s+/g, "_")
-              .replace(/[^a-z0-9_.-]/g, "")
-              .slice(0, 30) || "user",
-          },
+          emailRedirectTo: `${appOrigin}/feed`,
+          data: userMeta,
         },
       });
+
+      // Se Supabase rifiuta il redirect URL (non è nell'allowlist), ritenta senza emailRedirectTo.
+      // In questo caso Supabase utilizzerà il Site URL configurato nel progetto.
+      const isRedirectError = error && (
+        error.message.toLowerCase().includes("redirect") ||
+        error.message.toLowerCase().includes("not allowed") ||
+        error.message.toLowerCase().includes("invalid url") ||
+        (error.status === 422 && error.message.toLowerCase().includes("url"))
+      );
+      if (isRedirectError) {
+        console.warn("[SignUp] emailRedirectTo rejected, retrying without it:", error?.message);
+        const retry = await supabase.auth.signUp({
+          email: fields.email.trim(),
+          password: fields.password,
+          options: { data: userMeta },
+        });
+        data = retry.data;
+        error = retry.error;
+      }
 
       if (error) {
         console.error("[SignUp] Supabase error:", error.message, error.status);
@@ -147,16 +178,22 @@ export default function PrivateSignupPage() {
           setServerError(lang === "en"
             ? "This email is already registered. Sign in or reset your password."
             : "Questa email è già registrata. Accedi con le tue credenziali o recupera la password.");
-        } else if (error.message.includes("password")) {
+        } else if (error.message.toLowerCase().includes("password")) {
           setServerError(lang === "en"
             ? "Password does not meet security requirements. Choose a stronger one."
             : "La password non soddisfa i requisiti di sicurezza. Scegli una password più forte.");
-        } else if (error.message.includes("rate") || error.message.includes("limit") || error.message.includes("exceeded")) {
+        } else if (error.message.toLowerCase().includes("rate") || error.message.toLowerCase().includes("limit") || error.message.toLowerCase().includes("exceeded")) {
           setServerError(lang === "en"
             ? "Too many signup attempts. Please wait a few minutes and try again."
             : "Troppi tentativi di registrazione. Attendi qualche minuto e riprova.");
+        } else if (error.message.toLowerCase().includes("email") && error.message.toLowerCase().includes("disabled")) {
+          setServerError(lang === "en"
+            ? "Email sign-up is currently disabled. Please contact support."
+            : "La registrazione via email è disabilitata. Contatta l'assistenza.");
         } else {
-          setServerError(error.message);
+          setServerError(lang === "en"
+            ? "Registration failed. Please try again or contact support."
+            : "Registrazione non riuscita. Riprova o contatta l'assistenza.");
         }
         return;
       }
@@ -202,20 +239,29 @@ export default function PrivateSignupPage() {
     setResendMsg(null);
     setVerifyError(null);
     try {
+      const appOrigin = (() => {
+        const domains = __REPLIT_DOMAINS__?.split(",").filter(Boolean);
+        if (domains?.length) return `https://${domains[0]!.trim()}`;
+        if (__REPLIT_DEV_DOMAIN__) return `https://${__REPLIT_DEV_DOMAIN__}`;
+        return window.location.origin;
+      })();
+
       const { error } = await supabase.auth.resend({
         type: "signup",
         email: fields.email.trim(),
         options: {
-          emailRedirectTo: `${window.location.origin}/feed`,
+          emailRedirectTo: `${appOrigin}/feed`,
         },
       });
       if (error) {
-        if (error.message.includes("rate") || error.message.includes("limit")) {
+        if (error.message.toLowerCase().includes("rate") || error.message.toLowerCase().includes("limit")) {
           setVerifyError(lang === "en"
             ? "Too many requests. Wait a few minutes before trying again."
             : "Troppe richieste. Attendi qualche minuto prima di riprovare.");
         } else {
-          setVerifyError(error.message);
+          setVerifyError(lang === "en"
+            ? "Error resending email. Try again."
+            : "Errore nell'invio dell'email. Riprova.");
         }
       } else {
         setResendMsg(lang === "en"
