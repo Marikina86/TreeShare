@@ -1,10 +1,63 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { usersTable, treesTable, treeSunsTable, treeUpdatesTable, eventsTable, eventParticipantsTable, problemReportsTable, userConsentsTable, cookieConsentsTable, userNotificationsTable, donationCampaignsTable, weeklyWinnersTable, reportsTable, organizationsTable } from "@workspace/db";
-import { eq, desc, count, sql } from "drizzle-orm";
+import { usersTable, treesTable, treeSunsTable, treeUpdatesTable, eventsTable, eventParticipantsTable, problemReportsTable, userConsentsTable, cookieConsentsTable, userNotificationsTable, donationCampaignsTable, weeklyWinnersTable, reportsTable, organizationsTable, bannedEmailsTable, alertsTable } from "@workspace/db";
+import { eq, desc, count, sql, inArray } from "drizzle-orm";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth";
 import { UpsertMyProfileBody } from "@workspace/api-zod";
 import { isAdmin } from "../middlewares/requireAdmin";
+import { createClient } from "@supabase/supabase-js";
+import { v2 as cloudinary } from "cloudinary";
+import { existsSync, unlinkSync } from "fs";
+import { join } from "path";
+
+function getSupabaseAdmin() {
+  const url = process.env.SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) return null;
+  return createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } });
+}
+
+function isCloudinaryConfigured() {
+  return !!(process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET);
+}
+
+async function deletePhotoFromStorage(photoUrl: string): Promise<void> {
+  try {
+    if (photoUrl.includes("cloudinary.com") && isCloudinaryConfigured()) {
+      const parts = photoUrl.split("/");
+      const uploadIdx = parts.indexOf("upload");
+      if (uploadIdx !== -1) {
+        const pathParts = parts.slice(uploadIdx + 2);
+        const publicIdWithExt = pathParts.join("/");
+        const publicId = publicIdWithExt.replace(/\.[^/.]+$/, "");
+        await cloudinary.uploader.destroy(publicId);
+      }
+    } else if (photoUrl.startsWith("/objects/uploads/")) {
+      const filename = photoUrl.replace("/objects/uploads/", "");
+      const filePath = join(process.cwd(), "uploads", filename);
+      if (existsSync(filePath)) unlinkSync(filePath);
+    }
+  } catch {}
+}
+
+async function collectAndDeleteUserPhotos(userId: string): Promise<void> {
+  const photoUrls: string[] = [];
+  const [userRow] = await db.select({ photoUrl: usersTable.photoUrl }).from(usersTable).where(eq(usersTable.clerkUserId, userId));
+  if (userRow?.photoUrl) photoUrls.push(userRow.photoUrl);
+  const trees = await db.select({ photoUrl: treesTable.photoUrl, thumb: treesTable.photoThumbnailUrl }).from(treesTable).where(eq(treesTable.userId, userId));
+  for (const t of trees) {
+    if (t.photoUrl) photoUrls.push(t.photoUrl);
+    if (t.thumb) photoUrls.push(t.thumb);
+  }
+  const updates = await db.select({ photoUrl: treeUpdatesTable.photoUrl }).from(treeUpdatesTable).where(eq(treeUpdatesTable.userId, userId));
+  for (const u of updates) { if (u.photoUrl) photoUrls.push(u.photoUrl); }
+  const campaigns = await db.select({ photos: donationCampaignsTable.photos }).from(donationCampaignsTable).where(eq(donationCampaignsTable.userId, userId));
+  for (const c of campaigns) {
+    const arr = Array.isArray(c.photos) ? c.photos : [];
+    for (const p of arr) { if (typeof p === "string" && p) photoUrls.push(p); }
+  }
+  await Promise.allSettled(photoUrls.map((url) => deletePhotoFromStorage(url)));
+}
 
 const router = Router();
 
@@ -158,52 +211,115 @@ router.get("/users/:userId", async (req, res) => {
 
 router.delete("/users/me/delete", requireAuth, async (req, res) => {
   const userId = (req as AuthenticatedRequest).userId;
+
+  // Recupera i dati utente prima di qualunque cancellazione
+  const [targetUser] = await db
+    .select({ accountType: usersTable.accountType, username: usersTable.username })
+    .from(usersTable)
+    .where(eq(usersTable.clerkUserId, userId));
+  if (!targetUser) {
+    res.status(404).json({ error: "User not found" });
+    return;
+  }
+
+  // Recupera l'email per il ban (da Supabase per utenti privati, da DB per org)
+  let userEmail: string | null = null;
   try {
-    const userTreeIds = await db.select({ id: treesTable.id }).from(treesTable).where(eq(treesTable.userId, userId));
-    const treeIds = userTreeIds.map(t => t.id);
+    if (targetUser.accountType === "organization") {
+      const [org] = await db.select({ email: organizationsTable.emailUfficiale })
+        .from(organizationsTable)
+        .where(eq(organizationsTable.username, targetUser.username));
+      userEmail = org?.email ?? null;
+    } else {
+      const supabaseAdmin = getSupabaseAdmin();
+      if (supabaseAdmin) {
+        const { data } = await supabaseAdmin.auth.admin.getUserById(userId);
+        userEmail = data?.user?.email ?? null;
+      }
+    }
+  } catch (err) {
+    req.log.warn({ err, userId }, "Could not fetch email before self-delete");
+  }
 
-    if (treeIds.length > 0) {
-      for (const treeId of treeIds) {
-        await db.delete(treeSunsTable).where(eq(treeSunsTable.treeId, treeId));
-        await db.delete(treeUpdatesTable).where(eq(treeUpdatesTable.treeId, treeId));
+  // Pulizia foto da Cloudinary / storage locale (non-transazionale, eseguita prima del DB)
+  try {
+    await collectAndDeleteUserPhotos(userId);
+    req.log.info({ userId }, "Photos deleted for self-deleted user");
+  } catch (err) {
+    req.log.warn({ err, userId }, "Photo deletion partial failure (proceeding with DB cleanup)");
+  }
+
+  try {
+    await db.transaction(async (tx) => {
+      const userTreeIds = await tx.select({ id: treesTable.id }).from(treesTable).where(eq(treesTable.userId, userId));
+      const treeIds = userTreeIds.map(t => t.id);
+
+      if (treeIds.length > 0) {
+        await tx.delete(treeSunsTable).where(inArray(treeSunsTable.treeId, treeIds));
+        await tx.delete(treeUpdatesTable).where(inArray(treeUpdatesTable.treeId, treeIds));
+      }
+
+      await tx.delete(treeSunsTable).where(eq(treeSunsTable.userId, userId));
+      await tx.delete(treeUpdatesTable).where(eq(treeUpdatesTable.userId, userId));
+      await tx.delete(treesTable).where(eq(treesTable.userId, userId));
+
+      const userEvents = await tx.select({ id: eventsTable.id }).from(eventsTable).where(eq(eventsTable.userId, userId));
+      const eventIds = userEvents.map(e => e.id);
+      if (eventIds.length > 0) {
+        await tx.delete(eventParticipantsTable).where(inArray(eventParticipantsTable.eventId, eventIds));
+      }
+      await tx.delete(eventParticipantsTable).where(eq(eventParticipantsTable.userId, userId));
+      await tx.delete(eventsTable).where(eq(eventsTable.userId, userId));
+
+      await tx.delete(donationCampaignsTable).where(eq(donationCampaignsTable.userId, userId));
+      await tx.delete(weeklyWinnersTable).where(eq(weeklyWinnersTable.userId, userId));
+      await tx.delete(problemReportsTable).where(eq(problemReportsTable.userId, userId));
+      await tx.delete(userNotificationsTable).where(eq(userNotificationsTable.userId, userId));
+      await tx.delete(userConsentsTable).where(eq(userConsentsTable.userId, userId));
+      await tx.delete(cookieConsentsTable).where(eq(cookieConsentsTable.userId, userId));
+      await tx.delete(reportsTable).where(eq(reportsTable.reporterUserId, userId));
+      await tx.delete(reportsTable).where(eq(reportsTable.reportedUserId, userId));
+      await tx.delete(alertsTable).where(eq(alertsTable.createdBy, userId));
+
+      // Fix: ricerca org per username, non per emailUfficiale
+      if (targetUser.accountType === "organization" && targetUser.username) {
+        const orgs = await tx.select({ id: organizationsTable.id })
+          .from(organizationsTable)
+          .where(eq(organizationsTable.username, targetUser.username));
+        for (const org of orgs) {
+          await tx.delete(userConsentsTable).where(eq(userConsentsTable.userId, `org:${org.id}`));
+        }
+        await tx.delete(organizationsTable).where(eq(organizationsTable.username, targetUser.username));
+      }
+
+      await tx.delete(usersTable).where(eq(usersTable.clerkUserId, userId));
+
+      // Registra l'email nella bannedEmailsTable per impedire re-registrazione
+      if (userEmail) {
+        await tx.insert(bannedEmailsTable)
+          .values({ email: userEmail.toLowerCase(), reason: "deleted", bannedBy: userId })
+          .onConflictDoUpdate({
+            target: bannedEmailsTable.email,
+            set: { reason: "deleted", bannedAt: sql`now()`, bannedBy: userId },
+          });
+      }
+    });
+
+    // Cancella l'account Supabase Auth (dopo la transazione DB riuscita)
+    const supabaseAdmin = getSupabaseAdmin();
+    if (supabaseAdmin) {
+      try {
+        await supabaseAdmin.auth.admin.deleteUser(userId);
+        req.log.info({ userId }, "Supabase auth account deleted on self-delete");
+      } catch (err) {
+        req.log.warn({ err, userId }, "Failed to delete Supabase auth on self-delete (DB already cleaned)");
       }
     }
 
-    await db.delete(treeSunsTable).where(eq(treeSunsTable.userId, userId));
-    await db.delete(treeUpdatesTable).where(eq(treeUpdatesTable.userId, userId));
-    await db.delete(treesTable).where(eq(treesTable.userId, userId));
-
-    const userEvents = await db.select({ id: eventsTable.id }).from(eventsTable).where(eq(eventsTable.userId, userId));
-    for (const ev of userEvents) {
-      await db.delete(eventParticipantsTable).where(eq(eventParticipantsTable.eventId, ev.id));
-    }
-    await db.delete(eventParticipantsTable).where(eq(eventParticipantsTable.userId, userId));
-    await db.delete(eventsTable).where(eq(eventsTable.userId, userId));
-
-    await db.delete(donationCampaignsTable).where(eq(donationCampaignsTable.userId, userId));
-
-    await db.delete(weeklyWinnersTable).where(eq(weeklyWinnersTable.userId, userId));
-    await db.delete(problemReportsTable).where(eq(problemReportsTable.userId, userId));
-    await db.delete(userNotificationsTable).where(eq(userNotificationsTable.userId, userId));
-    await db.delete(userConsentsTable).where(eq(userConsentsTable.userId, userId));
-    await db.delete(cookieConsentsTable).where(eq(cookieConsentsTable.userId, userId));
-    await db.delete(reportsTable).where(eq(reportsTable.reporterUserId, userId));
-
-    const [user] = await db.select({ accountType: usersTable.accountType }).from(usersTable).where(eq(usersTable.clerkUserId, userId));
-    if (user?.accountType === "organization") {
-      const orgs = await db.select({ id: organizationsTable.id }).from(organizationsTable)
-        .where(eq(organizationsTable.emailUfficiale, userId));
-      for (const org of orgs) {
-        await db.delete(userConsentsTable).where(eq(userConsentsTable.userId, `org:${org.id}`));
-        await db.delete(organizationsTable).where(eq(organizationsTable.id, org.id));
-      }
-    }
-
-    await db.delete(usersTable).where(eq(usersTable.clerkUserId, userId));
-
+    req.log.info({ userId, username: targetUser.username }, "User self-deleted successfully");
     res.status(204).send();
   } catch (err) {
-    req.log.error({ err }, "Error deleting user account");
+    req.log.error({ err, userId }, "Error deleting user account — transaction rolled back");
     res.status(500).json({ error: "Internal server error" });
   }
 });
