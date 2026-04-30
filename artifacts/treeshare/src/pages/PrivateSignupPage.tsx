@@ -170,20 +170,22 @@ export default function PrivateSignupPage() {
       });
 
       if (data.user) {
-        if (!data.session) {
-          const { error: loginError } = await supabase.auth.signInWithPassword({
-            email: fields.email.trim(),
-            password: fields.password,
-          });
-          if (loginError) {
-            console.warn("[SignUp] Auto-login after signup failed:", loginError.message);
-          }
+        if (data.user.identities?.length === 0) {
+          // Email già registrata — Supabase restituisce user con identities vuote
+          setServerError(lang === "en"
+            ? "This email is already registered. Sign in or reset your password."
+            : "Questa email è già registrata. Accedi con le tue credenziali o recupera la password.");
+        } else if (!data.session) {
+          // Email confirmation required — mostra schermata "controlla la tua email"
+          setStep("verify");
+        } else {
+          // Confermato automaticamente (email confirmation disabilitata in Supabase)
+          const saved = await saveCity();
+          setProfileSaved(saved);
+          setStep("done");
         }
-
-        const saved = await saveCity();
-        setProfileSaved(saved);
-        setStep("done");
-      } else if (data.user?.identities?.length === 0) {
+      } else {
+        // data.user null — email già esistente in alcune configurazioni Supabase
         setServerError(lang === "en"
           ? "This email is already registered. Sign in or reset your password."
           : "Questa email è già registrata. Accedi con le tue credenziali o recupera la password.");

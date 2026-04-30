@@ -110,7 +110,13 @@ router.post("/register-ente", async (req, res) => {
       return;
     }
 
-    const allowedOrigin = process.env.APP_ORIGIN || (process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : "");
+    // Determina l'origine pubblica dell'app per il link di redirect nella email
+    const allowedOrigin =
+      process.env.APP_ORIGIN ||
+      (process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : "") ||
+      (process.env.REPLIT_DOMAINS ? `https://${process.env.REPLIT_DOMAINS.split(",")[0]!.trim()}` : "");
+
+    const redirectTo = allowedOrigin ? `${allowedOrigin}/feed` : undefined;
 
     const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
       email: data.emailUfficiale,
@@ -140,16 +146,45 @@ router.post("/register-ente", async (req, res) => {
       return;
     }
 
+    // Invia email di conferma via Supabase — generateLink per tipo "signup" triggera l'invio automatico
     const { error: linkError } = await supabaseAdmin.auth.admin.generateLink({
       type: "signup",
       email: data.emailUfficiale,
       options: {
-        redirectTo: `${allowedOrigin}/feed`,
+        ...(redirectTo ? { redirectTo } : {}),
       },
     });
 
     if (linkError) {
-      req.log?.warn?.({ err: linkError }, "Failed to generate verification link, user created but email not sent");
+      req.log?.warn?.({ err: linkError }, "generateLink fallito — tento resend via API Supabase");
+      // Secondo tentativo: usa il client Supabase per inviare un'email di resend
+      try {
+        const supabaseUrl = process.env.SUPABASE_URL!;
+        const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+        const resendRes = await fetch(`${supabaseUrl}/auth/v1/resend`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "apikey": serviceKey,
+            "Authorization": `Bearer ${serviceKey}`,
+          },
+          body: JSON.stringify({
+            type: "signup",
+            email: data.emailUfficiale,
+            ...(redirectTo ? { redirect_to: redirectTo } : {}),
+          }),
+        });
+        if (!resendRes.ok) {
+          const resendBody = await resendRes.text().catch(() => "");
+          req.log?.warn?.({ status: resendRes.status, body: resendBody }, "Resend API fallita — email di conferma non inviata");
+        } else {
+          req.log?.info?.("Email di conferma inviata via /auth/v1/resend");
+        }
+      } catch (resendErr) {
+        req.log?.warn?.({ err: resendErr }, "Errore durante il resend fallback");
+      }
+    } else {
+      req.log?.info?.("Email di conferma inviata via generateLink");
     }
 
     const supabaseUserId = authData.user.id;
@@ -260,12 +295,17 @@ router.post("/register-ente/resend-verification", async (req, res) => {
   }
 
   try {
-    const allowedOrigin = process.env.APP_ORIGIN || (process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : "");
+    const allowedOrigin =
+      process.env.APP_ORIGIN ||
+      (process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : "") ||
+      (process.env.REPLIT_DOMAINS ? `https://${process.env.REPLIT_DOMAINS.split(",")[0]!.trim()}` : "");
+    const redirectTo = allowedOrigin ? `${allowedOrigin}/feed` : undefined;
+
     const { error } = await supabaseAdmin.auth.admin.generateLink({
       type: "signup",
       email: trimmed,
       options: {
-        redirectTo: `${allowedOrigin}/feed`,
+        ...(redirectTo ? { redirectTo } : {}),
       },
     });
 
@@ -275,6 +315,27 @@ router.post("/register-ente/resend-verification", async (req, res) => {
         return;
       }
       req.log?.warn?.({ err: error }, "Resend verification link error");
+      // Fallback: REST API Supabase
+      const supabaseUrl = process.env.SUPABASE_URL!;
+      const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+      try {
+        const resendRes = await fetch(`${supabaseUrl}/auth/v1/resend`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "apikey": serviceKey,
+            "Authorization": `Bearer ${serviceKey}`,
+          },
+          body: JSON.stringify({
+            type: "signup",
+            email: trimmed,
+            ...(redirectTo ? { redirect_to: redirectTo } : {}),
+          }),
+        });
+        if (!resendRes.ok) {
+          req.log?.warn?.({ status: resendRes.status }, "Resend REST API fallback failed");
+        }
+      } catch { /* silent */ }
     }
 
     res.json({ ok: true });
