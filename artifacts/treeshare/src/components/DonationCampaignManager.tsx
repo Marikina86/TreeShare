@@ -692,6 +692,29 @@ export default function DonationCampaignManager({ accountType }: {
     if (!selectedPricing || !formTitle.trim() || !formDesc.trim()) return;
     setSaving(true);
     try {
+      // 100% discount → activate immediately, no payment needed
+      if (discountInfo && discountInfo.discountedCents === 0) {
+        const res = await authFetch("/api/donations/campaigns/activate-free", {
+          method: "POST",
+          body: JSON.stringify({
+            title: formTitle.trim(),
+            description: formDesc.trim(),
+            photos: formPhotos,
+            pricingId: selectedPricing,
+            discountCode: discountInfo.code,
+          }),
+        });
+        if (res.ok) {
+          toast({ title: lang === "it" ? "Campagna attivata gratuitamente!" : "Campaign activated for free!" });
+          resetForm();
+          queryClient.invalidateQueries({ queryKey: ["my-campaigns"] });
+        } else {
+          const err = await res.json().catch(() => ({}));
+          toast({ title: err.error || l.paymentError, variant: "destructive" });
+        }
+        return;
+      }
+
       if (!stripePromise) {
         const configRes = await fetch("/api/donations/campaigns/stripe-config");
         if (configRes.ok) {
@@ -1245,22 +1268,35 @@ export default function DonationCampaignManager({ accountType }: {
                   >
                     {l.back}
                   </button>
-                  <button
-                    type="button"
-                    onClick={handleGoToPayment}
-                    disabled={!selectedPricing || saving}
-                    className="flex-1 py-2.5 bg-emerald-600 text-white rounded-xl text-sm font-bold hover:bg-emerald-700 disabled:opacity-50"
-                  >
-                    {saving ? l.processing : l.payWithCard}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleGoToPaymentPayPal}
-                    disabled={!selectedPricing || saving}
-                    className="flex-1 py-2.5 bg-[#003087] text-white rounded-xl text-sm font-bold hover:bg-[#001f5c] disabled:opacity-50"
-                  >
-                    {saving ? l.processing : l.payWithPayPal}
-                  </button>
+                  {discountInfo && discountInfo.discountedCents === 0 ? (
+                    <button
+                      type="button"
+                      onClick={handleGoToPayment}
+                      disabled={!selectedPricing || saving}
+                      className="flex-1 py-2.5 bg-emerald-600 text-white rounded-xl text-sm font-bold hover:bg-emerald-700 disabled:opacity-50 flex items-center justify-center gap-2"
+                    >
+                      {saving ? l.processing : (lang === "it" ? "🎉 Attiva gratuitamente" : "🎉 Activate for free")}
+                    </button>
+                  ) : (
+                    <>
+                      <button
+                        type="button"
+                        onClick={handleGoToPayment}
+                        disabled={!selectedPricing || saving}
+                        className="flex-1 py-2.5 bg-emerald-600 text-white rounded-xl text-sm font-bold hover:bg-emerald-700 disabled:opacity-50"
+                      >
+                        {saving ? l.processing : l.payWithCard}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleGoToPaymentPayPal}
+                        disabled={!selectedPricing || saving}
+                        className="flex-1 py-2.5 bg-[#003087] text-white rounded-xl text-sm font-bold hover:bg-[#001f5c] disabled:opacity-50"
+                      >
+                        {saving ? l.processing : l.payWithPayPal}
+                      </button>
+                    </>
+                  )}
                 </div>
               </div>
             )}

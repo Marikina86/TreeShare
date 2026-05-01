@@ -661,6 +661,154 @@ router.post("/campaigns/initiate-payment", requireAuth, async (req, res) => {
   }
 });
 
+router.post("/campaigns/activate-free", requireAuth, async (req, res) => {
+  const userId = (req as AuthenticatedRequest).userId;
+  try {
+    const [user] = await db
+      .select({ accountType: usersTable.accountType })
+      .from(usersTable)
+      .where(eq(usersTable.clerkUserId, userId));
+
+    if (!user || user.accountType !== "organization") {
+      res.status(403).json({ error: "Only organizations can create campaigns" });
+      return;
+    }
+
+    const { title, description, photos, pricingId, discountCode } = req.body;
+    if (!title || !description) {
+      res.status(400).json({ error: "Title and description required" });
+      return;
+    }
+    if (typeof title !== "string" || title.trim().length === 0 || title.trim().length > 200) {
+      res.status(400).json({ error: "Title must be 1-200 characters" });
+      return;
+    }
+    if (typeof description !== "string" || description.trim().length === 0 || description.trim().length > 2000) {
+      res.status(400).json({ error: "Description must be 1-2000 characters" });
+      return;
+    }
+    if (Array.isArray(photos) && photos.length > MAX_CAMPAIGN_PHOTOS) {
+      res.status(400).json({ error: `Maximum ${MAX_CAMPAIGN_PHOTOS} photos allowed` });
+      return;
+    }
+    if (!pricingId) {
+      res.status(400).json({ error: "pricingId required" });
+      return;
+    }
+    if (!discountCode || typeof discountCode !== "string" || !discountCode.trim()) {
+      res.status(400).json({ error: "discountCode required for free activation" });
+      return;
+    }
+
+    const [pricing] = await db
+      .select()
+      .from(campaignPricingTable)
+      .where(
+        and(
+          eq(campaignPricingTable.id, Number(pricingId)),
+          eq(campaignPricingTable.isActive, true),
+        ),
+      );
+    if (!pricing) {
+      res.status(404).json({ error: "Pricing option not found" });
+      return;
+    }
+
+    const discountResult = await resolveDiscountCode(discountCode, userId, pricing.priceCents);
+    if ("error" in discountResult) {
+      res.status(discountResult.status).json({ error: discountResult.error });
+      return;
+    }
+    if (discountResult.finalCents !== 0) {
+      res.status(400).json({ error: "This endpoint is only for 100% discount codes" });
+      return;
+    }
+
+    const finalPhotos = normalizeCampaignPhotos(photos);
+    const userKey = `user:${userId}`;
+    const durationDays = pricing.durationDays;
+    const expiresAt = getRomeExpiryDate(durationDays);
+
+    const result = await db.transaction(async (tx) => {
+      const [alreadyUsed] = await tx
+        .select({ id: discountCodeUsesTable.id })
+        .from(discountCodeUsesTable)
+        .where(
+          and(
+            eq(discountCodeUsesTable.discountCodeId, discountResult.discountCodeId),
+            eq(discountCodeUsesTable.userKey, userKey),
+          ),
+        );
+      if (alreadyUsed) return { error: "discount_used" };
+
+      const [campaign] = await tx
+        .insert(donationCampaignsTable)
+        .values({
+          userId,
+          title: title.trim(),
+          description: description.trim(),
+          photos: finalPhotos,
+          isActive: true,
+          paymentStatus: "paid",
+          stripePaymentIntentId: `free_${Date.now()}`,
+          durationDays,
+          pricePaidCents: 0,
+          discountCodeId: discountResult.discountCodeId,
+          discountAppliedCents: discountResult.savedCents,
+          expiresAt,
+        })
+        .returning();
+
+      await tx.insert(discountCodeUsesTable).values({
+        discountCodeId: discountResult.discountCodeId,
+        userKey,
+        campaignId: campaign.id,
+      });
+      await tx
+        .update(discountCodesTable)
+        .set({ useCount: sql`${discountCodesTable.useCount} + 1` })
+        .where(eq(discountCodesTable.id, discountResult.discountCodeId));
+
+      await ensurePlatformRevenueRow(tx);
+      await tx
+        .update(platformRevenueTable)
+        .set({
+          transactionCount: sql`${platformRevenueTable.transactionCount} + 1`,
+          updatedAt: new Date(),
+        })
+        .where(eq(platformRevenueTable.id, 1));
+
+      const fiscalActivation = await fetchFiscalSnapshot(userId, tx);
+      await tx.insert(paymentLedgerTable).values({
+        type: "campaign_activation",
+        amountCents: 0,
+        paymentMethod: "discount_100",
+        userId,
+        ...fiscalActivation,
+        campaignId: campaign.id,
+        description: `Attivazione gratuita campagna (100% sconto): ${campaign.title}`,
+      });
+
+      return { success: true, campaignId: campaign.id };
+    });
+
+    if (!result.success) {
+      res.status(400).json({ error: result.error === "discount_used" ? "Hai già utilizzato questo codice sconto" : "Activation failed" });
+      return;
+    }
+
+    res.json({
+      campaignId: result.campaignId,
+      expiresAt: expiresAt.toISOString(),
+      durationDays,
+      savedCents: discountResult.savedCents,
+    });
+  } catch (err) {
+    req.log.error({ err }, "[campaigns] activate-free error");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 router.post("/campaigns/confirm-payment", requireAuth, async (req, res) => {
   const userId = (req as AuthenticatedRequest).userId;
   try {
