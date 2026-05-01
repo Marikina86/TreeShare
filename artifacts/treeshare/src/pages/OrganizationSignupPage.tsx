@@ -583,6 +583,9 @@ export default function OrganizationSignupPage() {
                 <Label htmlFor="emailUfficiale">
                   Email <span className="text-destructive">*</span>
                 </Label>
+                <p className="text-xs text-muted-foreground mb-1">
+                  Se sei un ente, società o associazione inserisci la <strong>PEC</strong>.
+                </p>
                 <Input
                   id="emailUfficiale"
                   type="email"
