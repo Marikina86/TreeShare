@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { useLocation, Link } from "wouter";
 import { useAuth } from "@/lib/auth";
 import { getListTreesQueryKey } from "@workspace/api-client-react";
@@ -6,7 +6,8 @@ import { useQueryClient } from "@tanstack/react-query";
 import Layout from "@/components/Layout";
 import { useToast } from "@/hooks/use-toast";
 import { useGps, getPlatformInstructions } from "@/hooks/useGps";
-import LocationSearch, { type LocationResult } from "@/components/LocationSearch";
+import CityAutocomplete from "@/components/CityAutocomplete";
+import { ITALIAN_PROVINCES } from "@/lib/italianProvinces";
 import { resizeToBlob, resizeToThumbnailBlob, resizeToBase64 } from "@/lib/imageUtils";
 
 type UploadState = "idle" | "uploading" | "done" | "error";
@@ -41,6 +42,52 @@ export default function PostPage() {
   const { permission: gpsPermission, requestPosition } = useGps();
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const gpsAutoRef = useRef(false);
+  const reverseGeoTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const reverseGeocode = useCallback(async (lat: number, lng: number) => {
+    try {
+      const r = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&accept-language=it`,
+        { headers: { "Accept-Language": "it" } },
+      );
+      if (!r.ok) return;
+      const data = await r.json();
+      if (!data.address) return;
+      const a = data.address;
+      const comune = a.city || a.town || a.village || a.municipality || a.hamlet || "";
+      const countryName = a.country || "";
+      if (comune) setLocationName(comune);
+      if (countryName) setCountry(countryName);
+      const rawProv = a.county || a.state_district || a.state || "";
+      const cleanedProv = rawProv
+        .replace(/^Provincia di /i, "")
+        .replace(/^Città metropolitana di /i, "")
+        .replace(/^Province of /i, "")
+        .trim();
+      const matched = ITALIAN_PROVINCES.find(
+        (p) => p.name.toLowerCase() === cleanedProv.toLowerCase(),
+      );
+      if (matched) setProvince(matched.code);
+    } catch { /* ignora */ }
+  }, []);
+
+  function handleLatChange(val: string) {
+    setLatitude(val);
+    const latN = parseFloat(val);
+    const lngN = parseFloat(longitude);
+    if (reverseGeoTimeout.current) clearTimeout(reverseGeoTimeout.current);
+    if (!isNaN(latN) && !isNaN(lngN))
+      reverseGeoTimeout.current = setTimeout(() => reverseGeocode(latN, lngN), 800);
+  }
+
+  function handleLonChange(val: string) {
+    setLongitude(val);
+    const latN = parseFloat(latitude);
+    const lngN = parseFloat(val);
+    if (reverseGeoTimeout.current) clearTimeout(reverseGeoTimeout.current);
+    if (!isNaN(latN) && !isNaN(lngN))
+      reverseGeoTimeout.current = setTimeout(() => reverseGeocode(latN, lngN), 800);
+  }
 
   // Auto-rileva GPS all'apertura della pagina se non ancora fornito
   useEffect(() => {
@@ -189,39 +236,8 @@ export default function PostPage() {
       const lng = gps.lng;
       setLatitude(lat.toFixed(6));
       setLongitude(lng.toFixed(6));
+      await reverseGeocode(lat, lng);
       setGpsState("done");
-
-      try {
-        const response = await fetch(
-          `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&accept-language=it`
-        );
-        const data = await response.json();
-        if (data.address) {
-          const city =
-            data.address.city ||
-            data.address.town ||
-            data.address.village ||
-            data.address.hamlet ||
-            "";
-          const countryName = data.address.country || "";
-          setLocationName(
-            city
-              ? `${city}, ${countryName}`
-              : data.display_name?.split(",").slice(0, 2).join(",").trim() || ""
-          );
-          setCountry(countryName);
-          // Extract Italian province (county) or region (state) for weekly winner feature
-          const rawProvince = data.address.county || data.address.state || "";
-          const cleanedProvince = rawProvince
-            .replace(/^Provincia di /i, "")
-            .replace(/^Città metropolitana di /i, "")
-            .replace(/^Province of /i, "")
-            .trim();
-          if (cleanedProvince) setProvince(cleanedProvince);
-        }
-      } catch {
-        // nominatim fallback — keep coordinates only
-      }
     } catch (err: unknown) {
       setGpsState("error");
       const msg = err instanceof Error ? err.message : "";
@@ -252,6 +268,14 @@ export default function PostPage() {
     }
     if (uploadState === "error") {
       toast({ title: "Errore", description: "La foto non è stata caricata correttamente. Riprova.", variant: "destructive" });
+      return;
+    }
+    if (!locationName.trim()) {
+      toast({ title: "Comune obbligatorio", description: "Indica il comune dove si trova la pianta.", variant: "destructive" });
+      return;
+    }
+    if (!province) {
+      toast({ title: "Provincia obbligatoria", description: "Seleziona la provincia della pianta.", variant: "destructive" });
       return;
     }
     // verifyState può essere "ok" o "pending" — entrambi consentono la pubblicazione
@@ -479,11 +503,11 @@ export default function PostPage() {
             />
           </div>
 
-          {/* Location — optional */}
+          {/* Location — obbligatorio */}
           <div>
             <div className="flex items-center justify-between mb-3">
               <label className="block text-sm font-medium text-foreground">
-                Posizione <span className="text-muted-foreground font-normal">(facoltativo)</span>
+                Posizione <span className="text-red-500">*</span>
               </label>
               <button
                 type="button"
@@ -538,7 +562,7 @@ export default function PostPage() {
                   type="number"
                   step="any"
                   value={latitude}
-                  onChange={(e) => setLatitude(e.target.value)}
+                  onChange={(e) => handleLatChange(e.target.value)}
                   placeholder="es. 41.9028"
                   className="w-full px-3 py-2 border border-border rounded-lg bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 text-sm"
                 />
@@ -550,47 +574,42 @@ export default function PostPage() {
                   type="number"
                   step="any"
                   value={longitude}
-                  onChange={(e) => setLongitude(e.target.value)}
+                  onChange={(e) => handleLonChange(e.target.value)}
                   placeholder="es. 12.4964"
                   className="w-full px-3 py-2 border border-border rounded-lg bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 text-sm"
                 />
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="col-span-2">
-                <label className="block text-xs text-muted-foreground mb-1">Nome luogo</label>
-                <LocationSearch
-                  value={locationName}
-                  onChange={setLocationName}
-                  onSelect={(r: LocationResult) => {
-                    setLocationName(r.city || r.displayName);
-                    setCountry(r.country);
-                    setLatitude(String(r.lat));
-                    setLongitude(String(r.lng));
-                    if (r.province) {
-                      const cleaned = r.province
-                        .replace(/^Provincia di /i, "")
-                        .replace(/^Città metropolitana di /i, "")
-                        .replace(/^Province of /i, "")
-                        .trim();
-                      if (cleaned) setProvince(cleaned);
-                    }
-                  }}
-                  placeholder="es. Villa Borghese, Roma..."
-                  className="w-full px-3 py-2 border border-border rounded-lg bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 text-sm"
-                />
-                <p className="text-xs text-muted-foreground mt-1">Digita per cercare un luogo — le coordinate si compileranno automaticamente.</p>
-              </div>
-              <div className="col-span-2">
-                <label htmlFor="country" className="block text-xs text-muted-foreground mb-1">Paese</label>
-                <input
-                  id="country"
-                  type="text"
-                  value={country}
-                  onChange={(e) => setCountry(e.target.value)}
-                  placeholder="es. Italia"
-                  className="w-full px-3 py-2 border border-border rounded-lg bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 text-sm"
-                />
+
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs text-muted-foreground mb-1">
+                  Comune <span className="text-red-500">*</span>
+                </label>
+                <div className="flex gap-2">
+                  <CityAutocomplete
+                    value={locationName}
+                    onChange={(city, prov) => {
+                      setLocationName(city);
+                      if (prov) setProvince(prov);
+                    }}
+                    placeholder="es. Roma, Milano, Napoli..."
+                    className="flex-1 px-3 py-2 border border-border rounded-lg bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 text-sm"
+                  />
+                  <select
+                    value={province}
+                    onChange={(e) => setProvince(e.target.value)}
+                    className="w-28 border border-border rounded-lg px-2 py-2 text-sm bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  >
+                    <option value="">Prov. *</option>
+                    {ITALIAN_PROVINCES.map((p) => (
+                      <option key={p.code} value={p.code}>{p.code} — {p.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Digita il comune — la provincia si suggerisce automaticamente. Puoi correggerla dal menu.
+                </p>
               </div>
             </div>
           </div>
