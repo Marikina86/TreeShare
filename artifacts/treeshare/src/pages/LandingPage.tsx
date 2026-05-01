@@ -369,6 +369,14 @@ export default function LandingPage() {
           © {new Date().getFullYear()} TreeShareapp — Tutti i diritti riservati.{" "}
           È vietata la riproduzione, distribuzione o modifica senza autorizzazione.
         </p>
+        <p className="text-xs">
+          <a
+            href="mailto:info@treeshareapp.com"
+            className="hover:text-primary transition-colors"
+          >
+            info@treeshareapp.com
+          </a>
+        </p>
       </footer>
     </div>
   );
