@@ -263,6 +263,8 @@ export const donationCampaignsTable = pgTable("donation_campaigns", {
   pricePaidCents: integer("price_paid_cents"),
   discountCodeId: integer("discount_code_id"),
   discountAppliedCents: integer("discount_applied_cents"),
+  comune: text("comune"),
+  provincia: text("provincia"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 }, (table) => [

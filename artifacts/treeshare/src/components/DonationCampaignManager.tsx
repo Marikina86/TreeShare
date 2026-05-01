@@ -24,6 +24,8 @@ interface Campaign {
   treesPlanted?: number;
   co2Kg?: number;
   createdAt: string;
+  comune?: string | null;
+  provincia?: string | null;
 }
 
 interface PricingOption {
@@ -92,6 +94,10 @@ const t = {
     removeDiscount: "Rimuovi",
     discountCodeError: "Codice sconto non valido",
     youSave: "Risparmi",
+    comuneLabel: "Comune",
+    provinciaLabel: "Provincia",
+    comunePlaceholder: "Es. Milano",
+    provinciaPlaceholder: "Es. MI",
   },
   en: {
     title: "My campaigns",
@@ -149,6 +155,10 @@ const t = {
     removeDiscount: "Remove",
     discountCodeError: "Invalid discount code",
     youSave: "You save",
+    comuneLabel: "Comune",
+    provinciaLabel: "Provincia",
+    comunePlaceholder: "e.g. Milan",
+    provinciaPlaceholder: "e.g. MI",
   },
 };
 
@@ -266,6 +276,8 @@ export default function DonationCampaignManager({ accountType }: {
   const [formStep, setFormStep] = useState<1 | 2 | 3>(1);
   const [formTitle, setFormTitle] = useState("");
   const [formDesc, setFormDesc] = useState("");
+  const [formComune, setFormComune] = useState("");
+  const [formProvincia, setFormProvincia] = useState("");
   const [formPhotos, setFormPhotos] = useState<string[]>([]);
   const [selectedPricing, setSelectedPricing] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
@@ -274,6 +286,8 @@ export default function DonationCampaignManager({ accountType }: {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editTitle, setEditTitle] = useState("");
   const [editDesc, setEditDesc] = useState("");
+  const [editComune, setEditComune] = useState("");
+  const [editProvincia, setEditProvincia] = useState("");
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [paymentIntentId, setPaymentIntentId] = useState<string | null>(null);
@@ -504,6 +518,8 @@ export default function DonationCampaignManager({ accountType }: {
         photos: formPhotos,
         pricingId: selectedPricing,
         discountCode: discountInfo ? discountInfo.code : undefined,
+        comune: formComune.trim() || undefined,
+        provincia: formProvincia.trim() || undefined,
       }),
     });
     if (!res.ok) {
@@ -646,6 +662,8 @@ export default function DonationCampaignManager({ accountType }: {
     setEditingId(c.id);
     setEditTitle(c.title);
     setEditDesc(c.description);
+    setEditComune(c.comune || "");
+    setEditProvincia(c.provincia || "");
   }
 
   async function handleSaveEdit(campaignId: number) {
@@ -656,6 +674,8 @@ export default function DonationCampaignManager({ accountType }: {
         body: JSON.stringify({
           title: editTitle,
           description: editDesc,
+          comune: editComune,
+          provincia: editProvincia,
         }),
       });
       if (res.ok) {
@@ -702,6 +722,8 @@ export default function DonationCampaignManager({ accountType }: {
             photos: formPhotos,
             pricingId: selectedPricing,
             discountCode: discountInfo.code,
+            comune: formComune.trim() || undefined,
+            provincia: formProvincia.trim() || undefined,
           }),
         });
         if (res.ok) {
@@ -735,6 +757,8 @@ export default function DonationCampaignManager({ accountType }: {
           photos: formPhotos,
           pricingId: selectedPricing,
           discountCode: discountInfo ? discountInfo.code : undefined,
+          comune: formComune.trim() || undefined,
+          provincia: formProvincia.trim() || undefined,
         }),
       });
 
@@ -779,6 +803,8 @@ export default function DonationCampaignManager({ accountType }: {
     setFormStep(1);
     setFormTitle("");
     setFormDesc("");
+    setFormComune("");
+    setFormProvincia("");
     setFormPhotos([]);
     setSelectedPricing(null);
     setClientSecret(null);
@@ -850,6 +876,21 @@ export default function DonationCampaignManager({ accountType }: {
                     rows={3}
                     className="w-full px-3 py-2 border border-border rounded-xl text-sm bg-background resize-none"
                   />
+                  <div className="flex gap-2">
+                    <input
+                      value={editComune}
+                      onChange={(e) => setEditComune(e.target.value)}
+                      placeholder={l.comunePlaceholder}
+                      className="flex-1 px-3 py-2 border border-border rounded-xl text-sm bg-background"
+                    />
+                    <input
+                      value={editProvincia}
+                      onChange={(e) => setEditProvincia(e.target.value)}
+                      placeholder={l.provinciaPlaceholder}
+                      maxLength={10}
+                      className="w-24 px-3 py-2 border border-border rounded-xl text-sm bg-background"
+                    />
+                  </div>
                   <div className="flex gap-2">
                     <button
                       type="button"
@@ -1101,6 +1142,21 @@ export default function DonationCampaignManager({ accountType }: {
                   rows={3}
                   className="w-full px-3 py-2 border border-border rounded-xl text-sm bg-background resize-none"
                 />
+                <div className="flex gap-2">
+                  <input
+                    value={formComune}
+                    onChange={(e) => setFormComune(e.target.value)}
+                    placeholder={l.comunePlaceholder}
+                    className="flex-1 px-3 py-2 border border-border rounded-xl text-sm bg-background"
+                  />
+                  <input
+                    value={formProvincia}
+                    onChange={(e) => setFormProvincia(e.target.value)}
+                    placeholder={l.provinciaPlaceholder}
+                    maxLength={10}
+                    className="w-24 px-3 py-2 border border-border rounded-xl text-sm bg-background"
+                  />
+                </div>
 
                 {formPhotos.length > 0 && (
                   <div className="flex gap-2 flex-wrap">

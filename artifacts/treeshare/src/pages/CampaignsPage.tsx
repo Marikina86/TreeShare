@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth";
@@ -19,6 +20,8 @@ interface Campaign {
   createdAt: string;
   orgUsername: string;
   orgPhotoUrl: string | null;
+  comune?: string | null;
+  provincia?: string | null;
 }
 
 const t = {
@@ -30,6 +33,9 @@ const t = {
     share: "Condividi",
     expiresOn: "Scade il",
     days: "giorni",
+    filterComune: "Cerca per comune",
+    filterProvincia: "Prov.",
+    clearFilters: "Rimuovi filtri",
   },
   en: {
     title: "Active campaigns",
@@ -39,6 +45,9 @@ const t = {
     share: "Share",
     expiresOn: "Expires on",
     days: "days",
+    filterComune: "Search by comune",
+    filterProvincia: "Prov.",
+    clearFilters: "Clear filters",
   },
   fr: {
     title: "Campagnes actives",
@@ -48,6 +57,9 @@ const t = {
     share: "Partager",
     expiresOn: "Expire le",
     days: "jours",
+    filterComune: "Rechercher par commune",
+    filterProvincia: "Prov.",
+    clearFilters: "Effacer les filtres",
   },
   pt: {
     title: "Campanhas ativas",
@@ -57,6 +69,9 @@ const t = {
     share: "Compartilhar",
     expiresOn: "Expira em",
     days: "dias",
+    filterComune: "Pesquisar por comune",
+    filterProvincia: "Prov.",
+    clearFilters: "Limpar filtros",
   },
   es: {
     title: "Campañas activas",
@@ -66,6 +81,9 @@ const t = {
     share: "Compartir",
     expiresOn: "Expira el",
     days: "días",
+    filterComune: "Buscar por comune",
+    filterProvincia: "Prov.",
+    clearFilters: "Quitar filtros",
   },
   ja: {
     title: "アクティブなキャンペーン",
@@ -75,6 +93,9 @@ const t = {
     share: "共有",
     expiresOn: "有効期限",
     days: "日",
+    filterComune: "コムーネで検索",
+    filterProvincia: "県",
+    clearFilters: "フィルタを解除",
   },
 };
 
@@ -85,29 +106,81 @@ export default function CampaignsPage() {
   const { lang } = useLang();
   const l = t[lang as Lang] || t.en;
   const { share } = useShare();
+  const [filterComune, setFilterComune] = useState("");
+  const [filterProvincia, setFilterProvincia] = useState("");
+  const [appliedComune, setAppliedComune] = useState("");
+  const [appliedProvincia, setAppliedProvincia] = useState("");
+
+  function applyFilters() {
+    setAppliedComune(filterComune.trim());
+    setAppliedProvincia(filterProvincia.trim());
+  }
+
+  function clearFilters() {
+    setFilterComune("");
+    setFilterProvincia("");
+    setAppliedComune("");
+    setAppliedProvincia("");
+  }
+
+  const hasActiveFilter = appliedComune || appliedProvincia;
 
   const { data: campaigns = [], isLoading: loading } = useQuery<Campaign[]>({
-    queryKey: ["campaigns-active"],
+    queryKey: ["campaigns-active", appliedComune, appliedProvincia],
     queryFn: async () => {
       const token = await getToken();
-      const res = await fetch(`/api/donations/campaigns/active`, {
+      const params = new URLSearchParams();
+      if (appliedComune) params.set("comune", appliedComune);
+      if (appliedProvincia) params.set("provincia", appliedProvincia);
+      const qs = params.toString();
+      const res = await fetch(`/api/donations/campaigns/active${qs ? `?${qs}` : ""}`, {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
       if (!res.ok) return [];
       return res.json();
     },
-    staleTime: Infinity,
-    refetchOnWindowFocus: false,
-    refetchOnMount: false,
-    refetchOnReconnect: false,
-    refetchInterval: false,
+    staleTime: 30_000,
   });
 
   return (
     <Layout>
       <div className="max-w-2xl mx-auto px-4 py-6">
-        <div className="flex items-center justify-between mb-5">
+        <div className="flex items-center justify-between mb-4">
           <h1 className="text-xl font-bold text-foreground">{l.title}</h1>
+        </div>
+
+        <div className="flex gap-2 mb-5">
+          <input
+            value={filterComune}
+            onChange={(e) => setFilterComune(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && applyFilters()}
+            placeholder={l.filterComune}
+            className="flex-1 px-3 py-2 border border-border rounded-xl text-sm bg-background"
+          />
+          <input
+            value={filterProvincia}
+            onChange={(e) => setFilterProvincia(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && applyFilters()}
+            placeholder={l.filterProvincia}
+            maxLength={10}
+            className="w-20 px-3 py-2 border border-border rounded-xl text-sm bg-background"
+          />
+          <button
+            onClick={applyFilters}
+            className="px-4 py-2 bg-primary text-primary-foreground rounded-xl text-sm font-medium hover:opacity-90"
+          >
+            <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+              <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+            </svg>
+          </button>
+          {hasActiveFilter && (
+            <button
+              onClick={clearFilters}
+              className="px-3 py-2 border border-border rounded-xl text-sm text-muted-foreground hover:bg-muted"
+            >
+              ✕
+            </button>
+          )}
         </div>
 
         {loading ? (
@@ -153,6 +226,15 @@ export default function CampaignsPage() {
                   <p className="text-sm text-muted-foreground line-clamp-2 mb-4">{c.description}</p>
 
                   <CampaignPhotoGrid photos={Array.isArray(c.photos) ? c.photos : []} className="mb-4" />
+
+                  {(c.comune || c.provincia) && (
+                    <div className="flex items-center gap-1 text-xs text-muted-foreground mb-2">
+                      <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" className="flex-shrink-0">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
+                      </svg>
+                      <span>{[c.comune, c.provincia].filter(Boolean).join(" — ")}</span>
+                    </div>
+                  )}
 
                   {c.expiresAt && (
                     <div className="flex items-center gap-4 text-xs text-muted-foreground mb-3">

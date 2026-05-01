@@ -10,7 +10,7 @@ import {
   discountCodeUsesTable,
   paymentLedgerTable,
 } from "@workspace/db";
-import { eq, and, desc, sql, gt, gte, lte, count } from "drizzle-orm";
+import { eq, and, desc, sql, gt, gte, lte, count, ilike } from "drizzle-orm";
 import { fetchFiscalSnapshot } from "../lib/fiscalSnapshot";
 import { computeDiscountedCents } from "./discountCodes";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth";
@@ -560,7 +560,7 @@ router.post("/campaigns/initiate-payment", requireAuth, async (req, res) => {
       return;
     }
 
-    const { title, description, photos, pricingId, discountCode } = req.body;
+    const { title, description, photos, pricingId, discountCode, comune, provincia } = req.body;
     if (!title || !description) {
       res.status(400).json({ error: "Title and description required" });
       return;
@@ -642,6 +642,8 @@ router.post("/campaigns/initiate-payment", requireAuth, async (req, res) => {
         pricePaidCents: finalPriceCents,
         discountCodeId: appliedDiscountCodeId,
         discountAppliedCents: discountAppliedCents > 0 ? discountAppliedCents : null,
+        comune: typeof comune === "string" && comune.trim() ? comune.trim() : null,
+        provincia: typeof provincia === "string" && provincia.trim() ? provincia.trim() : null,
       })
       .returning();
 
@@ -674,7 +676,7 @@ router.post("/campaigns/activate-free", requireAuth, async (req, res) => {
       return;
     }
 
-    const { title, description, photos, pricingId, discountCode } = req.body;
+    const { title, description, photos, pricingId, discountCode, comune, provincia } = req.body;
     if (!title || !description) {
       res.status(400).json({ error: "Title and description required" });
       return;
@@ -756,6 +758,8 @@ router.post("/campaigns/activate-free", requireAuth, async (req, res) => {
           discountCodeId: discountResult.discountCodeId,
           discountAppliedCents: discountResult.savedCents,
           expiresAt,
+          comune: typeof comune === "string" && comune.trim() ? comune.trim() : null,
+          provincia: typeof provincia === "string" && provincia.trim() ? provincia.trim() : null,
         })
         .returning();
 
@@ -881,7 +885,7 @@ router.post("/campaigns/initiate-payment-paypal", requireAuth, async (req, res) 
       return;
     }
 
-    const { title, description, photos, pricingId, discountCode } = req.body;
+    const { title, description, photos, pricingId, discountCode, comune, provincia } = req.body;
     if (!title || !description) {
       res.status(400).json({ error: "Title and description required" });
       return;
@@ -951,6 +955,8 @@ router.post("/campaigns/initiate-payment-paypal", requireAuth, async (req, res) 
         pricePaidCents: finalPriceCents,
         discountCodeId: appliedDiscountCodeId,
         discountAppliedCents: discountAppliedCents > 0 ? discountAppliedCents : null,
+        comune: typeof comune === "string" && comune.trim() ? comune.trim() : null,
+        provincia: typeof provincia === "string" && provincia.trim() ? provincia.trim() : null,
       })
       .returning();
 
@@ -1078,6 +1084,12 @@ router.patch("/campaigns/:campaignId", requireAuth, async (req, res) => {
         return;
       }
       updates.photos = photos;
+    }
+    if (req.body.comune !== undefined) {
+      updates.comune = typeof req.body.comune === "string" && req.body.comune.trim() ? req.body.comune.trim() : null;
+    }
+    if (req.body.provincia !== undefined) {
+      updates.provincia = typeof req.body.provincia === "string" && req.body.provincia.trim() ? req.body.provincia.trim() : null;
     }
 
     const [updated] = await db
@@ -1452,9 +1464,19 @@ router.post("/campaigns/webhook/paypal", async (req, res) => {
   }
 });
 
-router.get("/campaigns/active", async (_req, res) => {
+router.get("/campaigns/active", async (req, res) => {
   try {
     const now = new Date();
+    const filterComune = typeof req.query.comune === "string" && req.query.comune.trim() ? req.query.comune.trim() : null;
+    const filterProvincia = typeof req.query.provincia === "string" && req.query.provincia.trim() ? req.query.provincia.trim() : null;
+
+    const conditions = [
+      eq(donationCampaignsTable.isActive, true),
+      eq(donationCampaignsTable.paymentStatus, "paid"),
+      gt(donationCampaignsTable.expiresAt, now),
+      ...(filterComune ? [ilike(donationCampaignsTable.comune, `%${filterComune}%`)] : []),
+      ...(filterProvincia ? [ilike(donationCampaignsTable.provincia, `%${filterProvincia}%`)] : []),
+    ];
 
     const campaigns = await db
       .select({
@@ -1465,19 +1487,15 @@ router.get("/campaigns/active", async (_req, res) => {
         photos: donationCampaignsTable.photos,
         durationDays: donationCampaignsTable.durationDays,
         expiresAt: donationCampaignsTable.expiresAt,
+        comune: donationCampaignsTable.comune,
+        provincia: donationCampaignsTable.provincia,
         createdAt: donationCampaignsTable.createdAt,
         orgUsername: usersTable.username,
         orgPhotoUrl: usersTable.photoUrl,
       })
       .from(donationCampaignsTable)
       .innerJoin(usersTable, eq(donationCampaignsTable.userId, usersTable.clerkUserId))
-      .where(
-        and(
-          eq(donationCampaignsTable.isActive, true),
-          eq(donationCampaignsTable.paymentStatus, "paid"),
-          gt(donationCampaignsTable.expiresAt, now),
-        ),
-      )
+      .where(and(...conditions))
       .orderBy(desc(donationCampaignsTable.createdAt))
       .limit(50);
 
