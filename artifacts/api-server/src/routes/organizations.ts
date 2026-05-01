@@ -5,6 +5,7 @@ import { db } from "@workspace/db";
 import { organizationsTable, registerEnteSchema, userConsentsTable, policiesTable, usersTable, bannedEmailsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth";
+import { sendEmail } from "../lib/email";
 
 const router = Router();
 
@@ -143,7 +144,7 @@ router.post("/register-ente", async (req, res) => {
       indirizzoCap: data.indirizzoCap,
       indirizzoStato: data.indirizzoStato,
       emailUfficiale: data.emailUfficiale,
-      pec: data.pec ?? null,
+      pec: data.pec,
       telefono: data.telefono ?? "",
       referenteNome: data.referenteNome,
       referenteCognome: data.referenteCognome,
@@ -188,39 +189,60 @@ router.post("/register-ente", async (req, res) => {
       return;
     }
 
-    // Invia email di conferma via /auth/v1/resend
-    // (generateLink genera solo il token senza spedire la mail;
-    //  /auth/v1/resend usa l'SMTP configurato in Supabase — Hostinger)
+    // Genera link di conferma e invia alla PEC
     const allowedOrigin = getAppOrigin();
     const redirectTo = allowedOrigin ? `${allowedOrigin}/register-ente/activate` : undefined;
 
-    const supabaseUrl = process.env.SUPABASE_URL!;
-    const anonKey = (process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY)!;
-    const resendUrl = redirectTo
-      ? `${supabaseUrl}/auth/v1/resend?redirect_to=${encodeURIComponent(redirectTo)}`
-      : `${supabaseUrl}/auth/v1/resend`;
-
-    const resendRes = await fetch(resendUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        apikey: anonKey,
-        Authorization: `Bearer ${anonKey}`,
-      },
-      body: JSON.stringify({ type: "signup", email: data.emailUfficiale }),
+    const { data: linkData, error: linkErr } = await supabaseAdmin.auth.admin.generateLink({
+      type: "signup",
+      email: data.emailUfficiale,
+      options: redirectTo ? { redirectTo } : {},
     });
 
-    if (!resendRes.ok) {
-      const body = await resendRes.text().catch(() => "");
-      req.log?.warn?.({ status: resendRes.status, body }, "Invio email conferma ente fallito");
+    if (linkErr || !linkData?.properties?.action_link) {
+      req.log?.warn?.({ err: linkErr }, "generateLink fallito per ente — fallback resend Supabase");
+      // Fallback: resend Supabase standard (invia all'emailUfficiale)
+      const supabaseUrl = process.env.SUPABASE_URL!;
+      const anonKey = (process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY)!;
+      const resendUrl = redirectTo
+        ? `${supabaseUrl}/auth/v1/resend?redirect_to=${encodeURIComponent(redirectTo)}`
+        : `${supabaseUrl}/auth/v1/resend`;
+      await fetch(resendUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", apikey: anonKey, Authorization: `Bearer ${anonKey}` },
+        body: JSON.stringify({ type: "signup", email: data.emailUfficiale }),
+      });
     } else {
-      req.log?.info?.("Email di conferma ente inviata");
+      const verificationUrl = linkData.properties.action_link;
+      const pecTo = data.pec!;
+      const { sent, error: mailErr } = await sendEmail(
+        pecTo,
+        "TreeShare — Conferma la registrazione del tuo ente",
+        `<div style="font-family:sans-serif;max-width:520px;margin:0 auto">
+          <h2 style="color:#166534">Benvenuto su TreeShare</h2>
+          <p>Clicca sul pulsante qui sotto per confermare la registrazione del tuo ente e attivare il profilo.</p>
+          <p style="margin:24px 0">
+            <a href="${verificationUrl}" style="background:#16a34a;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600">
+              Conferma registrazione
+            </a>
+          </p>
+          <p style="color:#6b7280;font-size:13px">Il link è valido per 24 ore. Se non hai richiesto questa registrazione, ignora questa email.</p>
+          <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0"/>
+          <p style="color:#9ca3af;font-size:12px">TreeShare — Piattaforma per la gestione e monitoraggio delle piantumazioni</p>
+        </div>`,
+      );
+      if (sent) {
+        req.log?.info?.({ pecTo }, "Email di conferma ente inviata alla PEC");
+      } else {
+        req.log?.warn?.({ mailErr }, "Invio email PEC fallito — il link è stato generato ma non spedito");
+      }
     }
 
     // Risposta: nessun DB record creato. Il profilo viene creato su /activate.
     res.status(201).json({
       emailVerificationRequired: true,
       email: data.emailUfficiale,
+      pec: data.pec,
     });
   } catch (err) {
     req.log?.error?.({ err }, "Error registering organization");
@@ -308,6 +330,7 @@ router.post("/register-ente/activate", requireAuth, async (req, res) => {
           indirizzoCap: pendingOrg.indirizzoCap as string,
           indirizzoStato: pendingOrg.indirizzoStato as string,
           emailUfficiale: pendingOrg.emailUfficiale as string,
+          pec: (pendingOrg.pec as string | null) ?? null,
           telefono: (pendingOrg.telefono as string) ?? "",
           referenteNome: (pendingOrg.referenteNome as string) ?? "",
           referenteCognome: (pendingOrg.referenteCognome as string) ?? "",
@@ -360,13 +383,14 @@ router.post("/register-ente/activate", requireAuth, async (req, res) => {
 // POST /api/register-ente/resend-verification
 // ---------------------------------------------------------------------------
 router.post("/register-ente/resend-verification", async (req, res) => {
-  const { email } = req.body || {};
+  const { email, pec } = req.body || {};
   if (!email || typeof email !== "string") {
     res.status(400).json({ error: "Email obbligatoria" });
     return;
   }
 
-  const trimmed = email.trim();
+  const trimmedEmail = email.trim();
+  const trimmedPec = typeof pec === "string" ? pec.trim() : null;
 
   const supabaseAdmin = getSupabaseAdmin();
   if (!supabaseAdmin) {
@@ -378,6 +402,41 @@ router.post("/register-ente/resend-verification", async (req, res) => {
     const allowedOrigin = getAppOrigin();
     const redirectTo = allowedOrigin ? `${allowedOrigin}/register-ente/activate` : undefined;
 
+    // Se abbiamo la PEC, generiamo il link e lo inviamo alla PEC via SMTP
+    if (trimmedPec) {
+      const { data: linkData, error: linkErr } = await supabaseAdmin.auth.admin.generateLink({
+        type: "signup",
+        email: trimmedEmail,
+        options: redirectTo ? { redirectTo } : {},
+      });
+
+      if (!linkErr && linkData?.properties?.action_link) {
+        const verificationUrl = linkData.properties.action_link;
+        const { sent } = await sendEmail(
+          trimmedPec,
+          "TreeShare — Conferma la registrazione del tuo ente",
+          `<div style="font-family:sans-serif;max-width:520px;margin:0 auto">
+            <h2 style="color:#166534">Conferma la registrazione</h2>
+            <p>Clicca sul pulsante qui sotto per confermare la registrazione del tuo ente su TreeShare.</p>
+            <p style="margin:24px 0">
+              <a href="${verificationUrl}" style="background:#16a34a;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600">
+                Conferma registrazione
+              </a>
+            </p>
+            <p style="color:#6b7280;font-size:13px">Il link è valido per 24 ore.</p>
+            <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0"/>
+            <p style="color:#9ca3af;font-size:12px">TreeShare — Piattaforma per la gestione e monitoraggio delle piantumazioni</p>
+          </div>`,
+        );
+        if (sent) {
+          res.json({ ok: true });
+          return;
+        }
+        req.log?.warn?.("Resend PEC SMTP fallito — fallback a Supabase resend");
+      }
+    }
+
+    // Fallback: resend Supabase standard (invia all'emailUfficiale)
     const supabaseUrl = process.env.SUPABASE_URL!;
     const anonKey = (process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY)!;
     const resendUrl = redirectTo
@@ -386,12 +445,8 @@ router.post("/register-ente/resend-verification", async (req, res) => {
 
     const resendRes = await fetch(resendUrl, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        apikey: anonKey,
-        Authorization: `Bearer ${anonKey}`,
-      },
-      body: JSON.stringify({ type: "signup", email: trimmed }),
+      headers: { "Content-Type": "application/json", apikey: anonKey, Authorization: `Bearer ${anonKey}` },
+      body: JSON.stringify({ type: "signup", email: trimmedEmail }),
     });
 
     if (resendRes.status === 429) {
@@ -402,7 +457,7 @@ router.post("/register-ente/resend-verification", async (req, res) => {
     if (!resendRes.ok) {
       const body = await resendRes.text().catch(() => "");
       req.log?.warn?.({ status: resendRes.status, body }, "Resend email verifica ente fallito");
-      res.status(500).json({ error: "Errore nell'invio dell'email. Riprova." });
+      res.status(500).json({ error: "Errore nell'invio. Riprova." });
       return;
     }
 

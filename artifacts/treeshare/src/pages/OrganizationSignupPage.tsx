@@ -178,6 +178,7 @@ export default function OrganizationSignupPage() {
   const [acceptTerms, setAcceptTerms] = useState(false);
   const [consentErrors, setConsentErrors] = useState<{ privacy?: string; terms?: string }>({});
   const [verifiedEmail, setVerifiedEmail] = useState("");
+  const [verifiedPec, setVerifiedPec] = useState("");
   const [resending, setResending] = useState(false);
   const [resendMsg, setResendMsg] = useState<string | null>(null);
   const [verifyError, setVerifyError] = useState<string | null>(null);
@@ -239,8 +240,9 @@ export default function OrganizationSignupPage() {
         return;
       }
 
-      // Registrazione completata — mostra schermata "controlla email"
+      // Registrazione completata — mostra schermata "controlla PEC"
       setVerifiedEmail(data.emailUfficiale);
+      setVerifiedPec((json as { pec?: string }).pec ?? data.pec ?? "");
       setStep("verify");
     } catch {
       setServerError("Impossibile contattare il server. Riprova più tardi.");
@@ -254,31 +256,17 @@ export default function OrganizationSignupPage() {
     setResendMsg(null);
     setVerifyError(null);
     try {
-      const appOrigin = (() => {
-        const domains = __REPLIT_DOMAINS__?.split(",").filter(Boolean);
-        if (domains?.length) return `https://${domains[0]!.trim()}`;
-        if (__REPLIT_DEV_DOMAIN__) return `https://${__REPLIT_DEV_DOMAIN__}`;
-        return window.location.origin;
-      })();
-
-      const { error } = await supabase.auth.resend({
-        type: "signup",
-        email: verifiedEmail.trim(),
-        options: { emailRedirectTo: `${appOrigin}/feed` },
+      const res = await fetch("/api/register-ente/resend-verification", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: verifiedEmail.trim(), pec: verifiedPec.trim() }),
       });
-      if (error) {
-        const res = await fetch("/api/register-ente/resend-verification", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email: verifiedEmail.trim() }),
-        });
-        if (!res.ok) {
-          const json = await res.json().catch(() => ({}));
-          setVerifyError((json as { error?: string }).error || "Errore nell'invio dell'email.");
-          return;
-        }
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        setVerifyError((json as { error?: string }).error || "Errore nell'invio.");
+        return;
       }
-      setResendMsg("Email rinviata! Controlla la tua casella di posta (anche lo spam).");
+      setResendMsg("Link inviato alla PEC! Controlla la tua casella (anche lo spam).");
     } catch {
       setVerifyError("Errore nell'invio dell'email. Riprova.");
     } finally {
@@ -296,10 +284,10 @@ export default function OrganizationSignupPage() {
                 <Leaf className="h-7 w-7" />
               </div>
             </div>
-            <h1 className="text-2xl font-bold mb-1">Controlla la tua email</h1>
+            <h1 className="text-2xl font-bold mb-1">Controlla la tua PEC</h1>
             <p className="text-sm text-muted-foreground mt-2">
-              Abbiamo inviato un link di verifica a{" "}
-              <strong className="text-foreground">{verifiedEmail}</strong>
+              Abbiamo inviato il link di verifica alla PEC{" "}
+              <strong className="text-foreground">{verifiedPec || verifiedEmail}</strong>
             </p>
           </div>
 
@@ -320,11 +308,11 @@ export default function OrganizationSignupPage() {
             <div className="bg-muted/50 border border-border rounded-xl p-5 space-y-3">
               <div className="flex items-start gap-3">
                 <div className="flex items-center justify-center w-7 h-7 rounded-full bg-primary/10 text-primary text-sm font-bold shrink-0 mt-0.5">1</div>
-                <p className="text-sm text-foreground">Apri l'email che ti abbiamo appena inviato</p>
+                <p className="text-sm text-foreground">Apri la PEC che ti abbiamo appena inviato</p>
               </div>
               <div className="flex items-start gap-3">
                 <div className="flex items-center justify-center w-7 h-7 rounded-full bg-primary/10 text-primary text-sm font-bold shrink-0 mt-0.5">2</div>
-                <p className="text-sm text-foreground">Clicca sul link di conferma nell'email per attivare il profilo</p>
+                <p className="text-sm text-foreground">Clicca sul link di conferma nella PEC per attivare il profilo</p>
               </div>
               <div className="flex items-start gap-3">
                 <div className="flex items-center justify-center w-7 h-7 rounded-full bg-primary/10 text-primary text-sm font-bold shrink-0 mt-0.5">3</div>
@@ -333,7 +321,7 @@ export default function OrganizationSignupPage() {
             </div>
 
             <p className="text-xs text-muted-foreground text-center">
-              Non trovi l'email? Controlla la cartella spam o posta indesiderata.
+              Non trovi la PEC? Controlla la cartella spam o la posta indesiderata.
             </p>
 
             <button
@@ -352,7 +340,7 @@ export default function OrganizationSignupPage() {
               {resending && (
                 <div className="w-3 h-3 border-2 border-primary border-t-transparent rounded-full animate-spin" />
               )}
-              Rinvia email di verifica
+              Rinvia link alla PEC
             </button>
 
             <button
