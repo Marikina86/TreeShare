@@ -117,52 +117,88 @@ export default function PrivateSignupPage() {
     } catch { /* non bloccare il signup se il check fallisce */ }
 
     try {
-      // Crea l'account via backend (admin API, email già confermata)
-      const signupRes = await fetch("/api/auth/signup-user", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email: fields.email.trim(),
-          password: fields.password,
-          nome: fields.nome.trim(),
-          cognome: fields.cognome.trim(),
-        }),
+      const appOrigin = (() => {
+        const domains = __REPLIT_DOMAINS__?.split(",").filter(Boolean);
+        if (domains?.length) return `https://${domains[0]!.trim()}`;
+        if (__REPLIT_DEV_DOMAIN__) return `https://${__REPLIT_DEV_DOMAIN__}`;
+        return window.location.origin;
+      })();
+
+      const userMeta = {
+        first_name: fields.nome.trim(),
+        last_name: fields.cognome.trim(),
+        username: `${fields.nome.trim()}_${fields.cognome.trim()}`
+          .toLowerCase()
+          .replace(/\s+/g, "_")
+          .replace(/[^a-z0-9_.-]/g, "")
+          .slice(0, 30) || "user",
+      };
+
+      let { data, error } = await supabase.auth.signUp({
+        email: fields.email.trim(),
+        password: fields.password,
+        options: {
+          emailRedirectTo: `${appOrigin}/feed`,
+          data: userMeta,
+        },
       });
 
-      if (!signupRes.ok) {
-        const body = await signupRes.json().catch(() => ({})) as { error?: string };
-        const msg = (body.error ?? "").toLowerCase();
-        if (signupRes.status === 409 || msg.includes("già registrata") || msg.includes("already")) {
+      // Se Supabase rifiuta il redirect URL, ritenta senza
+      const isRedirectError = error && (
+        error.message.toLowerCase().includes("redirect") ||
+        error.message.toLowerCase().includes("not allowed") ||
+        error.message.toLowerCase().includes("invalid url") ||
+        (error.status === 422 && error.message.toLowerCase().includes("url"))
+      );
+      if (isRedirectError) {
+        const retry = await supabase.auth.signUp({
+          email: fields.email.trim(),
+          password: fields.password,
+          options: { data: userMeta },
+        });
+        data = retry.data;
+        error = retry.error;
+      }
+
+      if (error) {
+        const msg = error.message.toLowerCase();
+        if (msg.includes("already registered") || msg.includes("already been registered") || (error as { code?: string }).code === "user_already_exists") {
           setServerError(lang === "en"
             ? "This email is already registered. Sign in or reset your password."
             : "Questa email è già registrata. Accedi con le tue credenziali o recupera la password.");
-        } else if (signupRes.status === 403) {
+        } else if (msg.includes("password")) {
           setServerError(lang === "en"
-            ? "This account has been suspended. Please contact support."
-            : "Questo account è stato sospeso. Contatta l'assistenza.");
+            ? "Password does not meet security requirements."
+            : "La password non soddisfa i requisiti di sicurezza.");
+        } else if (msg.includes("rate") || msg.includes("limit") || msg.includes("too many")) {
+          setServerError(lang === "en"
+            ? "Too many attempts. Wait a moment and try again."
+            : "Troppi tentativi. Attendi un momento e riprova.");
         } else {
-          setServerError(body.error ?? (lang === "en" ? "Registration failed. Try again." : "Registrazione non riuscita. Riprova."));
+          setServerError(lang === "en" ? "Registration failed. Try again." : "Registrazione non riuscita. Riprova.");
         }
         return;
       }
 
-      // Effettua il login automatico
-      const { data: loginData, error: loginError } = await supabase.auth.signInWithPassword({
-        email: fields.email.trim(),
-        password: fields.password,
-      });
-
-      if (loginError || !loginData.session) {
+      if (data.user) {
+        if (data.user.identities?.length === 0) {
+          setServerError(lang === "en"
+            ? "This email is already registered. Sign in or reset your password."
+            : "Questa email è già registrata. Accedi con le tue credenziali o recupera la password.");
+        } else if (!data.session) {
+          // Email di conferma inviata — mostra schermata verifica
+          setStep("verify");
+        } else {
+          // Email confirmation disabilitata — accesso diretto
+          const saved = await saveCity();
+          setProfileSaved(saved);
+          setStep("done");
+        }
+      } else {
         setServerError(lang === "en"
-          ? "Account created! Sign in to continue."
-          : "Account creato! Accedi per continuare.");
-        setStep("done");
-        return;
+          ? "This email is already registered. Sign in or reset your password."
+          : "Questa email è già registrata. Accedi con le tue credenziali o recupera la password.");
       }
-
-      const saved = await saveCity();
-      setProfileSaved(saved);
-      setStep("done");
     } catch {
       setServerError(lang === "en" ? "Registration failed. Try again." : "Errore durante la registrazione. Riprova.");
     } finally {

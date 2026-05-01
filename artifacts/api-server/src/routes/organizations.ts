@@ -122,7 +122,7 @@ router.post("/register-ente", async (req, res) => {
     const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
       email: data.emailUfficiale,
       password: data.password,
-      email_confirm: true,
+      email_confirm: false,
       user_metadata: {
         username: resolvedUsername,
         full_name: fullName,
@@ -145,6 +145,44 @@ router.post("/register-ente", async (req, res) => {
     if (!authData.user) {
       res.status(500).json({ error: "Errore nella creazione dell'account" });
       return;
+    }
+
+    // Invia email di conferma tramite generateLink (usa l'SMTP configurato in Supabase)
+    const { error: linkError } = await supabaseAdmin.auth.admin.generateLink({
+      type: "signup",
+      email: data.emailUfficiale,
+      options: { ...(redirectTo ? { redirectTo } : {}) },
+    });
+
+    if (linkError) {
+      req.log?.warn?.({ err: linkError }, "generateLink fallito — tento resend via /auth/v1/resend");
+      try {
+        const supabaseUrl = process.env.SUPABASE_URL!;
+        const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+        const resendRes = await fetch(`${supabaseUrl}/auth/v1/resend`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "apikey": serviceKey,
+            "Authorization": `Bearer ${serviceKey}`,
+          },
+          body: JSON.stringify({
+            type: "signup",
+            email: data.emailUfficiale,
+            ...(redirectTo ? { redirect_to: redirectTo } : {}),
+          }),
+        });
+        if (!resendRes.ok) {
+          const body = await resendRes.text().catch(() => "");
+          req.log?.warn?.({ status: resendRes.status, body }, "Resend API fallita");
+        } else {
+          req.log?.info?.("Email di conferma inviata via /auth/v1/resend");
+        }
+      } catch (resendErr) {
+        req.log?.warn?.({ err: resendErr }, "Errore resend fallback");
+      }
+    } else {
+      req.log?.info?.("Email di conferma inviata via generateLink");
     }
 
     const supabaseUserId = authData.user.id;
