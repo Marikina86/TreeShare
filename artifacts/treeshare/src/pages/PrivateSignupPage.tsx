@@ -132,13 +132,18 @@ export default function PrivateSignupPage() {
           .replace(/\s+/g, "_")
           .replace(/[^a-z0-9_.-]/g, "")
           .slice(0, 30) || "user",
+        // Salva città e provincia nei metadati: verranno letti dalla pagina di attivazione
+        city: fields.citta.trim() || null,
+        province: fields.provincia.trim() || null,
       };
+
+      const activateUrl = `${appOrigin}/register-privato/activate`;
 
       let { data, error } = await supabase.auth.signUp({
         email: fields.email.trim(),
         password: fields.password,
         options: {
-          emailRedirectTo: `${appOrigin}/feed`,
+          emailRedirectTo: activateUrl,
           data: userMeta,
         },
       });
@@ -222,7 +227,7 @@ export default function PrivateSignupPage() {
         type: "signup",
         email: fields.email.trim(),
         options: {
-          emailRedirectTo: `${appOrigin}/feed`,
+          emailRedirectTo: `${appOrigin}/register-privato/activate`,
         },
       });
       if (error) {
@@ -376,8 +381,8 @@ export default function PrivateSignupPage() {
                 <div className="flex items-center justify-center w-7 h-7 rounded-full bg-primary/10 text-primary text-sm font-bold shrink-0 mt-0.5">3</div>
                 <p className="text-sm text-foreground">
                   {lang === "en"
-                    ? "Come back here and sign in"
-                    : "Torna qui e accedi con le tue credenziali"}
+                    ? "Your profile will be created automatically and you'll be redirected"
+                    : "Il tuo profilo verrà creato automaticamente e sarai reindirizzato"}
                 </p>
               </div>
             </div>

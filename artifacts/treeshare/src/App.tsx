@@ -34,6 +34,7 @@ import CreateAdoptableTreePage from "@/pages/CreateAdoptableTreePage";
 import OrgAdoptionsPage from "@/pages/OrgAdoptionsPage";
 import ResetPasswordPage from "@/pages/ResetPasswordPage";
 import RegisterEnteActivatePage from "@/pages/RegisterEnteActivatePage";
+import RegisterPrivatoActivatePage from "@/pages/RegisterPrivatoActivatePage";
 import NotFound from "@/pages/not-found";
 import InstallPrompt from "@/components/InstallPrompt";
 
@@ -187,6 +188,7 @@ function AuthProviderWithRoutes() {
             <Route path="/cookies" component={CookiePage} />
             <Route path="/register" component={RegisterChoicePage} />
             <Route path="/register-privato" component={PrivateSignupPage} />
+            <Route path="/register-privato/activate" component={RegisterPrivatoActivatePage} />
             <Route path="/register-ente" component={OrganizationSignupPage} />
             <Route path="/register-ente/activate" component={RegisterEnteActivatePage} />
             <Route component={NotFound} />
