@@ -65,7 +65,7 @@ export default function SignInPage() {
       const { error } = await supabase.auth.resend({
         type: "signup",
         email: email.trim(),
-        options: { emailRedirectTo: `${window.location.origin}/feed` },
+        options: { emailRedirectTo: `${getAppOrigin()}/feed` },
       });
       if (error) {
         const res = await fetch("/api/register-ente/resend-verification", {
@@ -90,12 +90,19 @@ export default function SignInPage() {
     }
   }
 
+  function getAppOrigin() {
+    const domains = __REPLIT_DOMAINS__?.split(",").filter(Boolean);
+    if (domains?.length) return `https://${domains[0]!.trim()}`;
+    if (__REPLIT_DEV_DOMAIN__) return `https://${__REPLIT_DEV_DOMAIN__}`;
+    return window.location.origin;
+  }
+
   async function handleResetPassword(e: React.FormEvent) {
     e.preventDefault();
     setResetError(null);
     setResetLoading(true);
     try {
-      const redirectUrl = `${window.location.origin}/reset-password`;
+      const redirectUrl = `${getAppOrigin()}/reset-password`;
       const { error: resetErr } = await supabase.auth.resetPasswordForEmail(resetEmail.trim(), {
         redirectTo: redirectUrl,
       });
