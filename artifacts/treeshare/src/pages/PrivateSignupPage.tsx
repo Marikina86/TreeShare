@@ -1,7 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { Link, useLocation } from "wouter";
-import { supabase } from "@/lib/supabase";
-import { useAuth } from "@/lib/auth";
+import { Link } from "wouter";
 import { ArrowLeft, User, Eye, EyeOff, Leaf, AlertCircle, CheckCircle2 } from "lucide-react";
 import { useLang } from "@/lib/i18n";
 import CityAutocomplete from "@/components/CityAutocomplete";
@@ -32,12 +30,9 @@ function getPasswordStrength(pw: string) {
 }
 
 export default function PrivateSignupPage() {
-  const { getToken } = useAuth();
-  const [, setLocation] = useLocation();
   const { lang } = useLang();
 
-  const [step, setStep] = useState<"form" | "verify" | "done">("form");
-  const [profileSaved, setProfileSaved] = useState(false);
+  const [step, setStep] = useState<"form" | "verify">("form");
   const [submitting, setSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -45,6 +40,8 @@ export default function PrivateSignupPage() {
   const [resending, setResending] = useState(false);
   const [resendMsg, setResendMsg] = useState<string | null>(null);
   const [verifyError, setVerifyError] = useState<string | null>(null);
+  // Salva l'email per il reinvio
+  const [registeredEmail, setRegisteredEmail] = useState("");
 
   const [fields, setFields] = useState({
     nome: "",
@@ -96,114 +93,42 @@ export default function PrivateSignupPage() {
     setServerError(null);
 
     try {
-      // Verifica se l'email è stata bannata (account eliminato o bloccato dall'admin)
-      const bannedRes = await fetch(`/api/auth/banned?email=${encodeURIComponent(fields.email.trim().toLowerCase())}`);
-      if (bannedRes.ok) {
-        const bannedData = await bannedRes.json();
-        if (bannedData.banned) {
-          setServerError(
-            bannedData.reason === "deleted"
-              ? (lang === "en"
-                  ? "This email address cannot be used to create an account."
-                  : "Questo indirizzo email non può essere utilizzato per registrarsi.")
-              : (lang === "en"
-                  ? "This account has been suspended. Please contact support."
-                  : "Questo account è stato sospeso. Contatta l'assistenza.")
-          );
-          setSubmitting(false);
-          return;
-        }
-      }
-    } catch { /* non bloccare il signup se il check fallisce */ }
-
-    try {
-      const appOrigin = (() => {
-        const domains = __REPLIT_DOMAINS__?.split(",").filter(Boolean);
-        if (domains?.length) return `https://${domains[0]!.trim()}`;
-        if (__REPLIT_DEV_DOMAIN__) return `https://${__REPLIT_DEV_DOMAIN__}`;
-        return window.location.origin;
-      })();
-
-      const userMeta = {
-        first_name: fields.nome.trim(),
-        last_name: fields.cognome.trim(),
-        username: `${fields.nome.trim()}_${fields.cognome.trim()}`
-          .toLowerCase()
-          .replace(/\s+/g, "_")
-          .replace(/[^a-z0-9_.-]/g, "")
-          .slice(0, 30) || "user",
-        // Salva città e provincia nei metadati: verranno letti dalla pagina di attivazione
-        city: fields.citta.trim() || null,
-        province: fields.provincia.trim() || null,
-      };
-
-      const activateUrl = `${appOrigin}/register-privato/activate`;
-
-      let { data, error } = await supabase.auth.signUp({
-        email: fields.email.trim(),
-        password: fields.password,
-        options: {
-          emailRedirectTo: activateUrl,
-          data: userMeta,
-        },
-      });
-
-      // Se Supabase rifiuta il redirect URL, ritenta senza
-      const isRedirectError = error && (
-        error.message.toLowerCase().includes("redirect") ||
-        error.message.toLowerCase().includes("not allowed") ||
-        error.message.toLowerCase().includes("invalid url") ||
-        (error.status === 422 && error.message.toLowerCase().includes("url"))
-      );
-      if (isRedirectError) {
-        const retry = await supabase.auth.signUp({
+      // Registrazione via backend — usa admin API con email_confirm: false
+      // garantisce che la verifica email sia sempre richiesta,
+      // indipendentemente dalle impostazioni del progetto Supabase.
+      const res = await fetch("/api/auth/signup-user", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
           email: fields.email.trim(),
           password: fields.password,
-          options: { data: userMeta },
-        });
-        data = retry.data;
-        error = retry.error;
-      }
+          nome: fields.nome.trim(),
+          cognome: fields.cognome.trim(),
+          citta: fields.citta.trim() || undefined,
+          provincia: fields.provincia.trim() || undefined,
+        }),
+      });
 
-      if (error) {
-        const msg = error.message.toLowerCase();
-        if (msg.includes("already registered") || msg.includes("already been registered") || (error as { code?: string }).code === "user_already_exists") {
-          setServerError(lang === "en"
-            ? "This email is already registered. Sign in or reset your password."
-            : "Questa email è già registrata. Accedi con le tue credenziali o recupera la password.");
-        } else if (msg.includes("password")) {
-          setServerError(lang === "en"
-            ? "Password does not meet security requirements."
-            : "La password non soddisfa i requisiti di sicurezza.");
-        } else if (msg.includes("rate") || msg.includes("limit") || msg.includes("too many")) {
+      const body = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        if (res.status === 409) {
+          setErrors((e) => ({ ...e, email: body.error ?? "Email già registrata." }));
+        } else if (res.status === 403) {
+          setErrors((e) => ({ ...e, email: body.error ?? "Email non utilizzabile." }));
+        } else if (res.status === 429) {
           setServerError(lang === "en"
             ? "Too many attempts. Wait a moment and try again."
             : "Troppi tentativi. Attendi un momento e riprova.");
         } else {
-          setServerError(lang === "en" ? "Registration failed. Try again." : "Registrazione non riuscita. Riprova.");
+          setServerError(body.error ?? (lang === "en" ? "Registration failed. Try again." : "Registrazione non riuscita. Riprova."));
         }
         return;
       }
 
-      if (data.user) {
-        if (data.user.identities?.length === 0) {
-          setServerError(lang === "en"
-            ? "This email is already registered. Sign in or reset your password."
-            : "Questa email è già registrata. Accedi con le tue credenziali o recupera la password.");
-        } else if (!data.session) {
-          // Email di conferma inviata — mostra schermata verifica
-          setStep("verify");
-        } else {
-          // Email confirmation disabilitata — accesso diretto
-          const saved = await saveCity();
-          setProfileSaved(saved);
-          setStep("done");
-        }
-      } else {
-        setServerError(lang === "en"
-          ? "This email is already registered. Sign in or reset your password."
-          : "Questa email è già registrata. Accedi con le tue credenziali o recupera la password.");
-      }
+      // Successo — email di verifica inviata
+      setRegisteredEmail(fields.email.trim());
+      setStep("verify");
     } catch {
       setServerError(lang === "en" ? "Registration failed. Try again." : "Errore durante la registrazione. Riprova.");
     } finally {
@@ -216,30 +141,20 @@ export default function PrivateSignupPage() {
     setResendMsg(null);
     setVerifyError(null);
     try {
-      const appOrigin = (() => {
-        const domains = __REPLIT_DOMAINS__?.split(",").filter(Boolean);
-        if (domains?.length) return `https://${domains[0]!.trim()}`;
-        if (__REPLIT_DEV_DOMAIN__) return `https://${__REPLIT_DEV_DOMAIN__}`;
-        return window.location.origin;
-      })();
-
-      const { error } = await supabase.auth.resend({
-        type: "signup",
-        email: fields.email.trim(),
-        options: {
-          emailRedirectTo: `${appOrigin}/register-privato/activate`,
-        },
+      const res = await fetch("/api/auth/resend-verification", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: registeredEmail }),
       });
-      if (error) {
-        if (error.message.toLowerCase().includes("rate") || error.message.toLowerCase().includes("limit")) {
-          setVerifyError(lang === "en"
-            ? "Too many requests. Wait a few minutes before trying again."
-            : "Troppe richieste. Attendi qualche minuto prima di riprovare.");
-        } else {
-          setVerifyError(lang === "en"
-            ? "Error resending email. Try again."
-            : "Errore nell'invio dell'email. Riprova.");
-        }
+
+      if (res.status === 429) {
+        setVerifyError(lang === "en"
+          ? "Too many requests. Wait a few minutes before trying again."
+          : "Troppe richieste. Attendi qualche minuto prima di riprovare.");
+      } else if (!res.ok) {
+        setVerifyError(lang === "en"
+          ? "Error resending email. Try again."
+          : "Errore nell'invio dell'email. Riprova.");
       } else {
         setResendMsg(lang === "en"
           ? "Email resent! Check your inbox (and spam folder)."
@@ -254,77 +169,9 @@ export default function PrivateSignupPage() {
     }
   }
 
-  async function saveCity(): Promise<boolean> {
-    let token: string | null = null;
-    for (let attempt = 0; attempt < 5; attempt++) {
-      token = await getToken();
-      if (token) break;
-      if (attempt < 4) await new Promise((r) => setTimeout(r, 500));
-    }
-    if (!token) return false;
-
-    const cityDisplay = fields.provincia
-      ? `${fields.citta.trim()} (${fields.provincia.trim()})`
-      : fields.citta.trim();
-
-    const username = `${fields.nome.trim()}_${fields.cognome.trim()}`
-      .toLowerCase()
-      .replace(/\s+/g, "_")
-      .replace(/[^a-z0-9_.-]/g, "")
-      .slice(0, 30) || "user";
-
-    try {
-      const res = await fetch("/api/users/me", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ username, city: cityDisplay || null, country: "Italia", photoUrl: null }),
-      });
-      return res.ok;
-    } catch {
-      return false;
-    }
-  }
-
   const inputCls =
     "w-full px-3 py-2.5 text-sm border border-border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 transition-shadow";
   const errorCls = "border-destructive";
-
-  useEffect(() => {
-    if (step !== "done") return;
-    const timer = setTimeout(() => {
-      setLocation(profileSaved ? "/feed" : "/onboarding");
-    }, 2500);
-    return () => clearTimeout(timer);
-  }, [step, profileSaved, setLocation]);
-
-  if (step === "done") {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background p-4">
-        <div className="w-full max-w-md text-center space-y-4 p-8 border border-border rounded-2xl bg-card shadow-sm">
-          <div className="flex justify-center">
-            <CheckCircle2 className="h-16 w-16 text-green-500" />
-          </div>
-          <h2 className="text-2xl font-bold">
-            {lang === "en" ? "Welcome to TreeShare!" : "Benvenuto su TreeShare!"}
-          </h2>
-          <p className="text-muted-foreground">
-            {lang === "en"
-              ? "Your account has been created. Start planting!"
-              : "Il tuo account è stato creato. Inizia a piantare!"}
-          </p>
-          <p className="text-sm text-muted-foreground animate-pulse">
-            {lang === "en" ? "Redirecting…" : "Reindirizzamento in corso…"}
-          </p>
-          <button
-            onClick={() => setLocation(profileSaved ? "/feed" : "/onboarding")}
-            className="w-full mt-2 py-2.5 bg-primary text-primary-foreground rounded-xl font-semibold hover:opacity-90 transition-opacity"
-          >
-            {lang === "en" ? "Start planting →" : "Inizia a piantare →"}
-          </button>
-        </div>
-      </div>
-    );
-  }
 
   if (step === "verify") {
     return (
@@ -341,8 +188,8 @@ export default function PrivateSignupPage() {
             </h1>
             <p className="text-sm text-muted-foreground mt-2">
               {lang === "en"
-                ? <>We sent a verification link to <strong className="text-foreground">{fields.email}</strong></>
-                : <>Abbiamo inviato un link di verifica a <strong className="text-foreground">{fields.email}</strong></>}
+                ? <>We sent a verification link to <strong className="text-foreground">{registeredEmail}</strong></>
+                : <>Abbiamo inviato un link di verifica a <strong className="text-foreground">{registeredEmail}</strong></>}
             </p>
           </div>
 
@@ -394,20 +241,13 @@ export default function PrivateSignupPage() {
             </p>
 
             <button
-              onClick={() => setLocation("/sign-in")}
-              className="w-full py-2.5 bg-primary text-primary-foreground rounded-xl font-semibold hover:opacity-90 flex items-center justify-center gap-2 transition-opacity"
-            >
-              {lang === "en" ? "Go to Sign in" : "Vai all'accesso"}
-            </button>
-
-            <button
               type="button"
               onClick={handleResendEmail}
               disabled={resending}
-              className="w-full py-2 text-sm font-medium text-primary hover:text-primary/80 disabled:opacity-50 flex items-center justify-center gap-2 transition-colors"
+              className="w-full py-2.5 bg-primary text-primary-foreground rounded-xl font-semibold hover:opacity-90 disabled:opacity-50 flex items-center justify-center gap-2 transition-opacity"
             >
               {resending && (
-                <div className="w-3 h-3 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
               )}
               {lang === "en" ? "Resend verification email" : "Rinvia email di verifica"}
             </button>
