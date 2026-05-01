@@ -41,9 +41,12 @@ router.post("/auth/verify-captcha", async (req, res) => {
     return;
   }
 
+  const isProduction = process.env.REPLIT_DEPLOYMENT === "1";
+  const TEST_SECRET_KEY = "6LeIxAcTAAAAAGG-vFI1TnRWxMZNFuojJ7Zv8bIo";
   const secretKey =
-    process.env.RECAPTCHA_SECRET_KEY ||
-    "6LeIxAcTAAAAAGG-vFI1TnRWxMZNFuojJ4WifJWe";
+    isProduction && process.env.RECAPTCHA_SECRET_KEY
+      ? process.env.RECAPTCHA_SECRET_KEY
+      : TEST_SECRET_KEY;
 
   try {
     const verifyRes = await fetch(

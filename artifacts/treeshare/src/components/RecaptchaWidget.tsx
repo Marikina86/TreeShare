@@ -1,9 +1,12 @@
 import { forwardRef, useEffect, useState } from "react";
 import ReCAPTCHA from "react-google-recaptcha";
 
+const TEST_SITE_KEY = "6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI";
+
 const SITE_KEY =
-  import.meta.env.VITE_RECAPTCHA_SITE_KEY ||
-  "6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI";
+  import.meta.env.PROD && import.meta.env.VITE_RECAPTCHA_SITE_KEY
+    ? import.meta.env.VITE_RECAPTCHA_SITE_KEY
+    : TEST_SITE_KEY;
 
 interface RecaptchaWidgetProps {
   onChange: (token: string | null) => void;
