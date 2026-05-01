@@ -81,8 +81,8 @@ const schema = z.object({
   indirizzoStato: z.string().min(2, "Stato obbligatorio").max(100),
 
   emailUfficiale: z.string().email("Email non valida"),
-  referenteNome: z.string().min(2, "Nome obbligatorio").max(100),
-  referenteCognome: z.string().min(2, "Cognome obbligatorio").max(100),
+  referenteNome: z.string().max(100).optional(),
+  referenteCognome: z.string().max(100).optional(),
 
   username: z
     .string()
@@ -96,7 +96,9 @@ const schema = z.object({
     .number({ invalid_type_error: "Numero non valido" })
     .int()
     .min(1, "Minimo 1 licenza")
-    .max(10000, "Massimo 10.000 licenze"),
+    .max(10000, "Massimo 10.000 licenze")
+    .optional()
+    .default(1),
 }).refine((data) => data.password === data.confirmPassword, {
   message: "Le password non coincidono",
   path: ["confirmPassword"],
@@ -233,8 +235,19 @@ export default function OrganizationSignupPage() {
         return;
       }
 
-      setVerifiedEmail(data.emailUfficiale);
-      setStep("verify");
+      // Registrazione completata — email già confermata, auto-login
+      const { error: loginError } = await supabase.auth.signInWithPassword({
+        email: data.emailUfficiale,
+        password: data.password,
+      });
+
+      if (loginError) {
+        // Auto-login fallito: reindirizza al login manuale
+        setStep("verify");
+        setVerifiedEmail(data.emailUfficiale);
+      } else {
+        setLocation("/feed");
+      }
     } catch {
       setServerError("Impossibile contattare il server. Riprova più tardi.");
     } finally {
@@ -289,9 +302,10 @@ export default function OrganizationSignupPage() {
                 <Leaf className="h-7 w-7" />
               </div>
             </div>
-            <h1 className="text-2xl font-bold mb-1">Controlla la tua email</h1>
+            <h1 className="text-2xl font-bold mb-1">Registrazione completata!</h1>
             <p className="text-sm text-muted-foreground mt-2">
-              Abbiamo inviato un link di verifica a <strong className="text-foreground">{verifiedEmail}</strong>
+              Il tuo account ente è stato creato. Puoi accedere subito con le credenziali di{" "}
+              <strong className="text-foreground">{verifiedEmail}</strong>
             </p>
           </div>
 
@@ -309,42 +323,16 @@ export default function OrganizationSignupPage() {
               </div>
             )}
 
-            <div className="bg-muted/50 border border-border rounded-xl p-5 space-y-3">
-              <div className="flex items-start gap-3">
-                <div className="flex items-center justify-center w-7 h-7 rounded-full bg-primary/10 text-primary text-sm font-bold shrink-0 mt-0.5">1</div>
-                <p className="text-sm text-foreground">Apri l'email che ti abbiamo appena inviato</p>
-              </div>
-              <div className="flex items-start gap-3">
-                <div className="flex items-center justify-center w-7 h-7 rounded-full bg-primary/10 text-primary text-sm font-bold shrink-0 mt-0.5">2</div>
-                <p className="text-sm text-foreground">Clicca sul link di conferma nell'email</p>
-              </div>
-              <div className="flex items-start gap-3">
-                <div className="flex items-center justify-center w-7 h-7 rounded-full bg-primary/10 text-primary text-sm font-bold shrink-0 mt-0.5">3</div>
-                <p className="text-sm text-foreground">Torna qui e accedi con le tue credenziali</p>
-              </div>
+            <div className="bg-green-50 border border-green-200 rounded-xl p-5 flex items-center gap-3">
+              <CheckCircle2 className="h-6 w-6 text-green-600 shrink-0" />
+              <p className="text-sm text-green-800">Il tuo account è attivo. Clicca su "Vai all'accesso" per entrare subito.</p>
             </div>
-
-            <p className="text-xs text-muted-foreground text-center">
-              Non trovi l'email? Controlla la cartella spam o posta indesiderata.
-            </p>
 
             <button
               onClick={() => setLocation("/sign-in")}
               className="w-full py-2.5 bg-primary text-primary-foreground rounded-xl font-semibold hover:opacity-90 flex items-center justify-center gap-2 transition-opacity"
             >
               Vai all'accesso
-            </button>
-
-            <button
-              type="button"
-              onClick={handleResendEmail}
-              disabled={resending}
-              className="w-full py-2 text-sm font-medium text-primary hover:text-primary/80 disabled:opacity-50 flex items-center justify-center gap-2 transition-colors"
-            >
-              {resending && (
-                <div className="w-3 h-3 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-              )}
-              Rinvia email di verifica
             </button>
 
             <button
@@ -596,7 +584,7 @@ export default function OrganizationSignupPage() {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <Label htmlFor="referenteNome">
-                    Nome referente <span className="text-destructive">*</span>
+                    Nome referente
                   </Label>
                   <Input
                     id="referenteNome"
@@ -608,7 +596,7 @@ export default function OrganizationSignupPage() {
                 </div>
                 <div>
                   <Label htmlFor="referenteCognome">
-                    Cognome referente <span className="text-destructive">*</span>
+                    Cognome referente
                   </Label>
                   <Input
                     id="referenteCognome"
@@ -738,7 +726,7 @@ export default function OrganizationSignupPage() {
 
               <div>
                 <Label htmlFor="numeroLicenze">
-                  Numero di utenti / licenze previste <span className="text-destructive">*</span>
+                  Numero di utenti / licenze previste
                 </Label>
                 <Input
                   id="numeroLicenze"

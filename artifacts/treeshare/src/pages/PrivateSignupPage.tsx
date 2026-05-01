@@ -117,144 +117,54 @@ export default function PrivateSignupPage() {
     } catch { /* non bloccare il signup se il check fallisce */ }
 
     try {
-      // Costruisce l'URL di redirect dalla variabile d'ambiente Replit (iniettata dal Vite config).
-      // Usa window.location.origin come fallback solo se non ci sono domini Replit configurati.
-      const appOrigin = (() => {
-        const domains = __REPLIT_DOMAINS__?.split(",").filter(Boolean);
-        if (domains?.length) return `https://${domains[0]!.trim()}`;
-        if (__REPLIT_DEV_DOMAIN__) return `https://${__REPLIT_DEV_DOMAIN__}`;
-        return window.location.origin;
-      })();
-
-      const userMeta = {
-        first_name: fields.nome.trim(),
-        last_name: fields.cognome.trim(),
-        username: `${fields.nome.trim()}_${fields.cognome.trim()}`
-          .toLowerCase()
-          .replace(/\s+/g, "_")
-          .replace(/[^a-z0-9_.-]/g, "")
-          .slice(0, 30) || "user",
-      };
-
-      // Primo tentativo: con emailRedirectTo
-      let { data, error } = await supabase.auth.signUp({
-        email: fields.email.trim(),
-        password: fields.password,
-        options: {
-          emailRedirectTo: `${appOrigin}/feed`,
-          data: userMeta,
-        },
-      });
-
-      // Se Supabase rifiuta il redirect URL (non è nell'allowlist), ritenta senza emailRedirectTo.
-      // In questo caso Supabase utilizzerà il Site URL configurato nel progetto.
-      const isRedirectError = error && (
-        error.message.toLowerCase().includes("redirect") ||
-        error.message.toLowerCase().includes("not allowed") ||
-        error.message.toLowerCase().includes("invalid url") ||
-        (error.status === 422 && error.message.toLowerCase().includes("url"))
-      );
-      if (isRedirectError) {
-        console.warn("[SignUp] emailRedirectTo rejected, retrying without it:", error?.message);
-        const retry = await supabase.auth.signUp({
+      // Crea l'account via backend (admin API, email già confermata)
+      const signupRes = await fetch("/api/auth/signup-user", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
           email: fields.email.trim(),
           password: fields.password,
-          options: { data: userMeta },
-        });
-        data = retry.data;
-        error = retry.error;
-      }
+          nome: fields.nome.trim(),
+          cognome: fields.cognome.trim(),
+        }),
+      });
 
-      if (error) {
-        console.error("[SignUp] Supabase error:", error.message, error.status, error.code);
-
-        // Provider email disabilitato in Supabase
-        if (
-          error.status === 500 ||
-          (error as { code?: string }).code === "email_provider_disabled" ||
-          error.message.toLowerCase().includes("email signups are disabled") ||
-          error.message.toLowerCase().includes("provider_disabled") ||
-          error.message.toLowerCase().includes("unexpected failure") ||
-          error.message.toLowerCase().includes("internal server")
-        ) {
-          setServerError(lang === "en"
-            ? "Email sign-up is currently disabled. Please contact support."
-            : "La registrazione via email è disabilitata. Contatta l'assistenza.");
-          return;
-        }
-
-        const msg = error.message.toLowerCase();
-        if (msg.includes("already registered") || msg.includes("already been registered") || error.code === "user_already_exists") {
+      if (!signupRes.ok) {
+        const body = await signupRes.json().catch(() => ({})) as { error?: string };
+        const msg = (body.error ?? "").toLowerCase();
+        if (signupRes.status === 409 || msg.includes("già registrata") || msg.includes("already")) {
           setServerError(lang === "en"
             ? "This email is already registered. Sign in or reset your password."
             : "Questa email è già registrata. Accedi con le tue credenziali o recupera la password.");
-        } else if (msg.includes("password")) {
+        } else if (signupRes.status === 403) {
           setServerError(lang === "en"
-            ? "Password does not meet security requirements. Choose a stronger one."
-            : "La password non soddisfa i requisiti di sicurezza. Scegli una password più forte.");
-        } else if (
-          msg.includes("rate") || msg.includes("limit") || msg.includes("exceeded") ||
-          msg.includes("60 second") || msg.includes("security purposes") || msg.includes("too many")
-        ) {
-          setServerError(lang === "en"
-            ? "Too many signup attempts. Please wait 60 seconds and try again."
-            : "Troppi tentativi. Attendi 60 secondi e riprova.");
-        } else if (msg.includes("email") && msg.includes("disabled")) {
-          setServerError(lang === "en"
-            ? "Email sign-up is currently disabled. Please contact support."
-            : "La registrazione via email è disabilitata. Contatta l'assistenza.");
-        } else if (msg.includes("invalid") && (msg.includes("email") || msg.includes("address"))) {
-          setServerError(lang === "en"
-            ? "The email address is not valid."
-            : "L'indirizzo email non è valido.");
-        } else if (msg.includes("signup") && msg.includes("disabled")) {
-          setServerError(lang === "en"
-            ? "Sign-up is currently disabled. Please contact support."
-            : "Le registrazioni sono disabilitate. Contatta l'assistenza.");
+            ? "This account has been suspended. Please contact support."
+            : "Questo account è stato sospeso. Contatta l'assistenza.");
         } else {
-          setServerError(
-            (lang === "en" ? "Registration failed" : "Registrazione non riuscita") +
-            `: ${error.message}`
-          );
+          setServerError(body.error ?? (lang === "en" ? "Registration failed. Try again." : "Registrazione non riuscita. Riprova."));
         }
-        captchaRef.current?.reset();
-        setCaptchaToken(null);
         return;
       }
 
-      console.log("[SignUp] Supabase response:", {
-        hasSession: !!data.session,
-        hasUser: !!data.user,
-        userId: data.user?.id,
-        emailConfirmedAt: data.user?.email_confirmed_at,
-        identities: data.user?.identities?.length,
+      // Effettua il login automatico
+      const { data: loginData, error: loginError } = await supabase.auth.signInWithPassword({
+        email: fields.email.trim(),
+        password: fields.password,
       });
 
-      if (data.user) {
-        if (data.user.identities?.length === 0) {
-          // Email già registrata — Supabase restituisce user con identities vuote
-          setServerError(lang === "en"
-            ? "This email is already registered. Sign in or reset your password."
-            : "Questa email è già registrata. Accedi con le tue credenziali o recupera la password.");
-        } else if (!data.session) {
-          // Email confirmation required — mostra schermata "controlla la tua email"
-          setStep("verify");
-        } else {
-          // Confermato automaticamente (email confirmation disabilitata in Supabase)
-          const saved = await saveCity();
-          setProfileSaved(saved);
-          setStep("done");
-        }
-      } else {
-        // data.user null — email già esistente in alcune configurazioni Supabase
+      if (loginError || !loginData.session) {
         setServerError(lang === "en"
-          ? "This email is already registered. Sign in or reset your password."
-          : "Questa email è già registrata. Accedi con le tue credenziali o recupera la password.");
+          ? "Account created! Sign in to continue."
+          : "Account creato! Accedi per continuare.");
+        setStep("done");
+        return;
       }
+
+      const saved = await saveCity();
+      setProfileSaved(saved);
+      setStep("done");
     } catch {
-      setServerError("Errore durante la registrazione. Riprova.");
-      captchaRef.current?.reset();
-      setCaptchaToken(null);
+      setServerError(lang === "en" ? "Registration failed. Try again." : "Errore durante la registrazione. Riprova.");
     } finally {
       setSubmitting(false);
     }

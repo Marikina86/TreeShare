@@ -106,13 +106,15 @@ router.post("/register-ente", async (req, res) => {
 
     const redirectTo = allowedOrigin ? `${allowedOrigin}/feed` : undefined;
 
+    const fullName = [data.referenteNome, data.referenteCognome].filter(Boolean).join(" ") || data.username;
+
     const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
       email: data.emailUfficiale,
       password: data.password,
-      email_confirm: false,
+      email_confirm: true,
       user_metadata: {
         username: data.username,
-        full_name: `${data.referenteNome} ${data.referenteCognome}`,
+        full_name: fullName,
       },
     });
 
@@ -132,47 +134,6 @@ router.post("/register-ente", async (req, res) => {
     if (!authData.user) {
       res.status(500).json({ error: "Errore nella creazione dell'account" });
       return;
-    }
-
-    // Invia email di conferma via Supabase — generateLink per tipo "signup" triggera l'invio automatico
-    const { error: linkError } = await supabaseAdmin.auth.admin.generateLink({
-      type: "signup",
-      email: data.emailUfficiale,
-      options: {
-        ...(redirectTo ? { redirectTo } : {}),
-      },
-    });
-
-    if (linkError) {
-      req.log?.warn?.({ err: linkError }, "generateLink fallito — tento resend via API Supabase");
-      // Secondo tentativo: usa il client Supabase per inviare un'email di resend
-      try {
-        const supabaseUrl = process.env.SUPABASE_URL!;
-        const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-        const resendRes = await fetch(`${supabaseUrl}/auth/v1/resend`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "apikey": serviceKey,
-            "Authorization": `Bearer ${serviceKey}`,
-          },
-          body: JSON.stringify({
-            type: "signup",
-            email: data.emailUfficiale,
-            ...(redirectTo ? { redirect_to: redirectTo } : {}),
-          }),
-        });
-        if (!resendRes.ok) {
-          const resendBody = await resendRes.text().catch(() => "");
-          req.log?.warn?.({ status: resendRes.status, body: resendBody }, "Resend API fallita — email di conferma non inviata");
-        } else {
-          req.log?.info?.("Email di conferma inviata via /auth/v1/resend");
-        }
-      } catch (resendErr) {
-        req.log?.warn?.({ err: resendErr }, "Errore durante il resend fallback");
-      }
-    } else {
-      req.log?.info?.("Email di conferma inviata via generateLink");
     }
 
     const supabaseUserId = authData.user.id;
@@ -210,8 +171,8 @@ router.post("/register-ente", async (req, res) => {
             indirizzoStato: data.indirizzoStato,
             emailUfficiale: data.emailUfficiale,
             telefono: data.telefono ?? "",
-            referenteNome: data.referenteNome,
-            referenteCognome: data.referenteCognome,
+            referenteNome: data.referenteNome ?? "",
+            referenteCognome: data.referenteCognome ?? "",
             username: data.username,
             hashedPassword,
             ruoloUtente: data.ruoloUtente,
