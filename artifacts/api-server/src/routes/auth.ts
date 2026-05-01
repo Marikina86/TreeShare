@@ -126,37 +126,31 @@ router.post("/auth/signup-user", async (req, res) => {
       return;
     }
 
-    // Invia email di verifica tramite generateLink → usa SMTP configurato in Supabase
+    // Invia email di verifica tramite Supabase /auth/v1/resend
+    // (generateLink genera solo il token senza inviare la mail;
+    //  /auth/v1/resend usa l'SMTP configurato in Supabase — Hostinger)
     const allowedOrigin = getAppOrigin();
     const redirectTo = allowedOrigin ? `${allowedOrigin}/register-privato/activate` : undefined;
 
-    const { error: linkError } = await supabaseAdmin.auth.admin.generateLink({
-      type: "signup",
-      email,
-      options: { ...(redirectTo ? { redirectTo } : {}) },
+    const supabaseUrl = process.env.SUPABASE_URL!;
+    const anonKey = process.env.SUPABASE_ANON_KEY!;
+    const resendUrl = redirectTo
+      ? `${supabaseUrl}/auth/v1/resend?redirect_to=${encodeURIComponent(redirectTo)}`
+      : `${supabaseUrl}/auth/v1/resend`;
+
+    const resendRes = await fetch(resendUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        apikey: anonKey,
+        Authorization: `Bearer ${anonKey}`,
+      },
+      body: JSON.stringify({ type: "signup", email }),
     });
 
-    if (linkError) {
-      req.log?.warn?.({ err: linkError }, "generateLink fallito per utente privato — fallback resend");
-      try {
-        const supabaseUrl = process.env.SUPABASE_URL!;
-        const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-        await fetch(`${supabaseUrl}/auth/v1/resend`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            apikey: serviceKey,
-            Authorization: `Bearer ${serviceKey}`,
-          },
-          body: JSON.stringify({
-            type: "signup",
-            email,
-            ...(redirectTo ? { redirect_to: redirectTo } : {}),
-          }),
-        });
-      } catch (resendErr) {
-        req.log?.warn?.({ err: resendErr }, "Resend fallback fallito");
-      }
+    if (!resendRes.ok) {
+      const resendBody = await resendRes.text().catch(() => "");
+      req.log?.warn?.({ status: resendRes.status, body: resendBody }, "Invio email verifica fallito");
     }
 
     res.status(201).json({ emailVerificationRequired: true, email });
@@ -188,35 +182,32 @@ router.post("/auth/resend-verification", async (req, res) => {
     const allowedOrigin = getAppOrigin();
     const redirectTo = allowedOrigin ? `${allowedOrigin}/register-privato/activate` : undefined;
 
-    const { error } = await supabaseAdmin.auth.admin.generateLink({
-      type: "signup",
-      email: trimmed,
-      options: { ...(redirectTo ? { redirectTo } : {}) },
+    const supabaseUrl = process.env.SUPABASE_URL!;
+    const anonKey = process.env.SUPABASE_ANON_KEY!;
+    const resendUrl = redirectTo
+      ? `${supabaseUrl}/auth/v1/resend?redirect_to=${encodeURIComponent(redirectTo)}`
+      : `${supabaseUrl}/auth/v1/resend`;
+
+    const resendRes = await fetch(resendUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        apikey: anonKey,
+        Authorization: `Bearer ${anonKey}`,
+      },
+      body: JSON.stringify({ type: "signup", email: trimmed }),
     });
 
-    if (error) {
-      if (error.message?.includes("rate") || error.message?.includes("limit") || error.message?.includes("exceeded")) {
-        res.status(429).json({ error: "Troppe richieste. Attendi qualche minuto prima di riprovare." });
-        return;
-      }
-      // Fallback REST Supabase
-      const supabaseUrl = process.env.SUPABASE_URL!;
-      const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-      try {
-        await fetch(`${supabaseUrl}/auth/v1/resend`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            apikey: serviceKey,
-            Authorization: `Bearer ${serviceKey}`,
-          },
-          body: JSON.stringify({
-            type: "signup",
-            email: trimmed,
-            ...(redirectTo ? { redirect_to: redirectTo } : {}),
-          }),
-        });
-      } catch { /* silent */ }
+    if (resendRes.status === 429) {
+      res.status(429).json({ error: "Troppe richieste. Attendi qualche minuto prima di riprovare." });
+      return;
+    }
+
+    if (!resendRes.ok) {
+      const body = await resendRes.text().catch(() => "");
+      req.log?.warn?.({ status: resendRes.status, body }, "Resend email verifica fallito");
+      res.status(500).json({ error: "Errore nell'invio dell'email. Riprova." });
+      return;
     }
 
     res.json({ ok: true });

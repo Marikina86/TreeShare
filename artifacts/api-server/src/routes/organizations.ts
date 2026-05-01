@@ -187,43 +187,33 @@ router.post("/register-ente", async (req, res) => {
       return;
     }
 
-    // Invia email di conferma — redirectTo punta alla pagina di attivazione frontend
+    // Invia email di conferma via /auth/v1/resend
+    // (generateLink genera solo il token senza spedire la mail;
+    //  /auth/v1/resend usa l'SMTP configurato in Supabase — Hostinger)
     const allowedOrigin = getAppOrigin();
     const redirectTo = allowedOrigin ? `${allowedOrigin}/register-ente/activate` : undefined;
 
-    const { error: linkError } = await supabaseAdmin.auth.admin.generateLink({
-      type: "signup",
-      email: data.emailUfficiale,
-      options: { ...(redirectTo ? { redirectTo } : {}) },
+    const supabaseUrl = process.env.SUPABASE_URL!;
+    const anonKey = process.env.SUPABASE_ANON_KEY!;
+    const resendUrl = redirectTo
+      ? `${supabaseUrl}/auth/v1/resend?redirect_to=${encodeURIComponent(redirectTo)}`
+      : `${supabaseUrl}/auth/v1/resend`;
+
+    const resendRes = await fetch(resendUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        apikey: anonKey,
+        Authorization: `Bearer ${anonKey}`,
+      },
+      body: JSON.stringify({ type: "signup", email: data.emailUfficiale }),
     });
 
-    if (linkError) {
-      req.log?.warn?.({ err: linkError }, "generateLink fallito — tento resend via /auth/v1/resend");
-      try {
-        const supabaseUrl = process.env.SUPABASE_URL!;
-        const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-        const resendRes = await fetch(`${supabaseUrl}/auth/v1/resend`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            apikey: serviceKey,
-            Authorization: `Bearer ${serviceKey}`,
-          },
-          body: JSON.stringify({
-            type: "signup",
-            email: data.emailUfficiale,
-            ...(redirectTo ? { redirect_to: redirectTo } : {}),
-          }),
-        });
-        if (!resendRes.ok) {
-          const body = await resendRes.text().catch(() => "");
-          req.log?.warn?.({ status: resendRes.status, body }, "Resend API fallita");
-        }
-      } catch (resendErr) {
-        req.log?.warn?.({ err: resendErr }, "Errore resend fallback");
-      }
+    if (!resendRes.ok) {
+      const body = await resendRes.text().catch(() => "");
+      req.log?.warn?.({ status: resendRes.status, body }, "Invio email conferma ente fallito");
     } else {
-      req.log?.info?.("Email di conferma inviata via generateLink");
+      req.log?.info?.("Email di conferma ente inviata");
     }
 
     // Risposta: nessun DB record creato. Il profilo viene creato su /activate.
@@ -387,45 +377,32 @@ router.post("/register-ente/resend-verification", async (req, res) => {
     const allowedOrigin = getAppOrigin();
     const redirectTo = allowedOrigin ? `${allowedOrigin}/register-ente/activate` : undefined;
 
-    const { error } = await supabaseAdmin.auth.admin.generateLink({
-      type: "signup",
-      email: trimmed,
-      options: {
-        ...(redirectTo ? { redirectTo } : {}),
+    const supabaseUrl = process.env.SUPABASE_URL!;
+    const anonKey = process.env.SUPABASE_ANON_KEY!;
+    const resendUrl = redirectTo
+      ? `${supabaseUrl}/auth/v1/resend?redirect_to=${encodeURIComponent(redirectTo)}`
+      : `${supabaseUrl}/auth/v1/resend`;
+
+    const resendRes = await fetch(resendUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        apikey: anonKey,
+        Authorization: `Bearer ${anonKey}`,
       },
+      body: JSON.stringify({ type: "signup", email: trimmed }),
     });
 
-    if (error) {
-      if (
-        error.message?.includes("rate") ||
-        error.message?.includes("limit") ||
-        error.message?.includes("exceeded")
-      ) {
-        res.status(429).json({ error: "Troppe richieste. Attendi qualche minuto prima di riprovare." });
-        return;
-      }
-      req.log?.warn?.({ err: error }, "Resend verification link error");
-      // Fallback: REST API Supabase
-      const supabaseUrl = process.env.SUPABASE_URL!;
-      const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-      try {
-        const resendRes = await fetch(`${supabaseUrl}/auth/v1/resend`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            apikey: serviceKey,
-            Authorization: `Bearer ${serviceKey}`,
-          },
-          body: JSON.stringify({
-            type: "signup",
-            email: trimmed,
-            ...(redirectTo ? { redirect_to: redirectTo } : {}),
-          }),
-        });
-        if (!resendRes.ok) {
-          req.log?.warn?.({ status: resendRes.status }, "Resend REST API fallback failed");
-        }
-      } catch { /* silent */ }
+    if (resendRes.status === 429) {
+      res.status(429).json({ error: "Troppe richieste. Attendi qualche minuto prima di riprovare." });
+      return;
+    }
+
+    if (!resendRes.ok) {
+      const body = await resendRes.text().catch(() => "");
+      req.log?.warn?.({ status: resendRes.status, body }, "Resend email verifica ente fallito");
+      res.status(500).json({ error: "Errore nell'invio dell'email. Riprova." });
+      return;
     }
 
     res.json({ ok: true });
