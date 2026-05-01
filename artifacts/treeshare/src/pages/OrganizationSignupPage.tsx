@@ -81,8 +81,16 @@ const schema = z.object({
   indirizzoStato: z.string().min(2, "Stato obbligatorio").max(100),
 
   emailUfficiale: z.string().email("Email non valida"),
-  referenteNome: z.preprocess(v => (v === "" ? undefined : v), z.string().max(100).optional()),
-  referenteCognome: z.preprocess(v => (v === "" ? undefined : v), z.string().max(100).optional()),
+  pec: z.string().email("Indirizzo PEC non valido").refine(
+    (v) => {
+      const domain = v.toLowerCase().slice(v.indexOf("@") + 1);
+      const knownPec = ["legalmail.it", "postecert.it", "actaliscertymail.it"];
+      return domain.includes("pec") || knownPec.some(d => domain === d || domain.endsWith("." + d));
+    },
+    "Inserisci un indirizzo PEC valido (es. nome@pec.it)"
+  ),
+  referenteNome: z.string().min(1, "Nome referente obbligatorio").max(100),
+  referenteCognome: z.string().min(1, "Cognome referente obbligatorio").max(100),
 
   username: z.preprocess(v => (v === "" ? undefined : v), z.string().max(50).optional()),
   password: z.string().min(8, "Password minimo 8 caratteri").max(100),
@@ -583,9 +591,6 @@ export default function OrganizationSignupPage() {
                 <Label htmlFor="emailUfficiale">
                   Email <span className="text-destructive">*</span>
                 </Label>
-                <p className="text-xs text-muted-foreground mb-1">
-                  Se sei un ente inserisci la <strong>PEC</strong>.
-                </p>
                 <Input
                   id="emailUfficiale"
                   type="email"
@@ -596,10 +601,24 @@ export default function OrganizationSignupPage() {
                 <FieldError message={errors.emailUfficiale?.message} />
               </div>
 
+              <div>
+                <Label htmlFor="pec">
+                  PEC <span className="text-destructive">*</span>
+                </Label>
+                <Input
+                  id="pec"
+                  type="email"
+                  placeholder="es. comune.roma@pec.it"
+                  {...register("pec")}
+                  className={errors.pec ? "border-destructive" : ""}
+                />
+                <FieldError message={errors.pec?.message} />
+              </div>
+
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <Label htmlFor="referenteNome">
-                    Nome referente <span className="text-muted-foreground font-normal text-xs">(opzionale)</span>
+                    Nome referente <span className="text-destructive">*</span>
                   </Label>
                   <Input
                     id="referenteNome"
@@ -611,7 +630,7 @@ export default function OrganizationSignupPage() {
                 </div>
                 <div>
                   <Label htmlFor="referenteCognome">
-                    Cognome referente <span className="text-muted-foreground font-normal text-xs">(opzionale)</span>
+                    Cognome referente <span className="text-destructive">*</span>
                   </Label>
                   <Input
                     id="referenteCognome"
