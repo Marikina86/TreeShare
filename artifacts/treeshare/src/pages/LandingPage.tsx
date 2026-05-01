@@ -371,10 +371,10 @@ export default function LandingPage() {
         </p>
         <p className="text-xs">
           <a
-            href="mailto:info@treeshareapp.com"
+            href="mailto:treeshare@treeshareapp.com"
             className="hover:text-primary transition-colors"
           >
-            info@treeshareapp.com
+            treeshare@treeshareapp.com
           </a>
         </p>
       </footer>
