@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useCallback } from "react";
 import { useLocation, Link } from "wouter";
 import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth";
@@ -7,6 +7,8 @@ import { useGetMyProfile } from "@workspace/api-client-react";
 import Layout from "@/components/Layout";
 import { useLang } from "@/lib/i18n";
 import { resizeToBlob, resizeToThumbnailBlob } from "@/lib/imageUtils";
+import CityAutocomplete from "@/components/CityAutocomplete";
+import { ITALIAN_PROVINCES } from "@/lib/italianProvinces";
 
 const T = {
   it: {
@@ -181,6 +183,7 @@ export default function CreateAdoptableTreePage() {
   const [title, setTitle] = useState("");
   const [speciesName, setSpeciesName] = useState("");
   const [locationName, setLocationName] = useState("");
+  const [provincia, setProvincia] = useState("");
   const [description, setDescription] = useState("");
   const [productDescription, setProductDescription] = useState("");
   const [priceEur, setPriceEur] = useState("");
@@ -191,6 +194,39 @@ export default function CreateAdoptableTreePage() {
   const [longitude, setLongitude] = useState("");
   const [gpsLoading, setGpsLoading] = useState(false);
   const [gpsError, setGpsError] = useState<string | null>(null);
+  const reverseGeoTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const reverseGeocode = useCallback(async (lat: string, lon: string) => {
+    if (!lat || !lon) return;
+    const latN = parseFloat(lat);
+    const lonN = parseFloat(lon);
+    if (isNaN(latN) || isNaN(lonN)) return;
+    try {
+      const r = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&accept-language=it`,
+        { headers: { "Accept-Language": "it" } },
+      );
+      if (!r.ok) return;
+      const data = await r.json();
+      const a = data.address ?? {};
+      const comune = a.city || a.town || a.village || a.municipality || a.hamlet || "";
+      const prov = a.county || a.state_district || a.state || "";
+      if (comune) setLocationName(comune);
+      if (prov) setProvincia(prov);
+    } catch { /* ignora */ }
+  }, []);
+
+  function handleLatChange(val: string) {
+    setLatitude(val);
+    if (reverseGeoTimeout.current) clearTimeout(reverseGeoTimeout.current);
+    reverseGeoTimeout.current = setTimeout(() => reverseGeocode(val, longitude), 800);
+  }
+
+  function handleLonChange(val: string) {
+    setLongitude(val);
+    if (reverseGeoTimeout.current) clearTimeout(reverseGeoTimeout.current);
+    reverseGeoTimeout.current = setTimeout(() => reverseGeocode(latitude, val), 800);
+  }
 
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
@@ -281,7 +317,7 @@ export default function CreateAdoptableTreePage() {
           title: title.trim(),
           description: description.trim(),
           speciesName: speciesName.trim(),
-          locationName: locationName.trim() || null,
+          locationName: (locationName.trim() ? locationName.trim() + (provincia ? ` (${provincia})` : "") : null),
           productDescription: productDescription.trim() || null,
           priceCents,
           durationDays,
@@ -524,16 +560,32 @@ export default function CreateAdoptableTreePage() {
 
             <div>
               <label className="block text-sm font-medium text-foreground mb-1">
-                {t.fieldLocation} <span className="text-red-500">*</span>
+                Comune <span className="text-red-500">*</span>
               </label>
-              <input
-                type="text"
-                value={locationName}
-                onChange={(e) => setLocationName(e.target.value)}
-                placeholder={t.fieldLocationPlaceholder}
-                required
-                className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
-              />
+              <div className="flex gap-2">
+                <CityAutocomplete
+                  value={locationName}
+                  onChange={(city, prov) => {
+                    setLocationName(city);
+                    if (prov) setProvincia(prov);
+                  }}
+                  placeholder="es. Catania"
+                  className="flex-1 border border-border rounded-lg px-3 py-2 text-sm bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
+                />
+                <select
+                  value={provincia}
+                  onChange={(e) => setProvincia(e.target.value)}
+                  className="w-28 border border-border rounded-lg px-2 py-2 text-sm bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
+                >
+                  <option value="">Prov.</option>
+                  {ITALIAN_PROVINCES.map((p) => (
+                    <option key={p.code} value={p.code}>{p.code} — {p.name}</option>
+                  ))}
+                </select>
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">
+                Seleziona il comune dove si trova la pianta. La provincia si compila automaticamente.
+              </p>
             </div>
 
             <p className="text-xs text-muted-foreground">{t.locationHelp}</p>
@@ -554,24 +606,7 @@ export default function CreateAdoptableTreePage() {
                     const lng = pos.coords.longitude.toFixed(6);
                     setLatitude(lat);
                     setLongitude(lng);
-                    try {
-                      const r = await fetch(
-                        `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&accept-language=it`,
-                        { headers: { "Accept-Language": "it" } },
-                      );
-                      if (r.ok) {
-                        const data = await r.json();
-                        const a = data.address ?? {};
-                        const parts = [
-                          a.city || a.town || a.village || a.municipality || a.county || "",
-                          a.state || a.region || "",
-                          a.country || "",
-                        ].filter(Boolean);
-                        const name = parts.join(", ");
-                        if (name) setLocationName(name);
-                      }
-                    } catch {
-                    }
+                    await reverseGeocode(lat, lng);
                     setGpsLoading(false);
                   },
                   () => {
@@ -619,7 +654,7 @@ export default function CreateAdoptableTreePage() {
                   type="number"
                   step="any"
                   value={latitude}
-                  onChange={(e) => setLatitude(e.target.value)}
+                  onChange={(e) => handleLatChange(e.target.value)}
                   placeholder={t.fieldLatPlaceholder}
                   className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
                   required
@@ -633,7 +668,7 @@ export default function CreateAdoptableTreePage() {
                   type="number"
                   step="any"
                   value={longitude}
-                  onChange={(e) => setLongitude(e.target.value)}
+                  onChange={(e) => handleLonChange(e.target.value)}
                   placeholder={t.fieldLonPlaceholder}
                   className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
                   required
