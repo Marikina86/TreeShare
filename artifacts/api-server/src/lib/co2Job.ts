@@ -1,13 +1,25 @@
 import { db } from "@workspace/db";
 import { treesTable, co2RankingsTable } from "@workspace/db";
-import { sql, and, eq, isNotNull, desc } from "drizzle-orm";
+import { sql, and, eq, isNotNull, gte, lt, desc } from "drizzle-orm";
 import { logger } from "./logger";
 
-const CO2_KG_PER_TREE_YEAR = 21.77;
+// 22 kg CO₂/anno per pianta ÷ 12 mesi = CO₂ mensile per pianta
+const CO2_KG_PER_TREE_MONTH = 22 / 12;
 
-function getCurrentMonthString(): string {
+function getPreviousMonthString(): string {
   const now = new Date(new Date().toLocaleString("en-US", { timeZone: "Europe/Rome" }));
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  const year = now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear();
+  const month = now.getMonth() === 0 ? 12 : now.getMonth();
+  return `${year}-${String(month).padStart(2, "0")}`;
+}
+
+function getPreviousMonthBounds(): { start: Date; end: Date } {
+  const now = new Date(new Date().toLocaleString("en-US", { timeZone: "Europe/Rome" }));
+  const year = now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear();
+  const month = now.getMonth() === 0 ? 12 : now.getMonth();
+  const start = new Date(year, month - 1, 1);
+  const end = new Date(year, month, 1);
+  return { start, end };
 }
 
 function getNextFirstOfMonthAt0001Rome(): Date {
@@ -19,7 +31,7 @@ function getNextFirstOfMonthAt0001Rome(): Date {
 }
 
 export async function calculateCo2Rankings(): Promise<void> {
-  const monthStr = getCurrentMonthString();
+  const monthStr = getPreviousMonthString();
 
   logger.info({ month: monthStr }, "[co2Job] Starting CO2 ranking calculation");
 
@@ -35,7 +47,9 @@ export async function calculateCo2Rankings(): Promise<void> {
       return;
     }
 
-    // Conta il totale cumulativo di tutte le piante approvate per comune (non filtrate per mese)
+    const { start, end } = getPreviousMonthBounds();
+
+    // Conta le piante approvate piantate nel mese precedente, raggruppate per comune
     const rows = await db
       .select({
         comune: treesTable.locationName,
@@ -47,6 +61,8 @@ export async function calculateCo2Rankings(): Promise<void> {
         and(
           eq(treesTable.photoStatus, "approved"),
           isNotNull(treesTable.locationName),
+          gte(treesTable.createdAt, start),
+          lt(treesTable.createdAt, end),
         ),
       )
       .groupBy(treesTable.locationName, treesTable.province)
@@ -54,7 +70,7 @@ export async function calculateCo2Rankings(): Promise<void> {
       .limit(3);
 
     if (rows.length === 0) {
-      logger.info({ month: monthStr }, "[co2Job] No approved trees found, skipping");
+      logger.info({ month: monthStr }, "[co2Job] No approved trees found for previous month, skipping");
       return;
     }
 
@@ -62,7 +78,8 @@ export async function calculateCo2Rankings(): Promise<void> {
 
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i];
-      const co2Kg = Math.round(row.treeCount * CO2_KG_PER_TREE_YEAR * 100) / 100;
+      // CO₂ mensile = numero piante × (22 kg/anno ÷ 12 mesi)
+      const co2Kg = Math.round(row.treeCount * CO2_KG_PER_TREE_MONTH * 100) / 100;
       await db.insert(co2RankingsTable).values({
         month: monthStr,
         rank: i + 1,

@@ -91,7 +91,7 @@ function RankingCard({ r }: { r: Co2Ranking }) {
             <path d="M12 22V14"/>
             <path d="M12 14C12 14 7 13 5 9C3 5 6 2 9 3C10.5 3.5 11.5 5 12 7C12.5 5 13.5 3.5 15 3C18 2 21 5 19 9C17 13 12 14 12 14Z"/>
           </svg>
-          <span className={`text-sm font-bold ${cfg.co2Text}`}>{formatCo2(r.co2Kg)} CO₂/anno assorbita</span>
+          <span className={`text-sm font-bold ${cfg.co2Text}`}>{formatCo2(r.co2Kg)} CO₂/mese assorbita</span>
         </div>
       </div>
     </div>
@@ -146,8 +146,8 @@ export default function Co2Page() {
             </svg>
           </div>
           <div className="text-sm text-muted-foreground leading-relaxed">
-            Ogni mese calcoliamo quanta <strong className="text-foreground">CO₂ viene assorbita</strong> dalle piante registrate in ogni comune.
-            Il calcolo si basa su <strong className="text-foreground">21,77 kg di CO₂ per pianta all'anno</strong> (media IPCC).
+            Ogni mese calcoliamo quanta <strong className="text-foreground">CO₂ viene assorbita</strong> dalle piante piantate nel mese precedente, per ogni comune.
+            Il calcolo si basa su <strong className="text-foreground">22 kg di CO₂ per pianta all'anno ÷ 12 = 1,83 kg/mese per pianta</strong>.
             La classifica viene aggiornata il <strong className="text-foreground">1° di ogni mese alle 00:01</strong> ora di Roma.
           </div>
         </div>
