@@ -133,7 +133,9 @@ router.post("/auth/signup-user", async (req, res) => {
     const redirectTo = allowedOrigin ? `${allowedOrigin}/register-privato/activate` : undefined;
 
     const supabaseUrl = process.env.SUPABASE_URL!;
-    const anonKey = process.env.SUPABASE_ANON_KEY!;
+    // VITE_SUPABASE_ANON_KEY è la chiave anon effettiva (usata dal frontend);
+    // SUPABASE_ANON_KEY potrebbe avere un valore diverso/sbagliato.
+    const anonKey = (process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY)!;
     const resendUrl = redirectTo
       ? `${supabaseUrl}/auth/v1/resend?redirect_to=${encodeURIComponent(redirectTo)}`
       : `${supabaseUrl}/auth/v1/resend`;
@@ -183,7 +185,7 @@ router.post("/auth/resend-verification", async (req, res) => {
     const redirectTo = allowedOrigin ? `${allowedOrigin}/register-privato/activate` : undefined;
 
     const supabaseUrl = process.env.SUPABASE_URL!;
-    const anonKey = process.env.SUPABASE_ANON_KEY!;
+    const anonKey = (process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY)!;
     const resendUrl = redirectTo
       ? `${supabaseUrl}/auth/v1/resend?redirect_to=${encodeURIComponent(redirectTo)}`
       : `${supabaseUrl}/auth/v1/resend`;

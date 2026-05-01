@@ -194,7 +194,7 @@ router.post("/register-ente", async (req, res) => {
     const redirectTo = allowedOrigin ? `${allowedOrigin}/register-ente/activate` : undefined;
 
     const supabaseUrl = process.env.SUPABASE_URL!;
-    const anonKey = process.env.SUPABASE_ANON_KEY!;
+    const anonKey = (process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY)!;
     const resendUrl = redirectTo
       ? `${supabaseUrl}/auth/v1/resend?redirect_to=${encodeURIComponent(redirectTo)}`
       : `${supabaseUrl}/auth/v1/resend`;
@@ -378,7 +378,7 @@ router.post("/register-ente/resend-verification", async (req, res) => {
     const redirectTo = allowedOrigin ? `${allowedOrigin}/register-ente/activate` : undefined;
 
     const supabaseUrl = process.env.SUPABASE_URL!;
-    const anonKey = process.env.SUPABASE_ANON_KEY!;
+    const anonKey = (process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY)!;
     const resendUrl = redirectTo
       ? `${supabaseUrl}/auth/v1/resend?redirect_to=${encodeURIComponent(redirectTo)}`
       : `${supabaseUrl}/auth/v1/resend`;
