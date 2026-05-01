@@ -439,6 +439,20 @@ export const bannedEmailsTable = pgTable("banned_emails", {
   bannedBy: text("banned_by"),
 });
 
+// ── CO2 mensile per comune ────────────────────────────────────────────────────
+
+export const co2RankingsTable = pgTable("co2_rankings", {
+  id: serial("id").primaryKey(),
+  month: text("month").notNull(),
+  rank: integer("rank").notNull(),
+  comune: text("comune").notNull(),
+  provincia: text("provincia"),
+  treeCount: integer("tree_count").notNull(),
+  co2Kg: real("co2_kg").notNull(),
+  badge: text("badge").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
 // ── App settings (key/value store for runtime feature flags) ─────────────────
 
 export const appSettingsTable = pgTable("app_settings", {

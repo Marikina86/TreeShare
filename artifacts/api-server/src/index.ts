@@ -2,6 +2,7 @@ import app from "./app";
 import { logger } from "./lib/logger";
 import { startEventCleaner } from "./lib/eventCleaner";
 import { startWeeklyWinnerScheduler } from "./lib/weeklyWinnerJob";
+import { startCo2Scheduler } from "./lib/co2Job";
 
 const port = Number(process.env.PORT) || 8080;
 
@@ -22,4 +23,7 @@ app.listen(port, (err) => {
 
   // Start weekly plant winner scheduler
   startWeeklyWinnerScheduler();
+
+  // Start monthly CO2 ranking scheduler
+  startCo2Scheduler();
 });

@@ -28,6 +28,7 @@ import RegisterChoicePage from "@/pages/RegisterChoicePage";
 import PrivateSignupPage from "@/pages/PrivateSignupPage";
 import SignInPage from "@/pages/SignInPage";
 import CampaignsPage from "@/pages/CampaignsPage";
+import Co2Page from "@/pages/Co2Page";
 import AdoptableTreesPage from "@/pages/AdoptableTreesPage";
 import AdoptableTreeDetailPage from "@/pages/AdoptableTreeDetailPage";
 import CreateAdoptableTreePage from "@/pages/CreateAdoptableTreePage";
@@ -178,6 +179,7 @@ function AuthProviderWithRoutes() {
             <Route path="/tips" component={() => <ProtectedRoute component={TipsPage} />} />
             <Route path="/settings" component={() => <ProtectedRoute component={SettingsPage} />} />
             <Route path="/campaigns" component={CampaignsPage} />
+            <Route path="/co2" component={Co2Page} />
             <Route path="/adopt" component={AdoptableTreesPage} />
             <Route path="/adopt/create" component={() => <ProtectedRoute component={CreateAdoptableTreePage} />} />
             <Route path="/adopt/manage" component={() => <ProtectedRoute component={OrgAdoptionsPage} />} />

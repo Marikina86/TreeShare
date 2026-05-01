@@ -358,6 +358,20 @@ export default function Layout({ children }: LayoutProps) {
               <path d="M12 14C12 14 7 13 5 9C3 5 6 2 9 3C10.5 3.5 11.5 5 12 7C12.5 5 13.5 3.5 15 3C18 2 21 5 19 9C17 13 12 14 12 14Z"/>
             </svg>
           </Link>
+          <Link
+            href="/co2"
+            title={t.nav.co2}
+            className={`p-2 rounded-lg transition-colors ${
+              location === "/co2" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground"
+            }`}
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M2 22C2 22 7 15 12 15C17 15 22 22 22 22"/>
+              <path d="M12 15V10"/>
+              <path d="M12 10C12 10 9 7 6 8C3 9 2 13 5 14C8 15 12 10 12 10Z"/>
+              <path d="M12 10C12 10 15 7 18 8C21 9 22 13 19 14C16 15 12 10 12 10Z"/>
+            </svg>
+          </Link>
           {isAdmin && (
             <Link
               href="/admin"
@@ -430,6 +444,20 @@ export default function Layout({ children }: LayoutProps) {
               <path d="M12 22V14"/>
               <path d="M12 14C12 14 7 13 5 9C3 5 6 2 9 3C10.5 3.5 11.5 5 12 7C12.5 5 13.5 3.5 15 3C18 2 21 5 19 9C17 13 12 14 12 14Z" fill="currentColor" opacity="0.15"/>
               <path d="M12 14C12 14 7 13 5 9C3 5 6 2 9 3C10.5 3.5 11.5 5 12 7C12.5 5 13.5 3.5 15 3C18 2 21 5 19 9C17 13 12 14 12 14Z"/>
+            </svg>
+          </Link>
+          <Link
+            href="/co2"
+            title={t.nav.co2}
+            className={`p-2 rounded-lg transition-colors ${
+              location === "/co2" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"
+            }`}
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M2 22C2 22 7 15 12 15C17 15 22 22 22 22"/>
+              <path d="M12 15V10"/>
+              <path d="M12 10C12 10 9 7 6 8C3 9 2 13 5 14C8 15 12 10 12 10Z"/>
+              <path d="M12 10C12 10 15 7 18 8C21 9 22 13 19 14C16 15 12 10 12 10Z"/>
             </svg>
           </Link>
           {isAdmin && (
