@@ -148,7 +148,8 @@ export default function Co2Page() {
           <div className="text-sm text-muted-foreground leading-relaxed">
             Ogni mese calcoliamo quanta <strong className="text-foreground">CO₂ viene assorbita</strong> dalle piante piantate nel mese precedente, per ogni comune.
             Il calcolo si basa su <strong className="text-foreground">22 kg di CO₂ per pianta all'anno ÷ 12 = 1,83 kg/mese per pianta</strong>.
-            La classifica viene aggiornata il <strong className="text-foreground">1° di ogni mese alle 00:01</strong> ora di Roma.
+            La classifica viene aggiornata il <strong className="text-foreground">1° di ogni mese alle 00:01</strong> ora di Roma.{" "}
+            <span className="italic">I valori sono stime indicative.</span>
           </div>
         </div>
 

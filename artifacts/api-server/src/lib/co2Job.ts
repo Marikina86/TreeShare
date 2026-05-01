@@ -122,7 +122,6 @@ function scheduleNext(): void {
 }
 
 export function startCo2Scheduler(): void {
-  calculateCo2Rankings();
   scheduleNext();
   logger.info("[co2Job] Scheduler started (runs on 1st of each month at 00:01 Europe/Rome)");
 }
