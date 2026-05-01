@@ -81,10 +81,10 @@ const schema = z.object({
   indirizzoStato: z.string().min(2, "Stato obbligatorio").max(100),
 
   emailUfficiale: z.string().email("Email non valida"),
-  referenteNome: z.string().max(100).optional(),
-  referenteCognome: z.string().max(100).optional(),
+  referenteNome: z.preprocess(v => (v === "" ? undefined : v), z.string().max(100).optional()),
+  referenteCognome: z.preprocess(v => (v === "" ? undefined : v), z.string().max(100).optional()),
 
-  username: z.string().max(50).optional(),
+  username: z.preprocess(v => (v === "" ? undefined : v), z.string().max(50).optional()),
   password: z.string().min(8, "Password minimo 8 caratteri").max(100),
   confirmPassword: z.string().min(1, "Ripeti la password"),
   ruoloUtente: z.string().min(1, "Ruolo obbligatorio"),
@@ -596,7 +596,7 @@ export default function OrganizationSignupPage() {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <Label htmlFor="referenteNome">
-                    Nome referente
+                    Nome referente <span className="text-muted-foreground font-normal text-xs">(opzionale)</span>
                   </Label>
                   <Input
                     id="referenteNome"
@@ -608,7 +608,7 @@ export default function OrganizationSignupPage() {
                 </div>
                 <div>
                   <Label htmlFor="referenteCognome">
-                    Cognome referente
+                    Cognome referente <span className="text-muted-foreground font-normal text-xs">(opzionale)</span>
                   </Label>
                   <Input
                     id="referenteCognome"
@@ -632,7 +632,7 @@ export default function OrganizationSignupPage() {
             <CardContent className="space-y-4">
               <div>
                 <Label htmlFor="username">
-                  Username
+                  Username <span className="text-muted-foreground font-normal text-xs">(opzionale)</span>
                 </Label>
                 <div className="relative">
                   <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
