@@ -33,6 +33,7 @@ import AdoptableTreeDetailPage from "@/pages/AdoptableTreeDetailPage";
 import CreateAdoptableTreePage from "@/pages/CreateAdoptableTreePage";
 import OrgAdoptionsPage from "@/pages/OrgAdoptionsPage";
 import ResetPasswordPage from "@/pages/ResetPasswordPage";
+import RegisterEnteActivatePage from "@/pages/RegisterEnteActivatePage";
 import NotFound from "@/pages/not-found";
 import InstallPrompt from "@/components/InstallPrompt";
 
@@ -187,6 +188,7 @@ function AuthProviderWithRoutes() {
             <Route path="/register" component={RegisterChoicePage} />
             <Route path="/register-privato" component={PrivateSignupPage} />
             <Route path="/register-ente" component={OrganizationSignupPage} />
+            <Route path="/register-ente/activate" component={RegisterEnteActivatePage} />
             <Route component={NotFound} />
           </Switch>
           <Toaster />
