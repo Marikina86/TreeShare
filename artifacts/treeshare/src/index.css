@@ -203,13 +203,3 @@
   animation: sun-pulse 0.6s ease-out;
 }
 
-.honeypot-field {
-  position: absolute;
-  left: -9999px;
-  top: -9999px;
-  width: 0;
-  height: 0;
-  overflow: hidden;
-  opacity: 0;
-  pointer-events: none;
-}

@@ -171,8 +171,6 @@ export default function OrganizationSignupPage() {
   const [acceptPrivacy, setAcceptPrivacy] = useState(false);
   const [acceptTerms, setAcceptTerms] = useState(false);
   const [consentErrors, setConsentErrors] = useState<{ privacy?: string; terms?: string }>({});
-  const [hpWebsite, setHpWebsite] = useState("");
-  const [hpSegnoZodiacale, setHpSegnoZodiacale] = useState("");
   const [verifiedEmail, setVerifiedEmail] = useState("");
   const [resending, setResending] = useState(false);
   const [resendMsg, setResendMsg] = useState<string | null>(null);
@@ -194,11 +192,6 @@ export default function OrganizationSignupPage() {
   const strength = useMemo(() => getPasswordStrength(passwordValue), [passwordValue]);
 
   const onSubmit = async (data: FormValues) => {
-    if (hpWebsite || hpSegnoZodiacale) {
-      setVerifiedEmail(data.emailUfficiale);
-      setStep("verify");
-      return;
-    }
     const ce: { privacy?: string; terms?: string } = {};
     if (!acceptPrivacy) ce.privacy = "Devi accettare l'informativa sulla privacy";
     if (!acceptTerms) ce.terms = "Devi accettare i termini e condizioni";
@@ -220,8 +213,6 @@ export default function OrganizationSignupPage() {
           numeroLicenze: Number(data.numeroLicenze),
           acceptPrivacy: true,
           acceptTerms: true,
-          website: hpWebsite,
-          segno_zodiacale: hpSegnoZodiacale,
         }),
       });
 
@@ -402,24 +393,6 @@ export default function OrganizationSignupPage() {
         )}
 
         <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-6">
-          <div className="honeypot-field" aria-hidden="true">
-            <input
-              type="text"
-              name="ts_trap_a7x"
-              value={hpWebsite}
-              onChange={(e) => setHpWebsite(e.target.value)}
-              tabIndex={-1}
-              autoComplete="off"
-            />
-            <input
-              type="text"
-              name="ts_trap_b3z"
-              value={hpSegnoZodiacale}
-              onChange={(e) => setHpSegnoZodiacale(e.target.value)}
-              tabIndex={-1}
-              autoComplete="off"
-            />
-          </div>
           {/* SEZIONE 1: Dati identificativi */}
           <Card>
             <CardHeader className="pb-2">
