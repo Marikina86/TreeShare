@@ -507,7 +507,7 @@ export default function PrivateSignupPage() {
           <div className="honeypot-field" aria-hidden="true">
             <input
               type="text"
-              name="website"
+              name="ts_trap_a7x"
               value={hpWebsite}
               onChange={(e) => setHpWebsite(e.target.value)}
               tabIndex={-1}
@@ -515,7 +515,7 @@ export default function PrivateSignupPage() {
             />
             <input
               type="text"
-              name="segno_zodiacale"
+              name="ts_trap_b3z"
               value={hpSegnoZodiacale}
               onChange={(e) => setHpSegnoZodiacale(e.target.value)}
               tabIndex={-1}
