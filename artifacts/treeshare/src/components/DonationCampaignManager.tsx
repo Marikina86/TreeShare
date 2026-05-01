@@ -1144,15 +1144,14 @@ export default function DonationCampaignManager({ accountType }: {
                 <h3 className="text-sm font-semibold text-foreground">{l.selectDuration}</h3>
                 <div className="space-y-2">
                   {pricing.map((p) => {
-                    const discounted = discountInfo && selectedPricing === p.id
-                      ? discountInfo.discountedCents
-                      : null;
+                    const isSelected = selectedPricing === p.id;
+                    const discounted = discountInfo && isSelected ? discountInfo.discountedCents : null;
                     return (
                       <button
                         key={p.id}
-                        onClick={() => { setSelectedPricing(p.id); setDiscountInfo(null); setDiscountCodeInput(""); }}
+                        onClick={() => { setSelectedPricing(p.id); setDiscountInfo(null); }}
                         className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border text-sm transition-colors ${
-                          selectedPricing === p.id
+                          isSelected
                             ? "border-emerald-500 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300"
                             : "border-border hover:bg-muted text-foreground"
                         }`}
@@ -1176,43 +1175,66 @@ export default function DonationCampaignManager({ accountType }: {
                   <p className="text-sm text-muted-foreground text-center py-4">{l.noPricing}</p>
                 )}
 
-                {/* Discount code input */}
-                {selectedPricing && !discountInfo && (
-                  <div className="flex gap-2 items-center">
-                    <input
-                      type="text"
-                      value={discountCodeInput}
-                      onChange={(e) => setDiscountCodeInput(e.target.value.toUpperCase())}
-                      onKeyDown={(e) => e.key === "Enter" && handleApplyDiscount()}
-                      placeholder={l.discountCodePlaceholder}
-                      className="flex-1 px-3 py-2 text-sm border border-border rounded-lg bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-                      maxLength={32}
-                    />
-                    <button
-                      type="button"
-                      onClick={handleApplyDiscount}
-                      disabled={!discountCodeInput.trim() || discountLoading}
-                      className="px-3 py-2 text-sm font-medium bg-muted border border-border rounded-lg hover:bg-muted/80 disabled:opacity-50"
-                    >
-                      {discountLoading ? "..." : l.applyCode}
-                    </button>
-                  </div>
-                )}
+                {/* Discount code — always visible when there are plans */}
+                {pricing.length > 0 && (
+                  <div className="border border-border rounded-xl p-3 space-y-2 bg-muted/30">
+                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{l.discountCode}</p>
+                    {!discountInfo ? (
+                      <div className="flex gap-2 items-center">
+                        <input
+                          type="text"
+                          value={discountCodeInput}
+                          onChange={(e) => setDiscountCodeInput(e.target.value.toUpperCase())}
+                          onKeyDown={(e) => e.key === "Enter" && selectedPricing && handleApplyDiscount()}
+                          placeholder={l.discountCodePlaceholder}
+                          className="flex-1 px-3 py-2 text-sm border border-border rounded-lg bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                          maxLength={32}
+                        />
+                        <button
+                          type="button"
+                          onClick={handleApplyDiscount}
+                          disabled={!discountCodeInput.trim() || discountLoading || !selectedPricing}
+                          title={!selectedPricing ? l.selectPlan : undefined}
+                          className="px-3 py-2 text-sm font-medium bg-primary text-primary-foreground rounded-lg hover:opacity-90 disabled:opacity-40"
+                        >
+                          {discountLoading ? "..." : l.applyCode}
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-emerald-700 dark:text-emerald-300 font-medium">
+                          <strong>{discountInfo.code}</strong>
+                          {" — "}{l.youSave} <strong className="text-emerald-600">€{(discountInfo.savedCents / 100).toFixed(2)}</strong>
+                        </span>
+                        <button
+                          type="button"
+                          onClick={handleRemoveDiscount}
+                          className="text-xs text-muted-foreground hover:text-destructive underline ml-2"
+                        >
+                          {l.removeDiscount}
+                        </button>
+                      </div>
+                    )}
 
-                {/* Applied discount badge */}
-                {discountInfo && selectedPricing && (
-                  <div className="flex items-center justify-between px-3 py-2 bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-300 dark:border-emerald-700 rounded-lg text-sm">
-                    <span className="text-emerald-700 dark:text-emerald-300 font-medium">
-                      {l.discountApplied}: <strong>{discountInfo.code}</strong>
-                      {" · "}{l.youSave} <strong>€{(discountInfo.savedCents / 100).toFixed(2)}</strong>
-                    </span>
-                    <button
-                      type="button"
-                      onClick={handleRemoveDiscount}
-                      className="text-xs text-muted-foreground hover:text-foreground underline ml-2"
-                    >
-                      {l.removeDiscount}
-                    </button>
+                    {/* Price summary */}
+                    {selectedPricing && (() => {
+                      const plan = pricing.find(p => p.id === selectedPricing);
+                      if (!plan) return null;
+                      const finalCents = discountInfo ? discountInfo.discountedCents : plan.priceCents;
+                      return (
+                        <div className="flex items-center justify-between pt-1 border-t border-border mt-1">
+                          <span className="text-xs text-muted-foreground">{lang === "it" ? "Totale da pagare" : "Total to pay"}</span>
+                          <span className="font-bold text-sm text-foreground">
+                            {discountInfo && (
+                              <span className="line-through text-muted-foreground text-xs font-normal mr-1.5">
+                                €{(plan.priceCents / 100).toFixed(2)}
+                              </span>
+                            )}
+                            €{(finalCents / 100).toFixed(2)}
+                          </span>
+                        </div>
+                      );
+                    })()}
                   </div>
                 )}
                 <div className="flex gap-2 pt-1">
