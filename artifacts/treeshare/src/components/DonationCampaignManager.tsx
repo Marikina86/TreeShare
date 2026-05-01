@@ -8,6 +8,8 @@ import { resizeToCampaignBlob } from "@/lib/imageUtils";
 import { loadStripe } from "@stripe/stripe-js";
 import { Elements, PaymentElement, useStripe, useElements } from "@stripe/react-stripe-js";
 import { PayPalScriptProvider, PayPalButtons } from "@paypal/react-paypal-js";
+import CityAutocomplete from "@/components/CityAutocomplete";
+import { ITALIAN_PROVINCES } from "@/lib/italianProvinces";
 
 interface Campaign {
   id: number;
@@ -877,19 +879,25 @@ export default function DonationCampaignManager({ accountType }: {
                     className="w-full px-3 py-2 border border-border rounded-xl text-sm bg-background resize-none"
                   />
                   <div className="flex gap-2">
-                    <input
+                    <CityAutocomplete
                       value={editComune}
-                      onChange={(e) => setEditComune(e.target.value)}
+                      onChange={(city, province) => {
+                        setEditComune(city);
+                        if (province) setEditProvincia(province);
+                      }}
                       placeholder={l.comunePlaceholder}
                       className="flex-1 px-3 py-2 border border-border rounded-xl text-sm bg-background"
                     />
-                    <input
+                    <select
                       value={editProvincia}
                       onChange={(e) => setEditProvincia(e.target.value)}
-                      placeholder={l.provinciaPlaceholder}
-                      maxLength={10}
-                      className="w-24 px-3 py-2 border border-border rounded-xl text-sm bg-background"
-                    />
+                      className="w-28 px-2 py-2 border border-border rounded-xl text-sm bg-background"
+                    >
+                      <option value="">{l.provinciaLabel}</option>
+                      {ITALIAN_PROVINCES.map((p) => (
+                        <option key={p.code} value={p.code}>{p.code} — {p.name}</option>
+                      ))}
+                    </select>
                   </div>
                   <div className="flex gap-2">
                     <button
@@ -1143,19 +1151,25 @@ export default function DonationCampaignManager({ accountType }: {
                   className="w-full px-3 py-2 border border-border rounded-xl text-sm bg-background resize-none"
                 />
                 <div className="flex gap-2">
-                  <input
+                  <CityAutocomplete
                     value={formComune}
-                    onChange={(e) => setFormComune(e.target.value)}
+                    onChange={(city, province) => {
+                      setFormComune(city);
+                      if (province) setFormProvincia(province);
+                    }}
                     placeholder={l.comunePlaceholder}
                     className="flex-1 px-3 py-2 border border-border rounded-xl text-sm bg-background"
                   />
-                  <input
+                  <select
                     value={formProvincia}
                     onChange={(e) => setFormProvincia(e.target.value)}
-                    placeholder={l.provinciaPlaceholder}
-                    maxLength={10}
-                    className="w-24 px-3 py-2 border border-border rounded-xl text-sm bg-background"
-                  />
+                    className="w-28 px-2 py-2 border border-border rounded-xl text-sm bg-background"
+                  >
+                    <option value="">{l.provinciaLabel}</option>
+                    {ITALIAN_PROVINCES.map((p) => (
+                      <option key={p.code} value={p.code}>{p.code} — {p.name}</option>
+                    ))}
+                  </select>
                 </div>
 
                 {formPhotos.length > 0 && (

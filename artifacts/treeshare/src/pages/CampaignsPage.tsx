@@ -6,6 +6,8 @@ import Layout from "@/components/Layout";
 import { useLang } from "@/lib/i18n";
 import { useShare } from "@/hooks/useShare";
 import { CampaignPhotoGrid, type CampaignPhoto } from "@/components/PhotoLightbox";
+import CityAutocomplete from "@/components/CityAutocomplete";
+import { ITALIAN_PROVINCES } from "@/lib/italianProvinces";
 
 interface Campaign {
   id: number;
@@ -149,38 +151,49 @@ export default function CampaignsPage() {
           <h1 className="text-xl font-bold text-foreground">{l.title}</h1>
         </div>
 
-        <div className="flex gap-2 mb-5">
-          <input
-            value={filterComune}
-            onChange={(e) => setFilterComune(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && applyFilters()}
-            placeholder={l.filterComune}
-            className="flex-1 px-3 py-2 border border-border rounded-xl text-sm bg-background"
-          />
-          <input
-            value={filterProvincia}
-            onChange={(e) => setFilterProvincia(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && applyFilters()}
-            placeholder={l.filterProvincia}
-            maxLength={10}
-            className="w-20 px-3 py-2 border border-border rounded-xl text-sm bg-background"
-          />
-          <button
-            onClick={applyFilters}
-            className="px-4 py-2 bg-primary text-primary-foreground rounded-xl text-sm font-medium hover:opacity-90"
-          >
-            <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-              <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
-            </svg>
-          </button>
-          {hasActiveFilter && (
+        <div className="space-y-2 mb-5">
+          <div className="flex gap-2">
+            <div className="flex-1">
+              <CityAutocomplete
+                value={filterComune}
+                onChange={(city, province) => {
+                  setFilterComune(city);
+                  if (province) setFilterProvincia(province);
+                }}
+                placeholder={l.filterComune}
+                className="w-full px-3 py-2 border border-border rounded-xl text-sm bg-background"
+              />
+            </div>
             <button
-              onClick={clearFilters}
-              className="px-3 py-2 border border-border rounded-xl text-sm text-muted-foreground hover:bg-muted"
+              onClick={applyFilters}
+              className="px-4 py-2 bg-primary text-primary-foreground rounded-xl text-sm font-medium hover:opacity-90 flex items-center"
             >
-              ✕
+              <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+              </svg>
             </button>
-          )}
+            {hasActiveFilter && (
+              <button
+                onClick={clearFilters}
+                className="px-3 py-2 border border-border rounded-xl text-sm text-muted-foreground hover:bg-muted"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+          <select
+            value={filterProvincia}
+            onChange={(e) => {
+              setFilterProvincia(e.target.value);
+              setAppliedProvincia(e.target.value);
+            }}
+            className="w-full px-3 py-2 border border-border rounded-xl text-sm bg-background"
+          >
+            <option value="">{l.filterProvincia} — tutte le province</option>
+            {ITALIAN_PROVINCES.map((p) => (
+              <option key={p.code} value={p.code}>{p.code} — {p.name}</option>
+            ))}
+          </select>
         </div>
 
         {loading ? (
