@@ -1,4 +1,6 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
+import RecaptchaWidget from "@/components/RecaptchaWidget";
+import type ReCAPTCHA from "react-google-recaptcha";
 import CityAutocomplete from "@/components/CityAutocomplete";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -172,6 +174,9 @@ export default function OrganizationSignupPage() {
   const [acceptTerms, setAcceptTerms] = useState(false);
   const [consentErrors, setConsentErrors] = useState<{ privacy?: string; terms?: string }>({});
   const [verifiedEmail, setVerifiedEmail] = useState("");
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const [captchaError, setCaptchaError] = useState<string | null>(null);
+  const captchaRef = useRef<ReCAPTCHA>(null);
   const [resending, setResending] = useState(false);
   const [resendMsg, setResendMsg] = useState<string | null>(null);
   const [verifyError, setVerifyError] = useState<string | null>(null);
@@ -192,6 +197,10 @@ export default function OrganizationSignupPage() {
   const strength = useMemo(() => getPasswordStrength(passwordValue), [passwordValue]);
 
   const onSubmit = async (data: FormValues) => {
+    if (!captchaToken) {
+      setCaptchaError("Completa la verifica reCAPTCHA prima di procedere.");
+      return;
+    }
     const ce: { privacy?: string; terms?: string } = {};
     if (!acceptPrivacy) ce.privacy = "Devi accettare l'informativa sulla privacy";
     if (!acceptTerms) ce.terms = "Devi accettare i termini e condizioni";
@@ -200,10 +209,26 @@ export default function OrganizationSignupPage() {
       return;
     }
     setConsentErrors({});
+    setCaptchaError(null);
     setSubmitting(true);
     setServerError(null);
 
     try {
+      // Verifica reCAPTCHA server-side
+      const captchaRes = await fetch("/api/auth/verify-captcha", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: captchaToken }),
+      });
+      if (!captchaRes.ok) {
+        const captchaData = await captchaRes.json().catch(() => ({}));
+        setServerError((captchaData as { error?: string }).error || "Verifica reCAPTCHA non riuscita. Riprova.");
+        captchaRef.current?.reset();
+        setCaptchaToken(null);
+        setSubmitting(false);
+        return;
+      }
+
       const res = await fetch("/api/register-ente", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -230,6 +255,8 @@ export default function OrganizationSignupPage() {
         } else {
           setServerError(json.error ?? "Errore durante la registrazione.");
         }
+        captchaRef.current?.reset();
+        setCaptchaToken(null);
         return;
       }
 
@@ -237,6 +264,8 @@ export default function OrganizationSignupPage() {
       setStep("verify");
     } catch {
       setServerError("Impossibile contattare il server. Riprova più tardi.");
+      captchaRef.current?.reset();
+      setCaptchaToken(null);
     } finally {
       setSubmitting(false);
     }
@@ -803,6 +832,22 @@ export default function OrganizationSignupPage() {
               </p>
             </CardContent>
           </Card>
+
+          <div className="flex flex-col items-center gap-2">
+            <RecaptchaWidget
+              ref={captchaRef}
+              onChange={(token) => {
+                setCaptchaToken(token);
+                if (token) setCaptchaError(null);
+              }}
+            />
+            {captchaError && (
+              <p className="flex items-center gap-1 text-xs text-destructive">
+                <AlertCircle className="h-3 w-3 flex-shrink-0" />
+                {captchaError}
+              </p>
+            )}
+          </div>
 
           <Button
             type="submit"

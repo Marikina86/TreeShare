@@ -5,6 +5,8 @@ import { useAuth } from "@/lib/auth";
 import { ArrowLeft, User, Eye, EyeOff, Leaf, AlertCircle, CheckCircle2 } from "lucide-react";
 import { useLang } from "@/lib/i18n";
 import CityAutocomplete from "@/components/CityAutocomplete";
+import RecaptchaWidget from "@/components/RecaptchaWidget";
+import type ReCAPTCHA from "react-google-recaptcha";
 
 function FieldError({ message }: { message?: string }) {
   if (!message) return null;
@@ -59,6 +61,8 @@ export default function PrivateSignupPage() {
   const [acceptTerms, setAcceptTerms] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const errorRef = useRef<HTMLDivElement>(null);
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const captchaRef = useRef<ReCAPTCHA>(null);
 
   useEffect(() => {
     if (serverError && errorRef.current) {
@@ -93,10 +97,30 @@ export default function PrivateSignupPage() {
     ev.preventDefault();
     if (!validate()) return;
 
+    if (!captchaToken) {
+      setErrors((e) => ({ ...e, captcha: lang === "en" ? "Please complete the reCAPTCHA verification." : "Completa la verifica reCAPTCHA prima di procedere." }));
+      return;
+    }
+
     setSubmitting(true);
     setServerError(null);
 
     try {
+      // Verifica reCAPTCHA server-side
+      const captchaRes = await fetch("/api/auth/verify-captcha", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: captchaToken }),
+      });
+      if (!captchaRes.ok) {
+        const captchaData = await captchaRes.json().catch(() => ({}));
+        setServerError((captchaData as { error?: string }).error || (lang === "en" ? "reCAPTCHA verification failed. Please try again." : "Verifica reCAPTCHA non riuscita. Riprova."));
+        captchaRef.current?.reset();
+        setCaptchaToken(null);
+        setSubmitting(false);
+        return;
+      }
+
       // Verifica se l'email è stata bannata (account eliminato o bloccato dall'admin)
       const bannedRes = await fetch(`/api/auth/banned?email=${encodeURIComponent(fields.email.trim().toLowerCase())}`);
       if (bannedRes.ok) {
@@ -218,6 +242,8 @@ export default function PrivateSignupPage() {
             `: ${error.message}`
           );
         }
+        captchaRef.current?.reset();
+        setCaptchaToken(null);
         return;
       }
 
@@ -252,6 +278,8 @@ export default function PrivateSignupPage() {
       }
     } catch {
       setServerError("Errore durante la registrazione. Riprova.");
+      captchaRef.current?.reset();
+      setCaptchaToken(null);
     } finally {
       setSubmitting(false);
     }
@@ -684,6 +712,22 @@ export default function PrivateSignupPage() {
                 ? <>By registering, you acknowledge our <Link href="/cookies" className="underline text-primary font-medium">Cookie Policy</Link>.</>
                 : <>Registrandoti, prendi atto della nostra <Link href="/cookies" className="underline text-primary font-medium">Cookie Policy</Link>.</>}
             </p>
+          </div>
+
+          <div className="pt-1">
+            <RecaptchaWidget
+              ref={captchaRef}
+              onChange={(token) => {
+                setCaptchaToken(token);
+                if (token) setErrors((e) => ({ ...e, captcha: "" }));
+              }}
+            />
+            {errors.captcha && (
+              <p className="flex items-center gap-1 text-xs text-destructive mt-2 justify-center">
+                <AlertCircle className="h-3 w-3 flex-shrink-0" />
+                {errors.captcha}
+              </p>
+            )}
           </div>
 
           <button
