@@ -84,11 +84,7 @@ const schema = z.object({
   referenteNome: z.string().max(100).optional(),
   referenteCognome: z.string().max(100).optional(),
 
-  username: z
-    .string()
-    .min(3, "Username minimo 3 caratteri")
-    .max(50)
-    .regex(/^[a-zA-Z0-9_]+$/, "Solo lettere, numeri e underscore"),
+  username: z.string().max(50).optional(),
   password: z.string().min(8, "Password minimo 8 caratteri").max(100),
   confirmPassword: z.string().min(1, "Ripeti la password"),
   ruoloUtente: z.string().min(1, "Ruolo obbligatorio"),
@@ -212,7 +208,7 @@ export default function OrganizationSignupPage() {
         body: JSON.stringify({
           ...data,
           confirmPassword: undefined,
-          numeroLicenze: Number(data.numeroLicenze),
+          numeroLicenze: data.numeroLicenze ? Number(data.numeroLicenze) : 1,
           acceptPrivacy: true,
           acceptTerms: true,
         }),
@@ -620,19 +616,19 @@ export default function OrganizationSignupPage() {
             <CardContent className="space-y-4">
               <div>
                 <Label htmlFor="username">
-                  Username <span className="text-destructive">*</span>
+                  Username
                 </Label>
                 <div className="relative">
                   <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input
                     id="username"
-                    placeholder="es. comune_roma"
+                    placeholder="es. comune_roma (facoltativo)"
                     className={`pl-9 ${errors.username ? "border-destructive" : ""}`}
                     {...register("username")}
                   />
                 </div>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Solo lettere, numeri e underscore (_)
+                  Facoltativo — solo lettere, numeri e underscore (_). Generato automaticamente se lasciato vuoto.
                 </p>
                 <FieldError message={errors.username?.message} />
               </div>

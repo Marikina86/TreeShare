@@ -50,18 +50,20 @@ router.post("/register-ente", async (req, res) => {
       return;
     }
 
-    const existing = await db
-      .select({ id: organizationsTable.id })
-      .from(organizationsTable)
-      .where(eq(organizationsTable.username, data.username))
-      .limit(1);
+    if (data.username && data.username.trim()) {
+      const existing = await db
+        .select({ id: organizationsTable.id })
+        .from(organizationsTable)
+        .where(eq(organizationsTable.username, data.username.trim()))
+        .limit(1);
 
-    if (existing.length > 0) {
-      res.status(409).json({
-        error: "Username già in uso",
-        fields: { username: "Questo username è già registrato." },
-      });
-      return;
+      if (existing.length > 0) {
+        res.status(409).json({
+          error: "Username già in uso",
+          fields: { username: "Questo username è già registrato." },
+        });
+        return;
+      }
     }
 
     const existingEmail = await db
@@ -106,14 +108,23 @@ router.post("/register-ente", async (req, res) => {
 
     const redirectTo = allowedOrigin ? `${allowedOrigin}/feed` : undefined;
 
-    const fullName = [data.referenteNome, data.referenteCognome].filter(Boolean).join(" ") || data.username;
+    // Auto-genera username dalla ragione sociale se non fornito
+    const resolvedUsername = (data.username && data.username.trim())
+      ? data.username.trim()
+      : data.ragioneSociale
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, "_")
+          .replace(/^_|_$/g, "")
+          .slice(0, 40) + "_" + Math.floor(Math.random() * 9000 + 1000);
+
+    const fullName = [data.referenteNome, data.referenteCognome].filter(Boolean).join(" ") || resolvedUsername;
 
     const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
       email: data.emailUfficiale,
       password: data.password,
       email_confirm: true,
       user_metadata: {
-        username: data.username,
+        username: resolvedUsername,
         full_name: fullName,
       },
     });
@@ -152,7 +163,7 @@ router.post("/register-ente", async (req, res) => {
       orgResult = await db.transaction(async (tx) => {
         await tx.insert(usersTable).values({
           clerkUserId: supabaseUserId,
-          username: data.username,
+          username: resolvedUsername,
           accountType: "organization",
         });
 
@@ -173,7 +184,7 @@ router.post("/register-ente", async (req, res) => {
             telefono: data.telefono ?? "",
             referenteNome: data.referenteNome ?? "",
             referenteCognome: data.referenteCognome ?? "",
-            username: data.username,
+            username: resolvedUsername,
             hashedPassword,
             ruoloUtente: data.ruoloUtente,
             numeroLicenze: data.numeroLicenze,
