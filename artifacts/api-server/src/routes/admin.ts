@@ -93,12 +93,11 @@ async function collectAndDeleteUserPhotos(clerkUserId: string): Promise<void> {
 // GET /admin/stats — summary numbers
 router.get("/admin/stats", requireAuth, requireAdmin, async (req, res) => {
   try {
-    const [totalUsers] = await db.select({ count: count() }).from(usersTable);
-    const [totalTrees] = await db.select({ count: count() }).from(treesTable);
-    const [blockedUsers] = await db
-      .select({ count: count() })
-      .from(usersTable)
-      .where(eq(usersTable.isBlocked, true));
+    const [[totalUsers], [totalTrees], [blockedUsers]] = await Promise.all([
+      db.select({ count: count() }).from(usersTable),
+      db.select({ count: count() }).from(treesTable),
+      db.select({ count: count() }).from(usersTable).where(eq(usersTable.isBlocked, true)),
+    ]);
 
     res.json({
       totalUsers: Number(totalUsers?.count ?? 0),
@@ -113,7 +112,7 @@ router.get("/admin/stats", requireAuth, requireAdmin, async (req, res) => {
 
 // GET /admin/users — list all users
 router.get("/admin/users", requireAuth, requireAdmin, async (req, res) => {
-  const search = (req.query.search as string | undefined)?.toLowerCase() ?? "";
+  const search = (req.query.search as string | undefined) ?? "";
   try {
     const users = await db
       .select({
@@ -128,19 +127,15 @@ router.get("/admin/users", requireAuth, requireAdmin, async (req, res) => {
         createdAt: usersTable.createdAt,
       })
       .from(usersTable)
+      .where(search ? or(
+        ilike(usersTable.username, `%${search}%`),
+        ilike(usersTable.country, `%${search}%`),
+        ilike(usersTable.city, `%${search}%`),
+      ) : undefined)
       .orderBy(desc(usersTable.createdAt));
 
-    const filtered = search
-      ? users.filter(
-          (u) =>
-            u.username.toLowerCase().includes(search) ||
-            (u.country ?? "").toLowerCase().includes(search) ||
-            (u.city ?? "").toLowerCase().includes(search),
-        )
-      : users;
-
     res.json(
-      filtered.map((u) => ({
+      users.map((u) => ({
         ...u,
         createdAt: u.createdAt.toISOString(),
       })),
@@ -363,47 +358,51 @@ router.get("/admin/trees", requireAuth, requireAdmin, async (req, res) => {
   const offset = (page - 1) * limit;
 
   try {
-    const query = db
-      .select({
-        id: treesTable.id,
-        userId: treesTable.userId,
-        photoUrl: treesTable.photoUrl,
-        plantName: treesTable.plantName,
-        caption: treesTable.caption,
-        species: treesTable.species,
-        locationName: treesTable.locationName,
-        country: treesTable.country,
-        photoStatus: treesTable.photoStatus,
-        verificationBypassed: treesTable.verificationBypassed,
-        createdAt: treesTable.createdAt,
-        username: usersTable.username,
-        userPhotoUrl: usersTable.photoUrl,
-      })
-      .from(treesTable)
-      .leftJoin(usersTable, eq(treesTable.userId, usersTable.clerkUserId))
-      .where(eq(treesTable.photoStatus, "pending"))
-      .orderBy(desc(treesTable.createdAt))
-      .limit(limit)
-      .offset(offset);
+    const searchCondition = search
+      ? and(
+          eq(treesTable.photoStatus, "pending"),
+          or(
+            ilike(usersTable.username, `%${search}%`),
+            ilike(treesTable.plantName, `%${search}%`),
+            ilike(treesTable.species, `%${search}%`),
+            ilike(treesTable.locationName, `%${search}%`),
+            ilike(treesTable.country, `%${search}%`),
+          ),
+        )
+      : eq(treesTable.photoStatus, "pending");
 
     const [trees, [{ total }]] = await Promise.all([
-      query,
-      db.select({ total: count() }).from(treesTable).where(eq(treesTable.photoStatus, "pending")),
+      db
+        .select({
+          id: treesTable.id,
+          userId: treesTable.userId,
+          photoUrl: treesTable.photoUrl,
+          plantName: treesTable.plantName,
+          caption: treesTable.caption,
+          species: treesTable.species,
+          locationName: treesTable.locationName,
+          country: treesTable.country,
+          photoStatus: treesTable.photoStatus,
+          verificationBypassed: treesTable.verificationBypassed,
+          createdAt: treesTable.createdAt,
+          username: usersTable.username,
+          userPhotoUrl: usersTable.photoUrl,
+        })
+        .from(treesTable)
+        .leftJoin(usersTable, eq(treesTable.userId, usersTable.clerkUserId))
+        .where(searchCondition)
+        .orderBy(desc(treesTable.createdAt))
+        .limit(limit)
+        .offset(offset),
+      db
+        .select({ total: count() })
+        .from(treesTable)
+        .leftJoin(usersTable, eq(treesTable.userId, usersTable.clerkUserId))
+        .where(searchCondition),
     ]);
 
-    const filtered = search
-      ? trees.filter(
-          (t) =>
-            (t.username ?? "").toLowerCase().includes(search) ||
-            (t.plantName ?? "").toLowerCase().includes(search) ||
-            (t.species ?? "").toLowerCase().includes(search) ||
-            (t.locationName ?? "").toLowerCase().includes(search) ||
-            (t.country ?? "").toLowerCase().includes(search),
-        )
-      : trees;
-
     res.json({
-      trees: filtered.map((t) => ({ ...t, createdAt: t.createdAt.toISOString() })),
+      trees: trees.map((t) => ({ ...t, createdAt: t.createdAt.toISOString() })),
       total: Number(total),
       page,
       pages: Math.ceil(Number(total) / limit),
@@ -522,12 +521,15 @@ router.delete("/admin/trees/:treeId", requireAuth, requireAdmin, async (req, res
   try {
     const [tree] = await db.select({ userId: treesTable.userId }).from(treesTable).where(eq(treesTable.id, treeId));
     if (!tree) { res.status(404).json({ error: "Tree not found" }); return; }
-    await db.delete(treesTable).where(eq(treesTable.id, treeId));
-    // Decrement user's tree count
-    await db
-      .update(usersTable)
-      .set({ treesPlanted: sql`GREATEST(${usersTable.treesPlanted} - 1, 0)` })
-      .where(eq(usersTable.clerkUserId, tree.userId));
+    await db.transaction(async (tx) => {
+      await tx.delete(treeStatusReportsTable).where(eq(treeStatusReportsTable.treeId, treeId));
+      await tx.delete(treeUpdatesTable).where(eq(treeUpdatesTable.treeId, treeId));
+      await tx.delete(treeSunsTable).where(eq(treeSunsTable.treeId, treeId));
+      await tx.delete(treesTable).where(eq(treesTable.id, treeId));
+      await tx.update(usersTable)
+        .set({ treesPlanted: sql`GREATEST(${usersTable.treesPlanted} - 1, 0)` })
+        .where(eq(usersTable.clerkUserId, tree.userId));
+    });
     res.status(204).send();
   } catch (err) {
     req.log.error({ err }, "Error deleting tree (admin)");

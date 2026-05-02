@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { treesTable, treeUpdatesTable, treeSunsTable, usersTable, weeklyWinnersTable } from "@workspace/db";
-import { eq, count, desc, inArray } from "drizzle-orm";
+import { treesTable, treeUpdatesTable, usersTable, weeklyWinnersTable } from "@workspace/db";
+import { eq, count, desc, inArray, and } from "drizzle-orm";
 import { requireAdmin } from "../middlewares/requireAdmin";
 import { calculateWeeklyWinners, getCurrentWinnersMap } from "../lib/weeklyWinnerJob";
 
@@ -25,14 +25,16 @@ router.get("/weekly-winners/current", async (req, res) => {
 
     const treeIds = Object.values(winnersMap).map((w) => w.treeId);
 
-    const [winnerTrees, updates, suns] = await Promise.all([
+    const [winnerTrees, updates] = await Promise.all([
       db.select().from(treesTable).where(inArray(treesTable.id, treeIds)),
-      db.select({ treeId: treeUpdatesTable.treeId, cnt: count() }).from(treeUpdatesTable).groupBy(treeUpdatesTable.treeId),
-      db.select({ treeId: treeSunsTable.treeId, cnt: count() }).from(treeSunsTable).groupBy(treeSunsTable.treeId),
+      // Scoped ai soli treeIds vincitori + solo aggiornamenti approvati (coerente con feed)
+      db.select({ treeId: treeUpdatesTable.treeId, cnt: count() })
+        .from(treeUpdatesTable)
+        .where(and(inArray(treeUpdatesTable.treeId, treeIds), eq(treeUpdatesTable.photoStatus, "approved")))
+        .groupBy(treeUpdatesTable.treeId),
     ]);
 
     const updateMap = new Map(updates.map((u) => [u.treeId, u.cnt]));
-    const sunMap = new Map(suns.map((s) => [s.treeId, s.cnt]));
 
     // Batch load users — una query per tutti i vincitori invece di N query nel loop
     const uniqueUserIds = [...new Set(winnerTrees.map((t) => t.userId))];
@@ -68,7 +70,7 @@ router.get("/weekly-winners/current", async (req, res) => {
         country: tree.country ?? null,
         province: tree.province ?? province,
         mapsUrl: tree.mapsUrl ?? buildMapsUrl(tree.latitude, tree.longitude),
-        sunCount: Number(sunMap.get(tree.id) ?? 0),
+        sunCount: tree.sunCount,
         weekSunCount: winner.sunCount,
         updateCount: Number(updateMap.get(tree.id) ?? 0),
         isWeeklyWinner: true,

@@ -549,7 +549,7 @@ router.post("/trees/:treeId/updates", requireAuth, async (req, res) => {
       .where(eq(treeUpdatesTable.treeId, treeId));
     const unlockedSlots = getUnlockedPhotoSlots(tree.createdAt);
     if (unlockedSlots === 0) {
-      res.status(422).json({ error: "Nessuno slot foto disponibile. Gli slot si sbloccano ogni trimestre (1 apr, 1 lug, 1 ott, 1 gen) a partire dalla data di piantagione." });
+      res.status(422).json({ error: "Nessuno slot foto disponibile. Gli slot si sbloccano ogni trimestre (15 feb, 15 mag, 15 ago, 15 nov) a partire dalla data di piantagione." });
       return;
     }
     if (existingUpdates.length >= unlockedSlots) {

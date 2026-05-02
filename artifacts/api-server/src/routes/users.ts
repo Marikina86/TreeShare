@@ -177,6 +177,7 @@ router.get("/users/top-planters", async (req, res) => {
       treeCount: Number(p.treeCount),
     })));
   } catch (err) {
+    req.log.error({ err }, "Error fetching top planters");
     res.status(500).json({ error: "Internal server error" });
   }
 });
