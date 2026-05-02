@@ -610,13 +610,11 @@ export default function TreeDetailPage() {
                   Modifica
                 </button>
               )}
-              {(() => {
+              {!isDead && (() => {
                 const updateCount = updates.data?.length ?? 0;
                 const unlockedSlots = t.createdAt ? getUnlockedPhotoSlots(t.createdAt) : 0;
-                const atLimit = isDead || unlockedSlots === 0 || updateCount >= unlockedSlots;
-                const title = isDead
-                  ? "L'albero è stato segnalato come morto"
-                  : unlockedSlots === 0
+                const atLimit = unlockedSlots === 0 || updateCount >= unlockedSlots;
+                const title = unlockedSlots === 0
                   ? `Nessuno slot disponibile. Si sblocca il ${getNextSlotDate(t.createdAt)}`
                   : atLimit
                   ? `Hai usato tutti gli ${unlockedSlots} slot disponibili`
@@ -629,11 +627,9 @@ export default function TreeDetailPage() {
                     className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-opacity flex items-center gap-1.5 ${atLimit ? "bg-muted text-muted-foreground cursor-not-allowed" : "bg-primary text-primary-foreground hover:opacity-90"}`}
                   >
                     + Aggiorna
-                    {!isDead && (
-                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${atLimit ? "bg-destructive/20 text-destructive" : "bg-white/20"}`}>
-                        {updateCount}/{unlockedSlots}
-                      </span>
-                    )}
+                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${atLimit ? "bg-destructive/20 text-destructive" : "bg-white/20"}`}>
+                      {updateCount}/{unlockedSlots}
+                    </span>
                   </button>
                 );
               })()}
