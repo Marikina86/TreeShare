@@ -147,20 +147,8 @@ export default function Co2Page() {
     <Layout>
       <div className="max-w-xl mx-auto px-4 py-6">
         <div className="mb-6">
-          <div className="flex items-center gap-3 mb-1">
-            <div className="w-10 h-10 rounded-2xl bg-green-100 dark:bg-green-900/30 flex items-center justify-center flex-shrink-0">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-green-600 dark:text-green-400">
-                <path d="M2 22C2 22 7 15 12 15C17 15 22 22 22 22"/>
-                <path d="M12 15V10"/>
-                <path d="M12 10C12 10 9 7 6 8C3 9 2 13 5 14C8 15 12 10 12 10Z"/>
-                <path d="M12 10C12 10 15 7 18 8C21 9 22 13 19 14C16 15 12 10 12 10Z"/>
-              </svg>
-            </div>
-            <div>
-              <h1 className="text-2xl font-bold text-foreground leading-tight">Classifica CO₂</h1>
-              <p className="text-sm text-muted-foreground">I comuni che assorbono più CO₂ ogni trimestre</p>
-            </div>
-          </div>
+          <h1 className="text-2xl font-bold text-foreground leading-tight">Classifica CO₂</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">I comuni che assorbono più CO₂ ogni trimestre</p>
         </div>
 
         <div className="bg-card border border-border rounded-2xl p-4 mb-6 flex gap-3 items-start">
