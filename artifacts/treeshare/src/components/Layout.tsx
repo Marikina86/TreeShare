@@ -353,9 +353,10 @@ export default function Layout({ children }: LayoutProps) {
             }`}
           >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12 22V14"/>
-              <path d="M12 14C12 14 7 13 5 9C3 5 6 2 9 3C10.5 3.5 11.5 5 12 7C12.5 5 13.5 3.5 15 3C18 2 21 5 19 9C17 13 12 14 12 14Z" fill="currentColor" opacity="0.15"/>
-              <path d="M12 14C12 14 7 13 5 9C3 5 6 2 9 3C10.5 3.5 11.5 5 12 7C12.5 5 13.5 3.5 15 3C18 2 21 5 19 9C17 13 12 14 12 14Z"/>
+              <circle cx="12" cy="9" r="6" fill="currentColor" opacity="0.15"/>
+              <circle cx="12" cy="9" r="6"/>
+              <path d="M12 15V20"/>
+              <path d="M9 20h6"/>
             </svg>
           </Link>
           <Link
@@ -436,9 +437,10 @@ export default function Layout({ children }: LayoutProps) {
             }`}
           >
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12 22V14"/>
-              <path d="M12 14C12 14 7 13 5 9C3 5 6 2 9 3C10.5 3.5 11.5 5 12 7C12.5 5 13.5 3.5 15 3C18 2 21 5 19 9C17 13 12 14 12 14Z" fill="currentColor" opacity="0.15"/>
-              <path d="M12 14C12 14 7 13 5 9C3 5 6 2 9 3C10.5 3.5 11.5 5 12 7C12.5 5 13.5 3.5 15 3C18 2 21 5 19 9C17 13 12 14 12 14Z"/>
+              <circle cx="12" cy="9" r="6" fill="currentColor" opacity="0.15"/>
+              <circle cx="12" cy="9" r="6"/>
+              <path d="M12 15V20"/>
+              <path d="M9 20h6"/>
             </svg>
           </Link>
           <Link
