@@ -183,24 +183,36 @@ Immagine 2: Nuova foto proposta come aggiornamento fotografico.
 
 COMPITO IN DUE PASSI:
 
-PASSO 1 — Identifica la specie (o categoria) di pianta in ciascuna immagine separatamente.
-Esempi di categorie: quercia/faggio/castagno (latifoglie decidue), pino/abete/cipresso (aghifoglie), palma, cactus/succulenta, bambù, ulivo, arbusto fiorito, erba/erbacea, ecc.
+PASSO 1 — Identifica la specie botanica precisa (genere e specie, se possibile) della pianta in ciascuna immagine separatamente.
+Non limitarti alla categoria generica: distingui a livello di genere/specie. Esempi corretti: "Quercus robur (quercia farnia)", "Pinus sylvestris (pino silvestre)", "Olea europaea (ulivo)", "Phoenix dactylifera (palma da dattero)", "Cedrus atlantica (cedro dell'Atlante)".
 
-PASSO 2 — Confronta le due specie identificate:
-- Rispondi valid: false se le specie identificate appartengono a CATEGORIE DIVERSE (es. aghifoglia vs latifoglia, palma vs qualsiasi altro albero, cactus vs altra pianta, bambù vs altra pianta).
+PASSO 2 — Confronta le due specie identificate applicando queste regole RIGOROSE:
+- Rispondi valid: true SOLO SE le due immagini mostrano la STESSA SPECIE o lo STESSO GENERE botanico stretto (es. quercia + quercia, pino + pino, ulivo + ulivo).
+- Rispondi valid: false se le specie sono diverse anche all'interno della stessa famiglia o categoria. Esempi di RIFIUTO obbligatorio:
+  • Quercia (Quercus) + Faggio (Fagus) → false (entrambe latifoglie decidue ma generi diversi)
+  • Pino (Pinus) + Abete (Abies) → false (entrambe aghifoglie ma generi diversi)
+  • Pino (Pinus) + Cipresso (Cupressus) → false
+  • Palma da dattero (Phoenix) + Palma da cocco (Cocos) → false (generi diversi)
+  • Cedro + Pino → false
+  • Betulla + Pioppo → false
 - Rispondi valid: false se la specie nell'Immagine 2 NON corrisponde alla specie dichiarata (se fornita).
-- Rispondi valid: true SOLO SE le specie sono nella stessa categoria o identiche.
+- Variazioni stagionali (stessa pianta in inverno vs estate) sono ammesse SOLO se il genere è identico.
 
-IMPORTANTE:
-- In caso di dubbio sulla specie, rispondi valid: false.
-- Non fare affidamento su caratteristiche generiche come "entrambe hanno foglie verdi".
-- Variazioni stagionali (stessa pianta in inverno vs estate) sono ammesse SOLO se la categoria è la stessa.
+CRITERI DI RIFIUTO IMMEDIATO:
+- Specie di generi botanici diversi → RIFIUTA sempre, anche se visivamente simili.
+- Non accettare specie diverse solo perché appartengono alla stessa famiglia botanica larga.
+- Il confronto deve essere a livello di genere o specie, non di categoria visiva generica.
+
+POLITICA SUL DUBBIO:
+- Se non riesci a identificare con sufficiente certezza la specie in una o entrambe le immagini → valid: false.
+- Se hai anche solo un ragionevole dubbio che siano specie diverse → valid: false.
+- Sii RIGOROSO: è preferibile rifiutare un caso incerto piuttosto che accettare un aggiornamento con specie errata.
 
 Output OBBLIGATORIO in JSON (senza testo extra):
 {
   "valid": true | false,
-  "species1": "specie/categoria identificata nell'Immagine 1",
-  "species2": "specie/categoria identificata nell'Immagine 2",
+  "species1": "genere e specie identificati nell'Immagine 1",
+  "species2": "genere e specie identificati nell'Immagine 2",
   "reason": "spiegazione breve in italiano"
 }`;
 }
