@@ -1,6 +1,7 @@
 import { db } from "@workspace/db";
 import { treesTable, co2RankingsTable, treeStatusReportsTable } from "@workspace/db";
-import { sql, and, eq, isNotNull, gte, lt, desc, or } from "drizzle-orm";
+import { sql, and, eq, isNotNull, isNull, gte, lt, desc, or } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import { logger } from "./logger";
 
 // 22 kg CO₂/anno per pianta ÷ 12 mesi × 3 mesi = CO₂ trimestrale per pianta
@@ -96,9 +97,14 @@ export async function calculateCo2Rankings(): Promise<void> {
       "[co2Job] Querying trees for quarter"
     );
 
+    // Alias per il doppio join sulla stessa tabella
+    const aliveReports = alias(treeStatusReportsTable, "alive_reports");
+    const deadReports  = alias(treeStatusReportsTable, "dead_reports");
+
     // Conta solo alberi "vivi confermati":
-    // 1. Alberi piantati NEL trimestre precedente (nuovi → contano automaticamente)
-    // 2. Alberi piantati PRIMA del trimestre con status report "alive" + foto per quel trimestre
+    // 1. Alberi piantati NEL trimestre → contano solo se NON hanno report "dead" per il trimestre
+    // 2. Alberi piantati PRIMA del trimestre → contano solo se hanno report "alive" + foto
+    //    e NON hanno report "dead" per il trimestre
     const rows = await db
       .select({
         comune: treesTable.locationName,
@@ -107,21 +113,30 @@ export async function calculateCo2Rankings(): Promise<void> {
       })
       .from(treesTable)
       .leftJoin(
-        treeStatusReportsTable,
+        aliveReports,
         and(
-          eq(treeStatusReportsTable.treeId, treesTable.id),
-          eq(treeStatusReportsTable.quarter, quarterStr),
-          eq(treeStatusReportsTable.status, "alive"),
-          isNotNull(treeStatusReportsTable.photoUrl),
+          eq(aliveReports.treeId, treesTable.id),
+          eq(aliveReports.quarter, quarterStr),
+          eq(aliveReports.status, "alive"),
+          isNotNull(aliveReports.photoUrl),
+        )
+      )
+      .leftJoin(
+        deadReports,
+        and(
+          eq(deadReports.treeId, treesTable.id),
+          eq(deadReports.quarter, quarterStr),
+          eq(deadReports.status, "dead"),
         )
       )
       .where(
         and(
           eq(treesTable.photoStatus, "approved"),
           isNotNull(treesTable.locationName),
+          isNull(deadReports.id),          // escludi qualsiasi albero con report "dead"
           or(
             and(gte(treesTable.createdAt, start), lt(treesTable.createdAt, end)),
-            and(lt(treesTable.createdAt, start), isNotNull(treeStatusReportsTable.id)),
+            and(lt(treesTable.createdAt, start), isNotNull(aliveReports.id)),
           )
         )
       )
