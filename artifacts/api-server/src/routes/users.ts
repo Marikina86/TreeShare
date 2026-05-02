@@ -101,37 +101,25 @@ router.put("/users/me", requireAuth, async (req, res) => {
   }
   const { username, photoUrl, country, city } = parsed.data;
   try {
-    const existing = await db
-      .select()
-      .from(usersTable)
-      .where(eq(usersTable.clerkUserId, userId));
-
-    let user;
-    if (existing.length === 0) {
-      const [created] = await db
-        .insert(usersTable)
-        .values({
-          clerkUserId: userId,
+    const [user] = await db
+      .insert(usersTable)
+      .values({
+        clerkUserId: userId,
+        username,
+        photoUrl: photoUrl ?? null,
+        country: country ?? null,
+        city: city ?? null,
+      })
+      .onConflictDoUpdate({
+        target: usersTable.clerkUserId,
+        set: {
           username,
           photoUrl: photoUrl ?? null,
           country: country ?? null,
           city: city ?? null,
-        })
-        .returning();
-      user = created;
-    } else {
-      const [updated] = await db
-        .update(usersTable)
-        .set({
-          username,
-          photoUrl: photoUrl ?? null,
-          country: country ?? null,
-          city: city ?? null,
-        })
-        .where(eq(usersTable.clerkUserId, userId))
-        .returning();
-      user = updated;
-    }
+        },
+      })
+      .returning();
 
     res.json({
       id: user!.id,

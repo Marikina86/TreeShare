@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
 import { co2RankingsTable } from "@workspace/db";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, inArray } from "drizzle-orm";
 import { calculateCo2Rankings } from "../lib/co2Job";
 import { requireAuth } from "../middlewares/requireAuth";
 import { requireAdmin } from "../middlewares/requireAdmin";
@@ -34,6 +34,7 @@ router.get("/co2/rankings", async (req, res) => {
       rows = await db
         .select()
         .from(co2RankingsTable)
+        .where(inArray(co2RankingsTable.month, monthList))
         .orderBy(desc(co2RankingsTable.month), co2RankingsTable.rank);
 
       const rankings: Record<string, typeof rows> = {};
