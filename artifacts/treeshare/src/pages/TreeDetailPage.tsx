@@ -120,6 +120,9 @@ export default function TreeDetailPage() {
   const [statusSaving, setStatusSaving] = useState(false);
   const statusFileInputRef = useRef<HTMLInputElement>(null);
 
+  // Albero morto: blocca aggiornamenti e mostra overlay
+  const isDead = statusReport?.status === "dead";
+
   // Carica lo stato del trimestre corrente quando il tree è disponibile
   useEffect(() => {
     if (!treeId || !tree.data) return;
@@ -608,8 +611,10 @@ export default function TreeDetailPage() {
               {(() => {
                 const updateCount = updates.data?.length ?? 0;
                 const unlockedSlots = t.createdAt ? getUnlockedPhotoSlots(t.createdAt) : 0;
-                const atLimit = unlockedSlots === 0 || updateCount >= unlockedSlots;
-                const title = unlockedSlots === 0
+                const atLimit = isDead || unlockedSlots === 0 || updateCount >= unlockedSlots;
+                const title = isDead
+                  ? "L'albero è stato segnalato come morto"
+                  : unlockedSlots === 0
                   ? `Nessuno slot disponibile. Si sblocca il ${getNextSlotDate(t.createdAt)}`
                   : atLimit
                   ? `Hai usato tutti gli ${unlockedSlots} slot disponibili`
@@ -622,9 +627,11 @@ export default function TreeDetailPage() {
                     className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-opacity flex items-center gap-1.5 ${atLimit ? "bg-muted text-muted-foreground cursor-not-allowed" : "bg-primary text-primary-foreground hover:opacity-90"}`}
                   >
                     + Aggiorna
-                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${atLimit ? "bg-destructive/20 text-destructive" : "bg-white/20"}`}>
-                      {updateCount}/{unlockedSlots}
-                    </span>
+                    {!isDead && (
+                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${atLimit ? "bg-destructive/20 text-destructive" : "bg-white/20"}`}>
+                        {updateCount}/{unlockedSlots}
+                      </span>
+                    )}
                   </button>
                 );
               })()}
@@ -648,7 +655,7 @@ export default function TreeDetailPage() {
                 </svg>
                 Stato trimestrale — {getCurrentQuarterString()}
               </h3>
-              {statusReport !== undefined && statusReport !== null && !showStatusForm && (
+              {statusReport !== undefined && statusReport !== null && !showStatusForm && !isDead && (
                 <button
                   onClick={() => { setShowStatusForm(true); setStatusChoice(null); }}
                   className="text-xs text-primary hover:underline"
@@ -967,13 +974,22 @@ export default function TreeDetailPage() {
                       )}
                     </div>
                   </div>
-                  <div className="rounded-xl overflow-hidden border border-border">
+                  <div className="rounded-xl overflow-hidden border border-border relative">
                     <img
                       src={photoSrc(photo.photoUrl)}
                       alt={`Foto ${index + 1}`}
-                      className="w-full aspect-video object-cover bg-black/5 dark:bg-white/5 cursor-zoom-in"
+                      className={`w-full aspect-video object-cover bg-black/5 dark:bg-white/5 cursor-zoom-in transition-all ${isDead ? "brightness-[0.45] grayscale-[0.4]" : ""}`}
                       onClick={() => setLightboxUrl(photoSrc(photo.photoUrl))}
                     />
+                    {isDead && (
+                      <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none">
+                        <img
+                          src="/dead-tree.png"
+                          alt=""
+                          className="w-2/5 max-w-[140px] opacity-80 drop-shadow-xl"
+                        />
+                      </div>
+                    )}
                   </div>
                   {photo.note && <p className="mt-2 text-sm text-foreground">{photo.note}</p>}
                 </div>

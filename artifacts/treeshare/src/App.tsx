@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Switch, Route, Router as WouterRouter, Redirect, useLocation } from "wouter";
 import { QueryClientProvider, useQueryClient } from "@tanstack/react-query";
 import { SupabaseAuthProvider, useAuth, useUser, useClerk, Show } from "@/lib/auth";
@@ -93,6 +93,65 @@ function ProfileAutoSync() {
   return null;
 }
 
+function MobileBackButton() {
+  const [location, setLocation] = useLocation();
+  const locationRef = useRef(location);
+  const lastBackAtRef = useRef(0);
+  const [showExitHint, setShowExitHint] = useState(false);
+  const exitHintTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    locationRef.current = location;
+  }, [location]);
+
+  useEffect(() => {
+    // Ensure there is always one extra history entry so popstate fires on back press
+    history.pushState({ appGuard: true }, "");
+
+    const handlePopState = (e: PopStateEvent) => {
+      const currentLoc = locationRef.current;
+
+      if (currentLoc !== "/feed") {
+        // Block wouter from handling this pop; navigate to feed instead
+        e.stopPropagation();
+        history.pushState({ appGuard: true }, "");
+        setLocation("/feed");
+        return;
+      }
+
+      // Already at /feed — implement double-press to exit
+      const now = Date.now();
+      if (now - lastBackAtRef.current < 2000) {
+        // Second press within 2s → let the app close naturally
+        if (exitHintTimer.current) clearTimeout(exitHintTimer.current);
+        setShowExitHint(false);
+        return; // don't re-push state, browser will exit PWA
+      }
+
+      // First press at /feed → stay, show hint
+      e.stopPropagation();
+      history.pushState({ appGuard: true }, "");
+      lastBackAtRef.current = now;
+      setShowExitHint(true);
+      if (exitHintTimer.current) clearTimeout(exitHintTimer.current);
+      exitHintTimer.current = setTimeout(() => setShowExitHint(false), 2000);
+    };
+
+    window.addEventListener("popstate", handlePopState, true);
+    return () => {
+      window.removeEventListener("popstate", handlePopState, true);
+      if (exitHintTimer.current) clearTimeout(exitHintTimer.current);
+    };
+  }, [setLocation]);
+
+  if (!showExitHint) return null;
+  return (
+    <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-[200] px-4 py-2 bg-foreground text-background text-sm rounded-full shadow-lg animate-in fade-in slide-in-from-bottom-2 duration-200 pointer-events-none">
+      Premi ancora per uscire
+    </div>
+  );
+}
+
 function HomeRedirect() {
   return (
     <>
@@ -162,6 +221,7 @@ function AuthProviderWithRoutes() {
         <AuthTokenSync />
         <ProfileAutoSync />
         <TooltipProvider>
+          <MobileBackButton />
           <Switch>
             <Route path="/" component={HomeRedirect} />
             <Route path="/sign-in/*?" component={SignInPage} />
