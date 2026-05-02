@@ -85,7 +85,7 @@ export default function TreeCard({ tree, qualitySettings }: TreeCardProps) {
             />
             {tree.isDead && (
               <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none">
-                <img src="/dead-tree.png" alt="" className="w-1/3 max-w-[100px] opacity-80 drop-shadow-xl" />
+                <img src="/dead-tree.webp" alt="" className="w-1/3 max-w-[100px] opacity-80 drop-shadow-xl" />
               </div>
             )}
             {!tree.isDead && tree.isWeeklyWinner && (
@@ -99,13 +99,6 @@ export default function TreeCard({ tree, qualitySettings }: TreeCardProps) {
                   <path d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" strokeLinecap="round" strokeLinejoin="round"/>
                 </svg>
                 In revisione
-              </div>
-            )}
-            {tree.isDead && (
-              <div className="absolute top-3 left-3 bg-red-600/90 text-white text-xs font-bold px-2 py-1 rounded-full flex items-center gap-1 shadow-md">
-                <svg width="10" height="10" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
-                  <path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" strokeLinejoin="round"/>
-                </svg>
               </div>
             )}
             {tree.updateCount > 0 && (

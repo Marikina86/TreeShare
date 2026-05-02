@@ -984,7 +984,7 @@ export default function TreeDetailPage() {
                     {isDead && (
                       <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none">
                         <img
-                          src="/dead-tree.png"
+                          src="/dead-tree.webp"
                           alt=""
                           className="w-2/5 max-w-[140px] opacity-80 drop-shadow-xl"
                         />
