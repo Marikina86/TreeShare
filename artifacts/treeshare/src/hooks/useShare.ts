@@ -1,6 +1,7 @@
 import { useCallback } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useLang } from "@/lib/i18n";
+import { getCanonicalOrigin } from "@/lib/getCanonicalOrigin";
 
 const labels = {
   it: { copied: "Link copiato!", copyFail: "Impossibile copiare il link" },
@@ -25,7 +26,7 @@ export function useShare() {
   const l = labels[lang as Lang] || labels.en;
 
   const share = useCallback(async ({ title, text, path }: ShareData) => {
-    const baseUrl = window.location.origin + (import.meta.env.BASE_URL ?? "/").replace(/\/$/, "");
+    const baseUrl = getCanonicalOrigin() + (import.meta.env.BASE_URL ?? "/").replace(/\/$/, "");
     const url = `${baseUrl}${path}`;
 
     if (navigator.share) {

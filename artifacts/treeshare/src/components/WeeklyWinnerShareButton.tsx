@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { smartEncode } from "@/lib/imageUtils";
+import { getCanonicalOrigin } from "@/lib/getCanonicalOrigin";
 
 interface Props {
   photoUrl: string;
@@ -323,7 +324,7 @@ function PreviewModal(props: ModalProps) {
       );
 
       const baseUrl =
-        window.location.origin +
+        getCanonicalOrigin() +
         (import.meta.env.BASE_URL ?? "/").replace(/\/$/, "");
       const url = `${baseUrl}/tree/${props.treeId}`;
       const title = "🌞 Pianta della Settimana — TreeShare";

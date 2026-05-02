@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { getCanonicalOrigin } from "@/lib/getCanonicalOrigin";
 import { useParams, Link, useLocation } from "wouter";
 import { useUser, useAuth } from "@/lib/auth";
 import {
@@ -179,7 +180,7 @@ export default function ProfilePage() {
   const [shareState, setShareState] = useState<"idle" | "copied">("idle");
   const [inviteState, setInviteState] = useState<"idle" | "copied">("idle");
 
-  const appUrl = window.location.origin + (import.meta.env.BASE_URL ?? "/");
+  const appUrl = getCanonicalOrigin() + (import.meta.env.BASE_URL ?? "/");
 
   const SHARE_TEXTS: Record<Lang, { shareTitle: string; shareText: string; inviteText: string; copied: string }> = {
     it: { shareTitle: "TreeShare", shareText: "Scopri TreeShare, la community per chi pianta alberi e piante 🌱", inviteText: "Ti invito su TreeShare! Documenta ogni pianta che metti nel terreno e condividila con il mondo 🌳", copied: "Link copiato!" },
