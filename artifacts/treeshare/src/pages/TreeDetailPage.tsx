@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useParams, useLocation } from "wouter";
 import {
   useGetTree,
@@ -25,6 +25,41 @@ function photoSrc(url: string) {
 
 function googleEarthUrl(lat: number, lng: number) {
   return `https://earth.google.com/web/@${lat},${lng},0a,500d,35y,0h,45t,0r`;
+}
+
+function getUnlockedPhotoSlots(createdAtStr: string, now = new Date()): number {
+  const createdAt = new Date(createdAtStr);
+  const quarters = [0, 3, 6, 9];
+  let count = 0;
+  for (let year = createdAt.getFullYear(); year <= now.getFullYear() + 1; year++) {
+    for (const month of quarters) {
+      const boundary = new Date(year, month, 1);
+      if (boundary > createdAt && boundary <= now) count++;
+    }
+  }
+  return Math.min(count, 9);
+}
+
+function getCurrentQuarterString(now = new Date()): string {
+  const year = now.getFullYear();
+  const month = now.getMonth() + 1;
+  const q = month <= 3 ? 1 : month <= 6 ? 2 : month <= 9 ? 3 : 4;
+  return `${year}-Q${q}`;
+}
+
+function getNextSlotDate(createdAtStr: string): string {
+  const createdAt = new Date(createdAtStr);
+  const now = new Date();
+  const quarters = [0, 3, 6, 9];
+  for (let year = now.getFullYear(); year <= now.getFullYear() + 2; year++) {
+    for (const month of quarters) {
+      const boundary = new Date(year, month, 1);
+      if (boundary > now && boundary > createdAt) {
+        return boundary.toLocaleDateString("it-IT", { day: "numeric", month: "long", year: "numeric" });
+      }
+    }
+  }
+  return "prossimo trimestre";
 }
 
 export default function TreeDetailPage() {
@@ -71,6 +106,29 @@ export default function TreeDetailPage() {
   const isOwner = tree.data?.userId === user?.id;
   const canReport = isSignedIn && !isOwner && !!tree.data;
   const [showReport, setShowReport] = useState(false);
+
+  // ── Status report (segnala albero vivo/morto) ────────────────────────────
+  type StatusReport = { quarter: string; status: string; photoUrl: string | null } | null;
+  const [statusReport, setStatusReport] = useState<StatusReport | undefined>(undefined);
+  const [showStatusForm, setShowStatusForm] = useState(false);
+  const [statusChoice, setStatusChoice] = useState<"alive" | "dead" | null>(null);
+  const [statusPhotoFile, setStatusPhotoFile] = useState<File | null>(null);
+  const [statusPhotoPreview, setStatusPhotoPreview] = useState<string | null>(null);
+  const [statusVerifyState, setStatusVerifyState] = useState<"idle" | "verifying" | "ok" | "pending" | "rejected">("idle");
+  const [statusVerifyReason, setStatusVerifyReason] = useState<string | null>(null);
+  const [statusPhotoStatusForUpload, setStatusPhotoStatusForUpload] = useState<"approved" | "pending">("approved");
+  const [statusSaving, setStatusSaving] = useState(false);
+  const statusFileInputRef = useRef<HTMLInputElement>(null);
+
+  // Carica lo stato del trimestre corrente quando il tree è disponibile
+  useEffect(() => {
+    if (!treeId || !tree.data) return;
+    const quarter = getCurrentQuarterString();
+    fetch(`/api/trees/${treeId}/status-report?quarter=${quarter}`)
+      .then((r) => r.json())
+      .then((data) => setStatusReport(data as StatusReport))
+      .catch(() => setStatusReport(null));
+  }, [treeId, tree.data?.id]);
 
   function openEditModal() {
     const t = tree.data!;
@@ -328,6 +386,108 @@ export default function TreeDetailPage() {
     }
   }
 
+  async function handleStatusFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setStatusPhotoFile(file);
+    setStatusVerifyState("idle");
+    setStatusVerifyReason(null);
+    setStatusPhotoStatusForUpload("approved");
+    const reader = new FileReader();
+    reader.onload = async (ev) => {
+      const dataUrl = ev.target?.result as string;
+      setStatusPhotoPreview(dataUrl);
+      setStatusVerifyState("verifying");
+      try {
+        const base64 = dataUrl.includes(",") ? dataUrl.split(",")[1] : dataUrl;
+        const verRes = await fetch("/api/plants/verify", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ imageBase64: base64 }),
+        });
+        if (!verRes.ok) throw new Error("verify failed");
+        const verData = await verRes.json() as { isPlant?: boolean | null; aiUnavailable?: boolean; reason?: string };
+        if (verData.isPlant === false) {
+          setStatusVerifyState("rejected");
+          setStatusVerifyReason(verData.reason ?? "L'immagine non sembra contenere una pianta.");
+          setStatusPhotoFile(null);
+          setStatusPhotoPreview(null);
+          if (statusFileInputRef.current) statusFileInputRef.current.value = "";
+          return;
+        }
+        if (verData.aiUnavailable) {
+          setStatusVerifyState("pending");
+          setStatusPhotoStatusForUpload("pending");
+        } else {
+          setStatusVerifyState("ok");
+          setStatusPhotoStatusForUpload("approved");
+        }
+      } catch {
+        setStatusVerifyState("pending");
+        setStatusPhotoStatusForUpload("pending");
+      }
+    };
+    reader.readAsDataURL(file);
+  }
+
+  async function handleStatusSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!statusChoice) return;
+    if (statusChoice === "alive" && !statusPhotoFile) {
+      toast({ title: "Foto obbligatoria", description: "Scatta una foto dell'albero per segnalarlo come vivo.", variant: "destructive" });
+      return;
+    }
+    if (statusChoice === "alive" && statusVerifyState === "verifying") {
+      toast({ title: "Attendi la verifica AI", variant: "destructive" });
+      return;
+    }
+    if (statusChoice === "alive" && statusVerifyState === "rejected") {
+      toast({ title: "Foto non valida", description: "Scegli un'altra immagine.", variant: "destructive" });
+      return;
+    }
+    setStatusSaving(true);
+    try {
+      const token = await getToken();
+      let photoObjectPath: string | null = null;
+      if (statusChoice === "alive" && statusPhotoFile) {
+        photoObjectPath = await uploadPhoto(statusPhotoFile);
+      }
+      const quarter = getCurrentQuarterString();
+      const res = await fetch(`/api/trees/${treeId}/status-report`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify({ quarter, status: statusChoice, photoUrl: photoObjectPath }),
+      });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({})) as { error?: string };
+        throw new Error(errData.error ?? "Errore");
+      }
+      const report = await res.json() as StatusReport;
+      setStatusReport(report);
+      setShowStatusForm(false);
+      setStatusChoice(null);
+      setStatusPhotoFile(null);
+      setStatusPhotoPreview(null);
+      setStatusVerifyState("idle");
+      if (statusFileInputRef.current) statusFileInputRef.current.value = "";
+      toast({ title: statusChoice === "alive" ? "Stato segnalato: vivo ✓" : "Stato segnalato: morto" });
+    } catch (err) {
+      toast({ title: "Errore", description: (err as Error).message ?? "Impossibile salvare lo stato.", variant: "destructive" });
+    } finally {
+      setStatusSaving(false);
+    }
+  }
+
+  function resetStatusForm() {
+    setShowStatusForm(false);
+    setStatusChoice(null);
+    setStatusPhotoFile(null);
+    setStatusPhotoPreview(null);
+    setStatusVerifyState("idle");
+    setStatusVerifyReason(null);
+    if (statusFileInputRef.current) statusFileInputRef.current.value = "";
+  }
+
   async function handleDelete() {
     try {
       await deleteTree.mutateAsync({ treeId });
@@ -447,17 +607,23 @@ export default function TreeDetailPage() {
               </button>
               {(() => {
                 const updateCount = updates.data?.length ?? 0;
-                const atLimit = updateCount >= 9;
+                const unlockedSlots = t.createdAt ? getUnlockedPhotoSlots(t.createdAt) : 0;
+                const atLimit = unlockedSlots === 0 || updateCount >= unlockedSlots;
+                const title = unlockedSlots === 0
+                  ? `Nessuno slot disponibile. Si sblocca il ${getNextSlotDate(t.createdAt)}`
+                  : atLimit
+                  ? `Hai usato tutti gli ${unlockedSlots} slot disponibili`
+                  : "Aggiungi aggiornamento fotografico";
                 return (
                   <button
                     onClick={() => !atLimit && setShowUpdateForm(!showUpdateForm)}
                     disabled={atLimit}
-                    title={atLimit ? "Limite di 10 foto totali raggiunto" : "Aggiungi aggiornamento fotografico"}
+                    title={title}
                     className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-opacity flex items-center gap-1.5 ${atLimit ? "bg-muted text-muted-foreground cursor-not-allowed" : "bg-primary text-primary-foreground hover:opacity-90"}`}
                   >
                     + Aggiorna
                     <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${atLimit ? "bg-destructive/20 text-destructive" : "bg-white/20"}`}>
-                      {updateCount}/9
+                      {updateCount}/{unlockedSlots}
                     </span>
                   </button>
                 );
@@ -471,6 +637,162 @@ export default function TreeDetailPage() {
             </div>
           )}
         </div>
+
+        {/* ── Stato trimestrale (solo owner) ────────────────────────────────── */}
+        {isOwner && (
+          <div className="mb-5 p-4 bg-card border border-border rounded-xl">
+            <div className="flex items-center justify-between gap-2 mb-3">
+              <h3 className="font-semibold text-foreground text-sm flex items-center gap-2">
+                <svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" className="text-primary">
+                  <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+                Stato trimestrale — {getCurrentQuarterString()}
+              </h3>
+              {statusReport !== undefined && statusReport !== null && !showStatusForm && (
+                <button
+                  onClick={() => { setShowStatusForm(true); setStatusChoice(null); }}
+                  className="text-xs text-primary hover:underline"
+                >
+                  Aggiorna
+                </button>
+              )}
+            </div>
+
+            {/* Stato corrente */}
+            {statusReport !== undefined && statusReport !== null && !showStatusForm && (
+              <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${statusReport.status === "alive" ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400" : "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400"}`}>
+                {statusReport.status === "alive" ? (
+                  <>
+                    <svg width="11" height="11" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path d="M5 13l4 4L19 7" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                    Vivo — segnalato questo trimestre
+                  </>
+                ) : (
+                  <>
+                    <svg width="11" height="11" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                    Morto — segnalato questo trimestre
+                  </>
+                )}
+              </div>
+            )}
+
+            {/* Non ancora segnalato */}
+            {statusReport === null && !showStatusForm && (
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-xs text-muted-foreground">Non ancora segnalato per questo trimestre. Gli alberi confermati vivi contano nella classifica.</p>
+                <button
+                  onClick={() => setShowStatusForm(true)}
+                  className="flex-shrink-0 px-3 py-1.5 bg-primary text-primary-foreground rounded-lg text-xs font-medium hover:opacity-90 transition-opacity"
+                >
+                  Segnala
+                </button>
+              </div>
+            )}
+
+            {/* Caricamento */}
+            {statusReport === undefined && !showStatusForm && (
+              <div className="h-5 bg-muted rounded animate-pulse w-32" />
+            )}
+
+            {/* Form segnalazione */}
+            {showStatusForm && (
+              <form onSubmit={handleStatusSubmit} className="space-y-3">
+                <p className="text-xs text-muted-foreground">L'albero è ancora in vita?</p>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setStatusChoice("alive")}
+                    className={`flex-1 py-2 rounded-lg text-sm font-medium border transition-colors ${statusChoice === "alive" ? "bg-green-500 border-green-500 text-white" : "border-border text-foreground hover:border-green-400 hover:text-green-600 dark:hover:text-green-400"}`}
+                  >
+                    ✓ Vivo
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setStatusChoice("dead")}
+                    className={`flex-1 py-2 rounded-lg text-sm font-medium border transition-colors ${statusChoice === "dead" ? "bg-red-500 border-red-500 text-white" : "border-border text-foreground hover:border-red-400 hover:text-red-600 dark:hover:text-red-400"}`}
+                  >
+                    ✗ Morto
+                  </button>
+                </div>
+
+                {/* Foto obbligatoria per "vivo" */}
+                {statusChoice === "alive" && (
+                  <div>
+                    <p className="text-xs text-muted-foreground mb-1.5">Allega una foto dell'albero (obbligatoria per confermare che è vivo):</p>
+                    <label className="flex flex-col items-center justify-center w-full h-28 border-2 border-dashed border-border rounded-xl cursor-pointer hover:border-primary/50 transition-colors overflow-hidden relative">
+                      {statusPhotoPreview ? (
+                        <>
+                          <img src={statusPhotoPreview} alt="Anteprima stato" className="w-full h-full object-cover" />
+                          {statusVerifyState === "verifying" && (
+                            <div className="absolute inset-0 bg-black/50 flex items-center justify-center gap-2">
+                              <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                              <span className="text-white text-xs">Verifica AI...</span>
+                            </div>
+                          )}
+                          {statusVerifyState === "ok" && (
+                            <div className="absolute top-2 right-2 bg-green-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
+                              <svg width="9" height="9" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3"><path d="M5 13l4 4L19 7" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                              OK
+                            </div>
+                          )}
+                          {statusVerifyState === "pending" && (
+                            <div className="absolute top-2 right-2 bg-amber-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">In revisione</div>
+                          )}
+                        </>
+                      ) : (
+                        <div className="flex flex-col items-center gap-1.5 text-muted-foreground py-3">
+                          <svg width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
+                            <path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z" strokeLinecap="round" strokeLinejoin="round"/>
+                            <circle cx="12" cy="13" r="4" strokeLinecap="round" strokeLinejoin="round"/>
+                          </svg>
+                          <span className="text-xs font-medium">Scatta una foto</span>
+                        </div>
+                      )}
+                      <input
+                        ref={statusFileInputRef}
+                        type="file"
+                        accept="image/*"
+                        capture="environment"
+                        onChange={handleStatusFileChange}
+                        className="hidden"
+                      />
+                    </label>
+                    {statusVerifyState === "rejected" && statusVerifyReason && (
+                      <p className="text-xs text-destructive mt-1">{statusVerifyReason}</p>
+                    )}
+                    {statusVerifyState === "pending" && (
+                      <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">L'AI non ha potuto verificare la foto. Sarà revisionata manualmente.</p>
+                    )}
+                  </div>
+                )}
+
+                {/* Avviso per "morto" */}
+                {statusChoice === "dead" && (
+                  <p className="text-xs text-amber-700 dark:text-amber-400 p-2.5 bg-amber-50 dark:bg-amber-950/30 rounded-lg border border-amber-200 dark:border-amber-800">
+                    ⚠️ Segnalando l'albero come morto non verrà conteggiato nella classifica trimestrale.
+                  </p>
+                )}
+
+                <div className="flex gap-2">
+                  <button
+                    type="submit"
+                    disabled={statusSaving || !statusChoice || (statusChoice === "alive" && (!statusPhotoFile || statusVerifyState === "verifying" || statusVerifyState === "rejected"))}
+                    className="px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:opacity-90 transition-opacity disabled:opacity-50"
+                  >
+                    {statusSaving ? "Salvataggio..." : "Conferma"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={resetStatusForm}
+                    disabled={statusSaving}
+                    className="px-4 py-2 border border-border text-foreground rounded-lg text-sm font-medium hover:bg-muted transition-colors disabled:opacity-50"
+                  >
+                    Annulla
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        )}
 
         {/* Sun rating */}
         <div className="flex items-center gap-3 mb-5 pb-4 border-b border-border">

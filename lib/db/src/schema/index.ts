@@ -453,6 +453,20 @@ export const co2RankingsTable = pgTable("co2_rankings", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
+// ── Tree status reports (quarterly alive/dead confirmation) ───────────────────
+
+export const treeStatusReportsTable = pgTable("tree_status_reports", {
+  id: serial("id").primaryKey(),
+  treeId: integer("tree_id").notNull(),
+  quarter: text("quarter").notNull(), // e.g. "2026-Q2"
+  status: text("status").notNull(), // "alive" | "dead"
+  photoUrl: text("photo_url"), // mandatory if status = "alive"
+  reportedAt: timestamp("reported_at").notNull().defaultNow(),
+}, (table) => [
+  index("tree_status_reports_tree_id_idx").on(table.treeId),
+  uniqueIndex("tree_status_reports_tree_quarter_idx").on(table.treeId, table.quarter),
+]);
+
 // ── App settings (key/value store for runtime feature flags) ─────────────────
 
 export const appSettingsTable = pgTable("app_settings", {

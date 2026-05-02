@@ -1,6 +1,6 @@
 import { db } from "@workspace/db";
-import { treesTable, co2RankingsTable } from "@workspace/db";
-import { sql, and, eq, isNotNull, gte, lt, desc } from "drizzle-orm";
+import { treesTable, co2RankingsTable, treeStatusReportsTable } from "@workspace/db";
+import { sql, and, eq, isNotNull, gte, lt, desc, or } from "drizzle-orm";
 import { logger } from "./logger";
 
 // 22 kg CO₂/anno per pianta ÷ 12 mesi × 3 mesi = CO₂ trimestrale per pianta
@@ -96,6 +96,9 @@ export async function calculateCo2Rankings(): Promise<void> {
       "[co2Job] Querying trees for quarter"
     );
 
+    // Conta solo alberi "vivi confermati":
+    // 1. Alberi piantati NEL trimestre precedente (nuovi → contano automaticamente)
+    // 2. Alberi piantati PRIMA del trimestre con status report "alive" + foto per quel trimestre
     const rows = await db
       .select({
         comune: treesTable.locationName,
@@ -103,13 +106,24 @@ export async function calculateCo2Rankings(): Promise<void> {
         treeCount: sql<number>`cast(count(*) as int)`,
       })
       .from(treesTable)
+      .leftJoin(
+        treeStatusReportsTable,
+        and(
+          eq(treeStatusReportsTable.treeId, treesTable.id),
+          eq(treeStatusReportsTable.quarter, quarterStr),
+          eq(treeStatusReportsTable.status, "alive"),
+          isNotNull(treeStatusReportsTable.photoUrl),
+        )
+      )
       .where(
         and(
           eq(treesTable.photoStatus, "approved"),
           isNotNull(treesTable.locationName),
-          gte(treesTable.createdAt, start),
-          lt(treesTable.createdAt, end),
-        ),
+          or(
+            and(gte(treesTable.createdAt, start), lt(treesTable.createdAt, end)),
+            and(lt(treesTable.createdAt, start), isNotNull(treeStatusReportsTable.id)),
+          )
+        )
       )
       .groupBy(treesTable.locationName, treesTable.province)
       .orderBy(desc(sql`count(*)`))

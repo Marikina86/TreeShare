@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { treesTable, treeUpdatesTable, usersTable, treeSunsTable, userNotificationsTable } from "@workspace/db";
+import { treesTable, treeUpdatesTable, usersTable, treeSunsTable, userNotificationsTable, treeStatusReportsTable } from "@workspace/db";
 import { eq, desc, count, sql, and, ne, inArray } from "drizzle-orm";
 import { getCurrentWinnerIds } from "../lib/weeklyWinnerJob";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth";
@@ -34,6 +34,26 @@ const router = Router();
 function buildMapsUrl(lat: number, lng: number): string {
   return `https://www.google.com/maps?q=${lat},${lng}&z=17`;
 }
+
+/** Numero di slot foto sbloccati in base ai trimestri passati dalla piantagione. */
+function getUnlockedPhotoSlots(createdAt: Date, now = new Date()): number {
+  const quarters = [0, 3, 6, 9]; // gen, apr, lug, ott
+  let count = 0;
+  for (let year = createdAt.getFullYear(); year <= now.getFullYear() + 1; year++) {
+    for (const month of quarters) {
+      const boundary = new Date(year, month, 1);
+      if (boundary > createdAt && boundary <= now) count++;
+    }
+  }
+  return Math.min(count, 9);
+}
+
+const StatusReportParams = z.object({ treeId: z.coerce.number().int().positive() });
+const StatusReportBody = z.object({
+  quarter: z.string().regex(/^\d{4}-Q[1-4]$/),
+  status: z.enum(["alive", "dead"]),
+  photoUrl: z.string().nullable().optional(),
+});
 
 // ── Formattazione sincrona: nessuna query aggiuntiva ──────────────────────────
 // username e userPhotoUrl vengono passati già risolti dal chiamante.
@@ -493,8 +513,13 @@ router.post("/trees/:treeId/updates", requireAuth, async (req, res) => {
       .select({ id: treeUpdatesTable.id })
       .from(treeUpdatesTable)
       .where(eq(treeUpdatesTable.treeId, treeId));
-    if (existingUpdates.length >= 9) {
-      res.status(422).json({ error: "Limite raggiunto: puoi aggiungere al massimo 9 aggiornamenti per pianta (10 foto in totale)." });
+    const unlockedSlots = getUnlockedPhotoSlots(tree.createdAt);
+    if (unlockedSlots === 0) {
+      res.status(422).json({ error: "Nessuno slot foto disponibile. Gli slot si sbloccano ogni trimestre (1 apr, 1 lug, 1 ott, 1 gen) a partire dalla data di piantagione." });
+      return;
+    }
+    if (existingUpdates.length >= unlockedSlots) {
+      res.status(422).json({ error: `Hai esaurito i ${unlockedSlots} slot foto disponibili. Il prossimo si sblocca al trimestre successivo.` });
       return;
     }
     const finalStatus = photoStatus ?? "approved";
@@ -566,6 +591,81 @@ router.delete("/trees/:treeId/updates/:updateId", requireAuth, async (req, res) 
     res.status(204).send();
   } catch (err) {
     req.log.error({ err }, "Error deleting tree update");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ── GET /trees/:treeId/status-report?quarter=2026-Q2 ─────────────────────────
+router.get("/trees/:treeId/status-report", async (req, res) => {
+  const parsed = StatusReportParams.safeParse(req.params);
+  if (!parsed.success) { res.status(400).json({ error: "Invalid tree ID" }); return; }
+  const { treeId } = parsed.data;
+  const { quarter } = req.query;
+  if (typeof quarter !== "string" || !/^\d{4}-Q[1-4]$/.test(quarter)) {
+    res.status(400).json({ error: "Parametro quarter mancante o non valido (es. 2026-Q2)" });
+    return;
+  }
+  try {
+    const [report] = await db
+      .select()
+      .from(treeStatusReportsTable)
+      .where(and(eq(treeStatusReportsTable.treeId, treeId), eq(treeStatusReportsTable.quarter, quarter)));
+    if (!report) { res.json(null); return; }
+    res.json({
+      id: report.id,
+      treeId: report.treeId,
+      quarter: report.quarter,
+      status: report.status,
+      photoUrl: report.photoUrl ?? null,
+      reportedAt: report.reportedAt.toISOString(),
+    });
+  } catch (err) {
+    req.log.error({ err }, "Error fetching status report");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ── POST /trees/:treeId/status-report ────────────────────────────────────────
+router.post("/trees/:treeId/status-report", requireAuth, async (req, res) => {
+  const userId = (req as AuthenticatedRequest).userId;
+  const parsedParams = StatusReportParams.safeParse(req.params);
+  if (!parsedParams.success) { res.status(400).json({ error: "Invalid tree ID" }); return; }
+  const parsedBody = StatusReportBody.safeParse(req.body);
+  if (!parsedBody.success) {
+    res.status(400).json({ error: "Dati non validi", details: parsedBody.error.flatten() });
+    return;
+  }
+  const { treeId } = parsedParams.data;
+  const { quarter, status, photoUrl } = parsedBody.data;
+  if (status === "alive" && !photoUrl) {
+    res.status(422).json({ error: "Foto obbligatoria per segnalare l'albero come vivo." });
+    return;
+  }
+  try {
+    const [tree] = await db
+      .select({ userId: treesTable.userId })
+      .from(treesTable)
+      .where(eq(treesTable.id, treeId));
+    if (!tree) { res.status(404).json({ error: "Tree not found" }); return; }
+    if (tree.userId !== userId) { res.status(403).json({ error: "Forbidden" }); return; }
+    const [report] = await db
+      .insert(treeStatusReportsTable)
+      .values({ treeId, quarter, status, photoUrl: photoUrl ?? null })
+      .onConflictDoUpdate({
+        target: [treeStatusReportsTable.treeId, treeStatusReportsTable.quarter],
+        set: { status, photoUrl: photoUrl ?? null, reportedAt: new Date() },
+      })
+      .returning();
+    res.status(201).json({
+      id: report!.id,
+      treeId: report!.treeId,
+      quarter: report!.quarter,
+      status: report!.status,
+      photoUrl: report!.photoUrl ?? null,
+      reportedAt: report!.reportedAt.toISOString(),
+    });
+  } catch (err) {
+    req.log.error({ err }, "Error saving status report");
     res.status(500).json({ error: "Internal server error" });
   }
 });

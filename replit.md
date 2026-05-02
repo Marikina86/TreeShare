@@ -132,5 +132,27 @@ A plant/tree sharing social app. Community members document trees/plants they pl
 - **Login page resend**: When sign-in returns "Email not confirmed", shows a "Rinvia email di verifica" button; uses `supabase.auth.resend()` with backend fallback
 - Redirect URLs use server-side `APP_ORIGIN` / `REPLIT_DEV_DOMAIN` env vars for security
 
-### DB Schema (18 tables)
-`users`, `trees`, `treeUpdates`, `treeSuns`, `events`, `eventParticipants`, `alerts`, `tips`, `problemReports`, `userNotifications`, `organizations`, `reports`, `weeklyWinners`, `policies`, `userConsents`, `cookieConsents`, `donationCampaigns`, `campaignPricing`, `platformRevenue`
+### Quarterly Ranking (CO₂ / Comuni)
+- **Table**: `co2_rankings` — quarterly leaderboard (top 3 comuni with most alive trees)
+- **Scheduler**: `co2Job.ts` — fires 1 Apr, 1 Jul, 1 Oct, 1 Jan at 00:01 Europe/Rome
+- **Ranking logic**: Only counts trees with `photoStatus='approved'` AND:
+  - Planted in the previous quarter (new trees count automatically), OR
+  - Planted before the quarter AND have a `tree_status_reports` row with `status='alive'` + photo for that quarter
+- **Frontend**: `Co2Page.tsx` — gold/silver/bronze badges per quarter
+
+### Tree Status Reports (Quarterly Alive/Dead Confirmation)
+- **Table**: `tree_status_reports` (id, tree_id, quarter TEXT e.g. `2026-Q2`, status `alive|dead`, photo_url, reported_at)
+- **Unique constraint**: one report per (tree_id, quarter)
+- **API**: `GET /api/trees/:treeId/status-report?quarter=YYYY-Qn` — public, returns null if not yet reported
+- **API**: `POST /api/trees/:treeId/status-report` — requires auth+ownership; upserts; `alive` requires `photoUrl`
+- **Frontend**: Inline card on `TreeDetailPage.tsx` (owner only) showing current quarter status with alive/dead form + AI-verified photo for alive confirmation
+
+### Additional Photo Slots (Quarterly Unlock)
+- **Old limit**: absolute 9 updates per tree
+- **New limit**: `getUnlockedPhotoSlots(createdAt)` = number of quarter boundaries (Jan1, Apr1, Jul1, Oct1) passed strictly after tree creation, capped at 9
+- **Effect**: Fresh trees start with 0 extra photo slots; unlock 1 per quarter automatically
+- **API**: `POST /api/trees/:treeId/updates` returns 422 if no slots unlocked or slots exhausted
+- **Frontend button**: Shows `{current}/{unlocked}` and tooltip with next unlock date
+
+### DB Schema (19 tables)
+`users`, `trees`, `treeUpdates`, `treeSuns`, `events`, `eventParticipants`, `alerts`, `tips`, `problemReports`, `userNotifications`, `organizations`, `reports`, `weeklyWinners`, `policies`, `userConsents`, `cookieConsents`, `donationCampaigns`, `campaignPricing`, `platformRevenue`, `treeStatusReports`
