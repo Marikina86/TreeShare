@@ -234,7 +234,7 @@ export default function Co2Page() {
                   </h2>
                   {selectedMonth === data.months[0] && (
                     <span className="text-xs bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 px-2.5 py-1 rounded-full font-medium">
-                      Trimestre corrente
+                      Più recente
                     </span>
                   )}
                 </div>

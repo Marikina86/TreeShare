@@ -337,7 +337,7 @@ router.get("/trees/:treeId", async (req, res) => {
 
     // 3 query in parallelo invece di 4 sequenziali (no query separata per sunCount)
     const [[{ cnt }], userMap, userSun] = await Promise.all([
-      db.select({ cnt: count() }).from(treeUpdatesTable).where(eq(treeUpdatesTable.treeId, treeId)),
+      db.select({ cnt: count() }).from(treeUpdatesTable).where(and(eq(treeUpdatesTable.treeId, treeId), eq(treeUpdatesTable.photoStatus, "approved"))),
       batchLoadUsers([tree.userId]),
       requestingUserId
         ? db.select().from(treeSunsTable).where(and(eq(treeSunsTable.treeId, treeId), eq(treeSunsTable.userId, requestingUserId)))
@@ -439,7 +439,7 @@ router.patch("/trees/:treeId", requireAuth, async (req, res) => {
 
     const [[updated], [{ cnt }], userMap] = await Promise.all([
       db.update(treesTable).set(updateData).where(eq(treesTable.id, treeId)).returning(),
-      db.select({ cnt: count() }).from(treeUpdatesTable).where(eq(treeUpdatesTable.treeId, treeId)),
+      db.select({ cnt: count() }).from(treeUpdatesTable).where(and(eq(treeUpdatesTable.treeId, treeId), eq(treeUpdatesTable.photoStatus, "approved"))),
       batchLoadUsers([userId]),
     ]);
 
