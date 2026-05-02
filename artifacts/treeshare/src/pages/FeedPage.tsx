@@ -62,7 +62,7 @@ export default function FeedPage() {
   const adaptiveQuality = useAdaptiveQuality();
   const limit = adaptiveQuality.batch_size;
 
-  const { data, isLoading, isError, refreshing, lastRefreshResult, smartRefresh } =
+  const { data, isLoading, isError, refreshing, lastRefreshResult, refreshBlocked, smartRefresh } =
     useFeed({ page, limit });
 
   const qualitySettings = {
@@ -134,10 +134,10 @@ export default function FeedPage() {
   const noChangeTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
 
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
-    if (window.scrollY > 0 || refreshing) return;
+    if (window.scrollY > 0 || refreshing || refreshBlocked) return;
     touchStartY.current = e.touches[0].clientY;
     setPullState("pulling");
-  }, [refreshing]);
+  }, [refreshing, refreshBlocked]);
 
   const handleTouchMove = useCallback((e: React.TouchEvent) => {
     if (pullState !== "pulling") return;
@@ -182,6 +182,8 @@ export default function FeedPage() {
     if (pullDistance >= pullThreshold) return "Rilascia per aggiornare";
     return "Scorri per aggiornare";
   };
+
+  const isRefreshDisabled = refreshing || refreshBlocked;
 
   return (
     <Layout>
@@ -229,10 +231,10 @@ export default function FeedPage() {
             <h1 className="text-2xl font-bold text-foreground">Feed</h1>
             {/* Desktop refresh button */}
             <button
-              onClick={() => { smartRefresh(); window.dispatchEvent(new Event("treeshare:refresh-inbox")); }}
-              disabled={refreshing}
+              onClick={() => { if (!isRefreshDisabled) { smartRefresh(); window.dispatchEvent(new Event("treeshare:refresh-inbox")); } }}
+              disabled={isRefreshDisabled}
               className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground border border-border rounded-lg hover:bg-muted transition-colors disabled:opacity-50"
-              title="Aggiorna feed"
+              title={refreshBlocked ? "Limite aggiornamenti raggiunto — riapri l'app per continuare" : "Aggiorna feed"}
             >
               <svg
                 width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"
@@ -241,9 +243,14 @@ export default function FeedPage() {
                 <path d="M1 4v6h6M23 20v-6h-6" strokeLinecap="round" strokeLinejoin="round"/>
                 <path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15" strokeLinecap="round" strokeLinejoin="round"/>
               </svg>
-              {refreshing ? "..." : "Aggiorna"}
+              {refreshing ? "..." : refreshBlocked ? "Aggiornato" : "Aggiorna"}
             </button>
-            {lastRefreshResult === "no-change" && !refreshing && (
+            {refreshBlocked && !refreshing && (
+              <span className="text-xs text-muted-foreground bg-muted px-2 py-1 rounded-full animate-in fade-in duration-300">
+                Feed aggiornato
+              </span>
+            )}
+            {!refreshBlocked && lastRefreshResult === "no-change" && !refreshing && (
               <span className="text-xs text-muted-foreground bg-muted px-2 py-1 rounded-full animate-in fade-in duration-300">
                 Nessun aggiornamento
               </span>

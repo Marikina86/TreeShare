@@ -16,6 +16,7 @@ interface UseFeedOptions {
 }
 
 const FEED_BASE_KEY = ["/api/trees"] as const;
+const MAX_CONSECUTIVE_REFRESHES = 3;
 
 export function useFeed({ page, limit }: UseFeedOptions) {
   const queryClient = useQueryClient();
@@ -25,6 +26,8 @@ export function useFeed({ page, limit }: UseFeedOptions) {
   const [lastRefreshResult, setLastRefreshResult] = useState<
     "idle" | "no-change" | "updated"
   >("idle");
+  const consecutiveRefreshCountRef = useRef(0);
+  const [refreshBlocked, setRefreshBlocked] = useState(false);
 
   const queryKey = getListTreesQueryKey({ page, limit });
 
@@ -56,6 +59,16 @@ export function useFeed({ page, limit }: UseFeedOptions) {
 
   const smartRefresh = useCallback(async () => {
     if (refreshing) return;
+    if (consecutiveRefreshCountRef.current >= MAX_CONSECUTIVE_REFRESHES) {
+      setRefreshBlocked(true);
+      return;
+    }
+
+    consecutiveRefreshCountRef.current += 1;
+    if (consecutiveRefreshCountRef.current >= MAX_CONSECUTIVE_REFRESHES) {
+      setRefreshBlocked(true);
+    }
+
     setRefreshing(true);
     setLastRefreshResult("idle");
 
@@ -98,6 +111,7 @@ export function useFeed({ page, limit }: UseFeedOptions) {
     ...query,
     refreshing,
     lastRefreshResult,
+    refreshBlocked,
     smartRefresh,
   };
 }
