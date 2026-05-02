@@ -729,8 +729,8 @@ export default function AdoptableTreeDetailPage() {
     setInitiating(true);
     setInitError(null);
     try {
-      const sp = await loadStripeInstance();
-      setStripePromiseLoaded(sp);
+      await loadStripeInstance();
+      setStripePromiseLoaded(stripePromise);
       const token = await getToken();
       const res = await fetch("/api/adopt/initiate", {
         method: "POST",

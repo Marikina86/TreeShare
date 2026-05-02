@@ -499,7 +499,7 @@ export default function AdminPage() {
       },
       errors: { forbidden: "Access denied.", load: "Load error", block: "Block error", unblock: "Unblock error", delete: "Delete error", report: "Report error", deleteTree: "Delete content error" },
     },
-  }[lang];
+  }[lang === "it" ? "it" : "en"];
 
   async function authFetch(url: string, options?: RequestInit) {
     const token = await getToken();

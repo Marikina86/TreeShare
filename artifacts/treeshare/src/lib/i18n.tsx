@@ -296,7 +296,7 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
     localStorage.setItem("treeshare_lang", l);
   }
 
-  const t = translations[lang];
+  const t = translations[lang] as typeof translations.it;
 
   return (
     <LanguageContext.Provider value={{ lang, setLang, t }}>

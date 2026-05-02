@@ -55,7 +55,7 @@ export default function SettingsPage() {
   useEffect(() => {
     setAdoptionsLoading(true);
     getToken().then((token) => {
-      const h = token ? { Authorization: `Bearer ${token}` } : {};
+      const h: HeadersInit = token ? { Authorization: `Bearer ${token}` } : {};
       fetch("/api/adopt/my-adoptions", { headers: h })
         .then((r) => r.ok ? r.json() : [])
         .then((data: MyAdoption[]) => setMyAdoptions(data))
@@ -310,7 +310,7 @@ export default function SettingsPage() {
             )}
 
             {/* Enable GPS button — shown when not yet requested */}
-            {(permission === "prompt" || permission === "checking") && permission !== "unsupported" && (
+            {(permission === "prompt" || permission === "checking") && (
               <div className="px-5 py-4">
                 <p className="text-xs text-muted-foreground mb-3">
                   {({ it: "Il GPS non è ancora stato attivato per questa app. Premi il pulsante per abilitarlo direttamente dal browser.", en: "GPS has not been enabled for this app yet. Press the button to enable it directly from the browser.", fr: "Le GPS n'a pas encore été activé pour cette application. Appuyez sur le bouton pour l'activer depuis le navigateur.", pt: "O GPS ainda não foi ativado para esta app. Prima o botão para o ativar diretamente no browser.", es: "El GPS aún no ha sido habilitado para esta app. Pulsa el botón para activarlo directamente desde el navegador.", ja: "このアプリではまだGPSが有効になっていません。ボタンを押してブラウザから直接有効にしてください。" } as Record<string,string>)[lang]}

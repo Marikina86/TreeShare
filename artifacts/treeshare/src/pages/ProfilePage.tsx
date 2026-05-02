@@ -7,6 +7,8 @@ import {
   useGetUserProfile,
   useListTrees,
   getListTreesQueryKey,
+  getGetMyProfileQueryKey,
+  getGetUserProfileQueryKey,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import Layout from "@/components/Layout";
@@ -53,9 +55,9 @@ export default function ProfilePage() {
 
   const isOwnProfile = !params.userId || params.userId === user?.id;
 
-  const myProfile = useGetMyProfile({ query: { enabled: isOwnProfile } });
+  const myProfile = useGetMyProfile({ query: { enabled: isOwnProfile, queryKey: getGetMyProfileQueryKey() } });
   const otherProfile = useGetUserProfile(params.userId ?? "", {
-    query: { enabled: !!params.userId && !isOwnProfile },
+    query: { enabled: !!params.userId && !isOwnProfile, queryKey: getGetUserProfileQueryKey(params.userId ?? "") },
   });
 
   const profile = isOwnProfile ? myProfile.data : otherProfile.data;

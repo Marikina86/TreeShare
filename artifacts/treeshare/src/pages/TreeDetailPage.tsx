@@ -70,7 +70,7 @@ export default function TreeDetailPage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const tree = useGetTree(treeId, { query: { enabled: !!treeId } });
+  const tree = useGetTree(treeId, { query: { enabled: !!treeId, queryKey: getGetTreeQueryKey(treeId) } });
   const updates = useGetTreeUpdates(treeId, { query: { enabled: !!treeId, queryKey: getGetTreeUpdatesQueryKey(treeId) } });
   const addUpdate = useAddTreeUpdate();
   const deleteTree = useDeleteTree();
@@ -976,10 +976,10 @@ export default function TreeDetailPage() {
                   </div>
                   <div className="rounded-xl overflow-hidden border border-border relative">
                     <img
-                      src={photoSrc(photo.photoUrl)}
+                      src={photoSrc(photo.photoUrl ?? "")}
                       alt={`Foto ${index + 1}`}
                       className={`w-full aspect-video object-cover bg-black/5 dark:bg-white/5 cursor-zoom-in transition-all ${isDead ? "brightness-[0.45] grayscale-[0.4]" : ""}`}
-                      onClick={() => setLightboxUrl(photoSrc(photo.photoUrl))}
+                      onClick={() => setLightboxUrl(photoSrc(photo.photoUrl ?? ""))}
                     />
                     {isDead && (
                       <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none">

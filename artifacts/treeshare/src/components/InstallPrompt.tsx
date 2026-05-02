@@ -128,7 +128,7 @@ export default function InstallPrompt() {
       iosStep3b: "\"Add\"",
       close: "Got it",
     },
-  }[lang];
+  }[lang === "it" ? "it" : "en"];
 
   if (!show) return null;
 

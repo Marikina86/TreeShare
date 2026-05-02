@@ -88,7 +88,7 @@ export default function AlertsPage() {
     setLoading(true);
     try {
       const token = await getToken();
-      const headers = token ? { Authorization: `Bearer ${token}` } : {};
+      const headers: HeadersInit = token ? { Authorization: `Bearer ${token}` } : {};
 
       const [alertsRes, notifsRes] = await Promise.all([
         fetch("/api/alerts", { headers }),

@@ -322,9 +322,9 @@ export default function Layout({ children }: LayoutProps) {
               }`}
             >
               {item.label}
-              {"badge" in item && item.badge > 0 && (
+              {"badge" in item && (item.badge ?? 0) > 0 && (
                 <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center px-0.5 leading-none">
-                  {item.badge > 9 ? "9+" : item.badge}
+                  {(item.badge ?? 0) > 9 ? "9+" : item.badge}
                 </span>
               )}
             </Link>

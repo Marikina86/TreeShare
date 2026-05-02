@@ -131,7 +131,7 @@ export default function FeedPage() {
   const [pullDistance, setPullDistance] = useState(0);
   const [pullState, setPullState] = useState<"idle" | "pulling" | "refreshing" | "done">("idle");
   const pullThreshold = 80;
-  const noChangeTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
+  const noChangeTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
     if (window.scrollY > 0 || refreshing || refreshBlocked) return;
