@@ -22,7 +22,6 @@ interface AdaptiveQualityState extends OptimizationOutput {
 
 const SCROLL_FAST_THRESHOLD = 800;  // px/s
 const SCROLL_SLOW_THRESHOLD = 150;  // px/s
-const RECOMPUTE_INTERVAL_MS = 2000; // recompute settings every 2 seconds
 const MONTHLY_COST_PERCENT = 0;     // set by backend config if needed
 
 export function useAdaptiveQuality() {
@@ -92,7 +91,7 @@ export function useAdaptiveQuality() {
     return () => document.removeEventListener("pointerdown", onPointerDown);
   }, []);
 
-  // --- Periodic recompute --------------------------------------------------
+  // --- On-demand recompute (no polling) ------------------------------------
   useEffect(() => {
     function recompute() {
       const deviceType = detectDeviceType();
@@ -122,7 +121,6 @@ export function useAdaptiveQuality() {
       });
 
       setState((prev) => {
-        // Only trigger re-render if something meaningful changed
         if (
           prev.image_quality === settings.image_quality &&
           prev.preload === settings.preload &&
@@ -142,9 +140,20 @@ export function useAdaptiveQuality() {
       });
     }
 
+    // Compute once on mount
     recompute();
-    const id = setInterval(recompute, RECOMPUTE_INTERVAL_MS);
-    return () => clearInterval(id);
+
+    // Recompute when network conditions change (no timer needed)
+    const conn = (navigator as any).connection;
+    if (conn) conn.addEventListener("change", recompute);
+
+    // Recompute when tab becomes visible again (user returns to app)
+    document.addEventListener("visibilitychange", recompute);
+
+    return () => {
+      if (conn) conn.removeEventListener("change", recompute);
+      document.removeEventListener("visibilitychange", recompute);
+    };
   }, []);
 
   // Force an immediate recompute (e.g. after loading images)
