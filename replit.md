@@ -48,7 +48,10 @@ A plant/tree sharing social app. Community members document trees/plants they pl
 - Supabase JWT auth via HMAC-SHA256 (`SUPABASE_JWT_SECRET`); `sub` claim = Supabase UUID stored in `usersTable.clerkUserId` column
 - Trees, users, events, alerts, tips, notifications, reports, admin, map, storage, organizations, weekly winners routes
 - Image uploads: Cloudinary (optional) or local `uploads/` folder
-- Plant verification: Google Gemini AI (`GEMINI_API_KEY`)
+- Plant verification: Google Gemini AI (`GEMINI_API_KEY`) — **async queue** (`lib/photoVerificationQueue.ts`)
+  - Upload returns immediately; background job calls Gemini, updates `photoStatus`, sends in-app notification
+  - `lib/geminiUtils.ts` — shared Gemini helpers (models, prompts, callGemini, parseBase64Image, etc.)
+  - Fallback: if AI unavailable, admin gets `pending_tree` / `pending_tree_update` notification for manual review
 - Scheduled jobs: event cleanup, weekly winner selection
 
 ### Environment Variables Required

@@ -3,7 +3,6 @@ import { useParams, useLocation } from "wouter";
 import {
   useGetTree,
   useGetTreeUpdates,
-  useAddTreeUpdate,
   useDeleteTree,
   getGetTreeUpdatesQueryKey,
   getListTreesQueryKey,
@@ -16,7 +15,7 @@ import { useToast } from "@/hooks/use-toast";
 import LocationSearch, { type LocationResult } from "@/components/LocationSearch";
 import ReportModal from "@/components/ReportModal";
 import SunButton from "@/components/SunButton";
-import { resizeToBlob } from "@/lib/imageUtils";
+import { resizeToBlob, resizeToBase64 } from "@/lib/imageUtils";
 import { getUnlockedPhotoSlots, getCurrentQuarterString, getNextSlotDate } from "@workspace/treeshare-utils";
 
 function photoSrc(url: string) {
@@ -38,7 +37,6 @@ export default function TreeDetailPage() {
 
   const tree = useGetTree(treeId, { query: { enabled: !!treeId, queryKey: getGetTreeQueryKey(treeId) } });
   const updates = useGetTreeUpdates(treeId, { query: { enabled: !!treeId, queryKey: getGetTreeUpdatesQueryKey(treeId) } });
-  const addUpdate = useAddTreeUpdate();
   const deleteTree = useDeleteTree();
 
   const [updatePhotoFile, setUpdatePhotoFile] = useState<File | null>(null);
@@ -50,6 +48,7 @@ export default function TreeDetailPage() {
   const [verifyState, setVerifyState] = useState<"idle" | "verifying" | "ok" | "pending" | "rejected">("idle");
   const [verifyReason, setVerifyReason] = useState<string | null>(null);
   const [photoStatusForUpload, setPhotoStatusForUpload] = useState<"approved" | "pending">("approved");
+  const [updateBase64, setUpdateBase64] = useState<string | null>(null);
   const [deletingUpdateId, setDeletingUpdateId] = useState<number | null>(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
@@ -192,106 +191,15 @@ export default function TreeDetailPage() {
       const dataUrl = ev.target?.result as string;
       setUpdatePhotoPreview(dataUrl);
 
-      // Verifica AI
-      setVerifyState("verifying");
+      // Genera base64 ridimensionata per la verifica AI in background
       try {
-        const base64 = dataUrl.includes(",") ? dataUrl.split(",")[1] : dataUrl;
-        const token = await getToken();
-        const authHeader: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
+        const base64 = await resizeToBase64(file, 768);
+        setUpdateBase64(base64);
+      } catch { /* verifica proseguirà senza AI */ }
 
-        // 1️⃣ Check: è una pianta?
-        const verRes = await fetch("/api/plants/verify", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", ...authHeader },
-          body: JSON.stringify({ imageBase64: base64 }),
-        });
-        if (!verRes.ok) throw new Error("verify failed");
-        const verData = await verRes.json() as { isPlant?: boolean | null; aiUnavailable?: boolean; reason?: string };
-
-        if (verData.isPlant === false) {
-          // Non è una pianta → rifiuta subito
-          setVerifyState("rejected");
-          setVerifyReason(verData.reason ?? "L'immagine non sembra contenere una pianta.");
-          setUpdatePhotoFile(null);
-          setUpdatePhotoPreview(null);
-          if (fileInputRef.current) fileInputRef.current.value = "";
-          return;
-        }
-
-        // 2️⃣ Check: stessa specie dell'originale?
-        // Il frontend carica direttamente la foto originale come base64 per evitare
-        // problemi di lettura file lato server.
-        const referencePhotoUrl = tree.data?.photoUrl;
-        if (!verData.aiUnavailable && referencePhotoUrl) {
-          try {
-            // Carica la foto originale della pianta e convertila in base64
-            const refSrc = referencePhotoUrl.startsWith("/objects/")
-              ? `/api/storage${referencePhotoUrl}`
-              : referencePhotoUrl;
-            const refResp = await fetch(refSrc);
-            if (!refResp.ok) throw new Error("ref fetch failed");
-            const refBlob = await refResp.blob();
-            const referenceImageBase64 = await new Promise<string>((resolve, reject) => {
-              const r = new FileReader();
-              r.onload = () => resolve(r.result as string);
-              r.onerror = reject;
-              r.readAsDataURL(refBlob);
-            });
-
-            const speciesRes = await fetch("/api/plants/verify-update", {
-              method: "POST",
-              headers: { "Content-Type": "application/json", ...authHeader },
-              body: JSON.stringify({
-                newImageBase64: base64,
-                referenceImageBase64,
-                species: tree.data?.species ?? null,
-              }),
-            });
-
-            if (speciesRes.ok) {
-              const speciesData = await speciesRes.json() as { sameSpecies?: boolean | null; aiUnavailable?: boolean; reason?: string };
-              if (!speciesData.aiUnavailable && speciesData.sameSpecies === false) {
-                // Specie diversa → rifiuta
-                setVerifyState("rejected");
-                setVerifyReason(speciesData.reason ?? "La specie della pianta non corrisponde a quella originale.");
-                setUpdatePhotoFile(null);
-                setUpdatePhotoPreview(null);
-                if (fileInputRef.current) fileInputRef.current.value = "";
-                return;
-              }
-              if (speciesData.aiUnavailable) {
-                // AI non ha potuto verificare la specie → revisione manuale
-                setVerifyState("pending");
-                setPhotoStatusForUpload("pending");
-                return;
-              }
-            } else {
-              // Errore HTTP sul check specie → revisione manuale
-              setVerifyState("pending");
-              setPhotoStatusForUpload("pending");
-              return;
-            }
-          } catch {
-            // Errore caricamento foto originale o rete → revisione manuale
-            setVerifyState("pending");
-            setPhotoStatusForUpload("pending");
-            return;
-          }
-        }
-
-        // Tutto ok
-        if (verData.aiUnavailable) {
-          setVerifyState("pending");
-          setPhotoStatusForUpload("pending");
-        } else {
-          setVerifyState("ok");
-          setPhotoStatusForUpload("approved");
-        }
-      } catch {
-        // Errore di rete: procedi in pending
-        setVerifyState("pending");
-        setPhotoStatusForUpload("pending");
-      }
+      // Sempre pending: la verifica AI avviene in background dopo l'invio
+      setVerifyState("pending");
+      setPhotoStatusForUpload("pending");
     };
     reader.readAsDataURL(file);
   }
@@ -299,6 +207,7 @@ export default function TreeDetailPage() {
   function resetUpdateForm() {
     setUpdatePhotoFile(null);
     setUpdatePhotoPreview(null);
+    setUpdateBase64(null);
     setUpdateNote("");
     setShowUpdateForm(false);
     setVerifyState("idle");
@@ -331,27 +240,33 @@ export default function TreeDetailPage() {
       toast({ title: "Foto obbligatoria", description: "Seleziona una foto.", variant: "destructive" });
       return;
     }
-    if (verifyState === "verifying") {
-      toast({ title: "Attendi la verifica AI", description: "L'immagine è ancora in fase di verifica.", variant: "destructive" });
-      return;
-    }
-    if (verifyState === "rejected") {
-      toast({ title: "Foto non valida", description: "Scegli un'altra immagine.", variant: "destructive" });
-      return;
-    }
     try {
       setUploading(true);
+      const token = await getToken();
       const objectPath = await uploadPhoto(updatePhotoFile);
-      await addUpdate.mutateAsync({ treeId, data: { photoUrl: objectPath, note: updateNote || null, photoStatus: photoStatusForUpload } });
+      const updateRes = await fetch(`/api/trees/${treeId}/updates`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          photoUrl: objectPath,
+          note: updateNote || null,
+          photoStatus: "pending",
+          ...(updateBase64 ? { imageBase64: updateBase64 } : {}),
+        }),
+      });
+      if (!updateRes.ok) {
+        const errBody = await updateRes.json().catch(() => ({}));
+        throw new Error((errBody as { error?: string }).error ?? "Errore aggiornamento");
+      }
       queryClient.invalidateQueries({ queryKey: getGetTreeUpdatesQueryKey(treeId) });
       resetUpdateForm();
-      if (photoStatusForUpload === "pending") {
-        toast({ title: "Aggiornamento inviato", description: "La foto sarà revisionata dall'amministratore prima di essere pubblicata." });
-      } else {
-        toast({ title: "Aggiornamento aggiunto!" });
-      }
-    } catch {
-      toast({ title: "Errore", description: "Impossibile aggiungere l'aggiornamento.", variant: "destructive" });
+      toast({ title: "Aggiornamento inviato", description: "La tua foto è in verifica — riceverai una notifica con l'esito." });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Impossibile aggiungere l'aggiornamento.";
+      toast({ title: "Errore", description: msg, variant: "destructive" });
     } finally {
       setUploading(false);
     }
@@ -862,7 +777,7 @@ export default function TreeDetailPage() {
               )}
               {verifyState === "pending" && (
                 <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
-                  L'AI non ha potuto verificare la foto. Sarà revisionata manualmente dall'amministratore.
+                  Foto pronta — riceverai una notifica quando sarà verificata dall'AI.
                 </p>
               )}
               {updatePhotoFile && verifyState !== "rejected" && (
@@ -880,10 +795,10 @@ export default function TreeDetailPage() {
             <div className="flex gap-2">
               <button
                 type="submit"
-                disabled={uploading || !updatePhotoFile || verifyState === "verifying" || verifyState === "rejected"}
+                disabled={uploading || !updatePhotoFile}
                 className="px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:opacity-90 transition-opacity disabled:opacity-50"
               >
-                {uploading ? "Caricamento..." : verifyState === "verifying" ? "Verifica in corso..." : "Aggiungi"}
+                {uploading ? "Caricamento..." : "Aggiungi"}
               </button>
               <button
                 type="button"

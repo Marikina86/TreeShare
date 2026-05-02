@@ -11,7 +11,6 @@ import { ITALIAN_PROVINCES } from "@/lib/italianProvinces";
 import { resizeToBlob, resizeToThumbnailBlob, resizeToBase64 } from "@/lib/imageUtils";
 
 type UploadState = "idle" | "uploading" | "done" | "error";
-type VerifyState = "idle" | "verifying" | "ok" | "pending" | "rejected";
 
 export default function PostPage() {
   const [, setLocation] = useLocation();
@@ -25,8 +24,7 @@ export default function PostPage() {
   const [uploadedPath, setUploadedPath] = useState<string | null>(null);
   const [uploadedThumbnailPath, setUploadedThumbnailPath] = useState<string | null>(null);
   const [uploadState, setUploadState] = useState<UploadState>("idle");
-  const [verifyState, setVerifyState] = useState<VerifyState>("idle");
-  const [photoStatusForUpload, setPhotoStatusForUpload] = useState<"approved" | "pending">("approved");
+  const [imageBase64ForVerify, setImageBase64ForVerify] = useState<string | null>(null);
   const [plantName, setPlantName] = useState("");
   const [caption, setCaption] = useState("");
   const [species, setSpecies] = useState("");
@@ -138,84 +136,18 @@ export default function PostPage() {
     reader.readAsDataURL(file);
 
     setPhotoFile(file);
-    setVerifyState("verifying");
     setUploadState("idle");
     setUploadedPath(null);
     setUploadedThumbnailPath(null);
-    setPhotoStatusForUpload("approved");
+    setImageBase64ForVerify(null);
 
-    // STEP 1: verifica AI — se AI non disponibile, modalità pending
-    let canUpload = false;
+    // Genera base64 ridimensionata per la verifica AI in background
     try {
       const base64 = await resizeToBase64(file, 768);
-      const token = await getToken();
-      const verifyRes = await fetch("/api/plants/verify", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({ imageBase64: base64 }),
-      });
+      setImageBase64ForVerify(base64);
+    } catch { /* la verifica proseguirà senza AI */ }
 
-      if (!verifyRes.ok) {
-        throw new Error(`HTTP ${verifyRes.status}`);
-      }
-
-      const verifyData = (await verifyRes.json()) as {
-        isPlant?: boolean | null;
-        aiUnavailable?: boolean;
-        label?: string;
-        reason?: string;
-      };
-
-      if (verifyData.aiUnavailable === true) {
-        // AI non disponibile: upload consentito ma in stato pending
-        canUpload = true;
-        setPhotoStatusForUpload("pending");
-        setVerifyState("pending");
-        toast({
-          title: "⏳ Verifica manuale richiesta",
-          description: "L'analisi AI non è disponibile. La tua foto sarà pubblicata dopo la revisione da parte degli amministratori.",
-          duration: 6000,
-        });
-      } else if (verifyData.isPlant === true) {
-        canUpload = true;
-        setPhotoStatusForUpload("approved");
-        setVerifyState("ok");
-        toast({
-          title: "✅ Foto accettata",
-          description: verifyData.reason || "L'immagine mostra chiaramente una pianta o un albero.",
-          duration: 3000,
-        });
-      } else {
-        setVerifyState("rejected");
-        setPhotoPreview(null);
-        setPhotoFile(null);
-        toast({
-          title: "❌ Foto non accettata",
-          description: verifyData.reason
-            ? `Motivo: ${verifyData.reason}\n\nSono accettate solo foto di piante, alberi o piante in vaso.`
-            : "L'immagine non raffigura una pianta o un albero. Riprova con una foto di vegetazione.",
-          variant: "destructive",
-          duration: 6000,
-        });
-        return;
-      }
-    } catch {
-      canUpload = true;
-      setPhotoStatusForUpload("pending");
-      setVerifyState("pending");
-      toast({
-        title: "⏳ Verifica manuale richiesta",
-        description: "Impossibile verificare l'immagine automaticamente. La tua foto sarà pubblicata dopo la revisione da parte degli amministratori.",
-        duration: 6000,
-      });
-    }
-
-    // STEP 2: upload avviene SOLO se canUpload === true
-    if (!canUpload) return;
-
+    // Upload immediato senza attendere la verifica
     setUploadState("uploading");
     try {
       const { path, thumbnailPath } = await uploadPhoto(file);
@@ -258,14 +190,6 @@ export default function PostPage() {
       toast({ title: "Foto obbligatoria", description: "Scatta una foto prima di pubblicare.", variant: "destructive" });
       return;
     }
-    if (verifyState === "verifying") {
-      toast({ title: "Attendere", description: "Analisi dell'immagine in corso...", variant: "destructive" });
-      return;
-    }
-    if (verifyState === "rejected") {
-      toast({ title: "Foto non valida", description: "Seleziona una foto di una pianta o albero.", variant: "destructive" });
-      return;
-    }
     if (uploadState === "uploading") {
       toast({ title: "Attendere", description: "La foto è ancora in caricamento, attendi un momento.", variant: "destructive" });
       return;
@@ -282,7 +206,6 @@ export default function PostPage() {
       toast({ title: "Provincia obbligatoria", description: "Seleziona la provincia della pianta.", variant: "destructive" });
       return;
     }
-    // verifyState può essere "ok" o "pending" — entrambi consentono la pubblicazione
     setShowPrivacyPopup(true);
   }
 
@@ -318,7 +241,8 @@ export default function PostPage() {
           longitude: lng ?? 0,
           locationName: locationName || null,
           country: country || null,
-          photoStatus: photoStatusForUpload,
+          photoStatus: "pending" as const,
+          ...(imageBase64ForVerify ? { imageBase64: imageBase64ForVerify } : {}),
         }),
       });
 
@@ -333,11 +257,7 @@ export default function PostPage() {
       }
 
       queryClient.invalidateQueries({ queryKey: getListTreesQueryKey() });
-      if (photoStatusForUpload === "pending") {
-        toast({ title: "⏳ Foto inviata!", description: "La tua foto è in attesa di revisione da parte degli amministratori. Sarà visibile dopo l'approvazione." });
-      } else {
-        toast({ title: "🌱 Pianta pubblicata!", description: "La tua pianta è stata aggiunta alla mappa." });
-      }
+      toast({ title: "⏳ Pianta registrata!", description: "La tua foto è in verifica — riceverai una notifica quando sarà approvata." });
       setLocation("/feed");
     } catch {
       toast({ title: "Errore", description: "Pubblicazione fallita. Riprova.", variant: "destructive" });
@@ -375,20 +295,12 @@ export default function PostPage() {
                     <span className="text-white text-sm font-medium">Caricamento in corso...</span>
                   </div>
                 )}
-                {uploadState === "done" && verifyState === "ok" && (
-                  <div className="absolute top-2 right-2 bg-green-500 text-white text-xs px-2 py-1 rounded-full flex items-center gap-1">
-                    <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3">
-                      <path d="M5 13l4 4L19 7" strokeLinecap="round" strokeLinejoin="round"/>
-                    </svg>
-                    Caricata
-                  </div>
-                )}
-                {uploadState === "done" && verifyState === "pending" && (
+                {uploadState === "done" && (
                   <div className="absolute top-2 right-2 bg-amber-500 text-white text-xs px-2 py-1 rounded-full flex items-center gap-1">
                     <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
                       <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12" strokeLinecap="round"/><line x1="12" y1="16" x2="12.01" y2="16" strokeLinecap="round"/>
                     </svg>
-                    In revisione
+                    In verifica
                   </div>
                 )}
                 {uploadState === "error" && (
@@ -396,16 +308,9 @@ export default function PostPage() {
                     Errore
                   </div>
                 )}
-                {verifyState === "verifying" && (
-                  <div className="absolute inset-0 bg-black/60 flex flex-col items-center justify-center gap-2">
-                    <div className="w-8 h-8 border-3 border-white/30 border-t-white rounded-full animate-spin" />
-                    <span className="text-white text-sm font-medium">Analisi in corso...</span>
-                    <span className="text-white/70 text-xs">Verifica che sia una pianta</span>
-                  </div>
-                )}
                 <button
                   type="button"
-                  onClick={() => { setPhotoPreview(null); setPhotoFile(null); setUploadedPath(null); setUploadedThumbnailPath(null); setUploadState("idle"); setVerifyState("idle"); }}
+                  onClick={() => { setPhotoPreview(null); setPhotoFile(null); setUploadedPath(null); setUploadedThumbnailPath(null); setUploadState("idle"); setImageBase64ForVerify(null); }}
                   className="absolute top-2 left-2 bg-black/60 text-white w-8 h-8 rounded-full flex items-center justify-center hover:bg-black/80 transition-colors"
                 >
                   <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">

@@ -5,6 +5,8 @@ import { eq, desc, count, sql, and, ne, inArray } from "drizzle-orm";
 import { getCurrentWinnerIds } from "../lib/weeklyWinnerJob";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth";
 import { getAdminIds } from "../middlewares/requireAdmin";
+import { enqueueVerification } from "../lib/photoVerificationQueue";
+import { parseBase64Image } from "../lib/geminiUtils";
 import {
   CreateTreeBody,
   ListTreesQueryParams,
@@ -286,6 +288,16 @@ router.post("/trees", requireAuth, async (req, res) => {
     ]);
 
     const u = userMap[0];
+
+    // Enqueue AI photo verification if base64 provided (fire-and-forget)
+    if ((photoStatus ?? "approved") === "pending") {
+      const rawBase64 = typeof (req.body as any).imageBase64 === "string" ? (req.body as any).imageBase64 as string : null;
+      if (rawBase64) {
+        const { base64, mimeType } = parseBase64Image(rawBase64);
+        enqueueVerification({ kind: "tree", treeId: tree!.id, userId, imageBase64: base64, mimeType });
+      }
+    }
+
     res.status(201).json(formatTree(tree!, u?.username ?? "Unknown", u?.photoUrl ?? null, 0));
   } catch (err) {
     req.log.error({ err }, "Error creating tree");
@@ -535,22 +547,37 @@ router.post("/trees/:treeId/updates", requireAuth, async (req, res) => {
       .values({ treeId, userId, photoUrl, note: note ?? null, photoStatus: finalStatus })
       .returning();
 
-    // Se la foto richiede approvazione manuale → notifica tutti gli admin
+    // Se la foto è pending: verifica AI in background oppure notifica admin (legacy)
     if (finalStatus === "pending") {
-      const adminIds = getAdminIds();
-      if (adminIds.length > 0) {
-        const [treeRow] = await db.select({ plantName: treesTable.plantName }).from(treesTable).where(eq(treesTable.id, treeId));
-        const label = treeRow?.plantName ? `"${treeRow.plantName}"` : `#${treeId}`;
-        await db.insert(userNotificationsTable).values(
-          adminIds.map((adminId) => ({
-            userId: adminId,
-            title: "Aggiornamento foto in attesa",
-            message: `Una nuova foto per la pianta ${label} richiede approvazione. Vai nel pannello admin → Aggiorn. in attesa.`,
-            type: "pending_tree_update",
-            relatedId: update!.id,
-            isRead: false,
-          }))
-        );
+      const rawBase64 = typeof (req.body as any).imageBase64 === "string" ? (req.body as any).imageBase64 as string : null;
+      if (rawBase64) {
+        const { base64, mimeType } = parseBase64Image(rawBase64);
+        enqueueVerification({
+          kind: "update",
+          updateId: update!.id,
+          treeId,
+          userId,
+          imageBase64: base64,
+          mimeType,
+          referencePhotoUrl: tree.photoUrl ?? null,
+          species: tree.species ?? null,
+        });
+      } else {
+        // Nessun base64 fornito: notifica admin per revisione manuale
+        const adminIds = getAdminIds();
+        if (adminIds.length > 0) {
+          const label = tree.plantName ? `"${tree.plantName}"` : `#${treeId}`;
+          await db.insert(userNotificationsTable).values(
+            adminIds.map((adminId) => ({
+              userId: adminId,
+              title: "Aggiornamento foto in attesa",
+              message: `Una nuova foto per la pianta ${label} richiede approvazione. Vai nel pannello admin → Aggiorn. in attesa.`,
+              type: "pending_tree_update",
+              relatedId: update!.id,
+              isRead: false,
+            }))
+          );
+        }
       }
     }
 
