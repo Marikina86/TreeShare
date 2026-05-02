@@ -55,6 +55,14 @@ const StatusReportBody = z.object({
   photoUrl: z.string().nullable().optional(),
 });
 
+/** Restituisce la stringa trimestre corrente, es. "2026-Q2". */
+function getCurrentQuarterString(now = new Date()): string {
+  const year = now.getFullYear();
+  const month = now.getMonth() + 1;
+  const q = month <= 3 ? 1 : month <= 6 ? 2 : month <= 9 ? 3 : 4;
+  return `${year}-Q${q}`;
+}
+
 // ── Formattazione sincrona: nessuna query aggiuntiva ──────────────────────────
 // username e userPhotoUrl vengono passati già risolti dal chiamante.
 function formatTree(
@@ -65,6 +73,7 @@ function formatTree(
   sunCount = 0,
   userHasSunned = false,
   isWeeklyWinner = false,
+  isDead = false,
 ) {
   return {
     id: tree.id,
@@ -89,6 +98,7 @@ function formatTree(
     sunCount,
     userHasSunned,
     isWeeklyWinner,
+    isDead,
     createdAt: tree.createdAt.toISOString(),
   };
 }
@@ -174,16 +184,26 @@ router.get("/trees", async (req, res) => {
 
     // Una sola query utenti per tutti gli alberi della pagina (no N+1)
     const treeIds = trees.map((t) => t.id);
-    const [userMap, updates] = await Promise.all([
+    const currentQuarter = getCurrentQuarterString();
+    const [userMap, updates, deadReports] = await Promise.all([
       batchLoadUsers(trees.map((t) => t.userId)),
       // GROUP BY scoped ai soli ID della pagina (non a tutta la tabella) — solo aggiornamenti approvati
       db.select({ treeId: treeUpdatesTable.treeId, cnt: count() })
         .from(treeUpdatesTable)
         .where(and(inArray(treeUpdatesTable.treeId, treeIds), eq(treeUpdatesTable.photoStatus, "approved")))
         .groupBy(treeUpdatesTable.treeId),
+      // Status report del trimestre corrente per sapere quali alberi sono morti
+      db.select({ treeId: treeStatusReportsTable.treeId, status: treeStatusReportsTable.status })
+        .from(treeStatusReportsTable)
+        .where(and(
+          inArray(treeStatusReportsTable.treeId, treeIds),
+          eq(treeStatusReportsTable.quarter, currentQuarter),
+          eq(treeStatusReportsTable.status, "dead"),
+        )),
     ]);
 
     const updateMap = new Map(updates.map((u) => [u.treeId, u.cnt]));
+    const deadSet = new Set(deadReports.map((r) => r.treeId));
 
     const formatted = trees.map((t) => {
       const u = userMap.get(t.userId);
@@ -195,6 +215,7 @@ router.get("/trees", async (req, res) => {
         t.sunCount,          // colonna pre-calcolata — nessuna query aggregata
         false,
         winnerIds.has(t.id),
+        deadSet.has(t.id),
       );
     });
 
