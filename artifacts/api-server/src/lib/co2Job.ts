@@ -73,6 +73,15 @@ function getNextQuarterStartAt0001Rome(): Date {
   return new Date(now.getTime() + romeOffsetMs);
 }
 
+/** Dato "YYYY-Qn" restituisce il trimestre precedente. */
+function getQuarterBefore(quarterStr: string): string {
+  const [year, q] = quarterStr.split("-Q");
+  const y = parseInt(year);
+  const n = parseInt(q);
+  if (n === 1) return `${y - 1}-Q4`;
+  return `${y}-Q${n - 1}`;
+}
+
 export async function calculateCo2Rankings(): Promise<void> {
   const quarterStr = getPreviousQuarterString();
 
@@ -100,10 +109,14 @@ export async function calculateCo2Rankings(): Promise<void> {
     const aliveReports = alias(treeStatusReportsTable, "alive_reports");
     const deadReports  = alias(treeStatusReportsTable, "dead_reports");
 
+    // Cutoff "6 mesi": inizio del trimestre precedente a quello in calcolo
+    const prevQuarterStr = getQuarterBefore(quarterStr);
+    const sixMonthCutoff = new Date(start.getFullYear(), start.getMonth() - 3, 1);
+
     // Conta solo alberi "vivi confermati":
-    // 1. Piantati NEL trimestre (< 3 mesi) → contano se NON hanno report "dead"
-    // 2. Piantati PRIMA del trimestre (> 3 mesi) → contano solo se hanno report "alive"
-    //    e NON hanno report "dead"
+    // - Piantati negli ultimi 6 mesi (createdAt >= sixMonthCutoff): contano se non morti
+    // - Piantati da più di 6 mesi: devono avere un alive report nel trimestre corrente
+    //   O nel trimestre precedente (altrimenti 6+ mesi senza aggiornamenti → esclusi)
     const rows = await db
       .select({
         comune: treesTable.locationName,
@@ -115,8 +128,11 @@ export async function calculateCo2Rankings(): Promise<void> {
         aliveReports,
         and(
           eq(aliveReports.treeId, treesTable.id),
-          eq(aliveReports.quarter, quarterStr),
           eq(aliveReports.status, "alive"),
+          or(
+            eq(aliveReports.quarter, quarterStr),
+            eq(aliveReports.quarter, prevQuarterStr),
+          ),
         )
       )
       .leftJoin(
@@ -131,10 +147,11 @@ export async function calculateCo2Rankings(): Promise<void> {
         and(
           eq(treesTable.photoStatus, "approved"),
           isNotNull(treesTable.locationName),
+          lt(treesTable.createdAt, end),
           isNull(deadReports.id),
           or(
-            and(gte(treesTable.createdAt, start), lt(treesTable.createdAt, end)), // piantata nel trimestre
-            and(lt(treesTable.createdAt, start), isNotNull(aliveReports.id)),     // piantata prima: serve alive report
+            gte(treesTable.createdAt, sixMonthCutoff),  // < 6 mesi: conta sempre
+            isNotNull(aliveReports.id),                  // > 6 mesi: serve alive report recente
           )
         )
       )
