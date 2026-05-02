@@ -599,15 +599,17 @@ export default function TreeDetailPage() {
           </div>
           {isOwner && (
             <div className="flex gap-2 flex-wrap mt-3">
-              <button
-                onClick={openEditModal}
-                className="px-3 py-1.5 border border-border text-foreground rounded-lg text-sm font-medium hover:bg-muted transition-colors flex items-center gap-1.5"
-              >
-                <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                  <path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" strokeLinecap="round" strokeLinejoin="round"/>
-                </svg>
-                Modifica
-              </button>
+              {!isDead && (
+                <button
+                  onClick={openEditModal}
+                  className="px-3 py-1.5 border border-border text-foreground rounded-lg text-sm font-medium hover:bg-muted transition-colors flex items-center gap-1.5"
+                >
+                  <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                    <path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                  Modifica
+                </button>
+              )}
               {(() => {
                 const updateCount = updates.data?.length ?? 0;
                 const unlockedSlots = t.createdAt ? getUnlockedPhotoSlots(t.createdAt) : 0;
