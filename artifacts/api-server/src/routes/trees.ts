@@ -671,11 +671,15 @@ router.post("/trees/:treeId/status-report", requireAuth, async (req, res) => {
   }
   try {
     const [tree] = await db
-      .select({ userId: treesTable.userId })
+      .select({ userId: treesTable.userId, createdAt: treesTable.createdAt })
       .from(treesTable)
       .where(eq(treesTable.id, treeId));
     if (!tree) { res.status(404).json({ error: "Tree not found" }); return; }
     if (tree.userId !== userId) { res.status(403).json({ error: "Forbidden" }); return; }
+    if (getUnlockedPhotoSlots(tree.createdAt) === 0) {
+      res.status(422).json({ error: "Nessuna finestra disponibile. La prima segnalazione si sblocca alla prossima finestra trimestrale (15 feb, 15 mag, 15 ago, 15 nov) successiva alla data di registrazione della pianta." });
+      return;
+    }
     const [report] = await db
       .insert(treeStatusReportsTable)
       .values({ treeId, quarter, status, photoUrl: photoUrl ?? null })

@@ -649,7 +649,9 @@ export default function TreeDetailPage() {
         </div>
 
         {/* ── Stato trimestrale (solo owner) ────────────────────────────────── */}
-        {isOwner && (
+        {isOwner && (() => {
+          const statusWindowOpen = t.createdAt ? getUnlockedPhotoSlots(t.createdAt) > 0 : false;
+          return (
           <div className="mb-5 p-4 bg-card border border-border rounded-xl">
             <div className="flex items-center justify-between gap-2 mb-3">
               <h3 className="font-semibold text-foreground text-sm flex items-center gap-2">
@@ -658,7 +660,7 @@ export default function TreeDetailPage() {
                 </svg>
                 Stato trimestrale — {getCurrentQuarterString()}
               </h3>
-              {statusReport !== undefined && statusReport !== null && !showStatusForm && !isDead && (
+              {statusWindowOpen && statusReport !== undefined && statusReport !== null && !showStatusForm && !isDead && (
                 <button
                   onClick={() => { setShowStatusForm(true); setStatusChoice(null); }}
                   className="text-xs text-primary hover:underline"
@@ -668,8 +670,15 @@ export default function TreeDetailPage() {
               )}
             </div>
 
+            {/* Finestra non ancora aperta */}
+            {!statusWindowOpen && (
+              <p className="text-xs text-muted-foreground">
+                La segnalazione si sblocca alla prima finestra trimestrale successiva alla registrazione della pianta: <span className="font-medium text-foreground">{getNextSlotDate()}</span>.
+              </p>
+            )}
+
             {/* Stato corrente */}
-            {statusReport !== undefined && statusReport !== null && !showStatusForm && (
+            {statusWindowOpen && statusReport !== undefined && statusReport !== null && !showStatusForm && (
               <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${statusReport.status === "alive" ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400" : "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400"}`}>
                 {statusReport.status === "alive" ? (
                   <>
@@ -686,7 +695,7 @@ export default function TreeDetailPage() {
             )}
 
             {/* Non ancora segnalato */}
-            {statusReport === null && !showStatusForm && (
+            {statusWindowOpen && statusReport === null && !showStatusForm && (
               <div className="flex items-center justify-between gap-3">
                 <p className="text-xs text-muted-foreground">Non ancora segnalato per questo trimestre. Gli alberi confermati vivi contano nella classifica.</p>
                 <button
@@ -802,7 +811,8 @@ export default function TreeDetailPage() {
               </form>
             )}
           </div>
-        )}
+          );
+        })()}
 
         {/* Sun rating */}
         <div className="flex items-center gap-3 mb-5 pb-4 border-b border-border">
