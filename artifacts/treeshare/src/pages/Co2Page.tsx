@@ -34,62 +34,85 @@ function formatCo2(kg: number): string {
   return `${kg.toFixed(1)} kg`;
 }
 
+function LeafIcon({ className }: { className?: string }) {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" className={className}>
+      <path d="M17 8C8 10 5.9 16.17 3.82 19.34L5.71 21l1-1C9 18 11 17 13 17c4 0 7-3 7-7 0-1.5-.4-2.9-1.1-4.1C18.3 6.8 17.7 7.4 17 8z" opacity="0.8"/>
+      <path d="M3.82 19.34C3.28 20.21 3 21.1 3 22h1c0-.66.2-1.34.53-2L3.82 19.34z" opacity="0.6"/>
+    </svg>
+  );
+}
+
 const BADGE_CONFIG = {
   gold: {
-    emoji: "🥇",
-    label: "Oro",
-    bg: "from-yellow-50 to-amber-50 dark:from-yellow-950/30 dark:to-amber-950/30",
-    border: "border-yellow-300 dark:border-yellow-700",
-    text: "text-yellow-700 dark:text-yellow-400",
-    ring: "ring-yellow-400/60",
-    co2Bg: "bg-yellow-100 dark:bg-yellow-900/40",
-    co2Text: "text-yellow-800 dark:text-yellow-300",
+    rank: "1°",
+    label: "Super Green",
+    bg: "from-emerald-50 to-green-50 dark:from-emerald-950/40 dark:to-green-950/40",
+    border: "border-emerald-400 dark:border-emerald-600",
+    text: "text-emerald-700 dark:text-emerald-300",
+    ring: "ring-emerald-400/50",
+    rankBg: "bg-emerald-600 dark:bg-emerald-500",
+    co2Bg: "bg-emerald-100 dark:bg-emerald-900/40",
+    co2Text: "text-emerald-800 dark:text-emerald-300",
+    leafColor: "text-emerald-600 dark:text-emerald-400",
+    shadow: "shadow-emerald-100 dark:shadow-emerald-900/20",
   },
   silver: {
-    emoji: "🥈",
-    label: "Argento",
-    bg: "from-slate-50 to-zinc-50 dark:from-slate-900/40 dark:to-zinc-900/40",
-    border: "border-slate-300 dark:border-slate-600",
-    text: "text-slate-600 dark:text-slate-400",
-    ring: "ring-slate-400/60",
-    co2Bg: "bg-slate-100 dark:bg-slate-800/50",
-    co2Text: "text-slate-700 dark:text-slate-300",
+    rank: "2°",
+    label: "Green",
+    bg: "from-green-50 to-teal-50 dark:from-green-950/30 dark:to-teal-950/30",
+    border: "border-green-300 dark:border-green-700",
+    text: "text-green-700 dark:text-green-400",
+    ring: "ring-green-300/50",
+    rankBg: "bg-green-600 dark:bg-green-500",
+    co2Bg: "bg-green-100 dark:bg-green-900/40",
+    co2Text: "text-green-800 dark:text-green-300",
+    leafColor: "text-green-500 dark:text-green-400",
+    shadow: "shadow-green-100 dark:shadow-green-900/20",
   },
   bronze: {
-    emoji: "🥉",
-    label: "Bronzo",
-    bg: "from-orange-50 to-amber-50 dark:from-orange-950/30 dark:to-amber-950/30",
-    border: "border-orange-300 dark:border-orange-700",
-    text: "text-orange-700 dark:text-orange-400",
-    ring: "ring-orange-400/60",
-    co2Bg: "bg-orange-100 dark:bg-orange-900/40",
-    co2Text: "text-orange-800 dark:text-orange-300",
+    rank: "3°",
+    label: "Eco",
+    bg: "from-teal-50 to-cyan-50 dark:from-teal-950/30 dark:to-cyan-950/30",
+    border: "border-teal-300 dark:border-teal-700",
+    text: "text-teal-700 dark:text-teal-400",
+    ring: "ring-teal-300/50",
+    rankBg: "bg-teal-600 dark:bg-teal-500",
+    co2Bg: "bg-teal-100 dark:bg-teal-900/40",
+    co2Text: "text-teal-800 dark:text-teal-300",
+    leafColor: "text-teal-500 dark:text-teal-400",
+    shadow: "shadow-teal-100 dark:shadow-teal-900/20",
   },
 } as const;
 
 function RankingCard({ r }: { r: Co2Ranking }) {
   const cfg = BADGE_CONFIG[r.badge as keyof typeof BADGE_CONFIG] ?? BADGE_CONFIG.bronze;
   return (
-    <div className={`relative bg-gradient-to-br ${cfg.bg} border ${cfg.border} rounded-2xl p-5 flex gap-4 items-start shadow-sm ring-1 ${cfg.ring}`}>
-      <div className="text-4xl select-none leading-none mt-0.5">{cfg.emoji}</div>
+    <div className={`relative bg-gradient-to-br ${cfg.bg} border ${cfg.border} rounded-2xl p-5 flex gap-4 items-start shadow-sm ring-1 ${cfg.ring} ${cfg.shadow}`}>
+      <div className={`w-10 h-10 rounded-xl ${cfg.rankBg} flex items-center justify-center flex-shrink-0 mt-0.5`}>
+        <span className="text-white font-bold text-sm leading-none">{cfg.rank}</span>
+      </div>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
-          <span className={`text-xs font-semibold uppercase tracking-wide ${cfg.text}`}>{cfg.label}</span>
+          <span className={`inline-flex items-center gap-1 text-xs font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full ${cfg.co2Bg} ${cfg.text}`}>
+            <LeafIcon className={cfg.leafColor} />
+            {cfg.label}
+          </span>
           {r.provincia && (
             <span className="text-xs bg-background/70 border border-border rounded-full px-2 py-0.5 text-muted-foreground font-mono">
               {r.provincia}
             </span>
           )}
         </div>
-        <h3 className="text-lg font-bold text-foreground mt-0.5 leading-tight truncate">
+        <h3 className="text-lg font-bold text-foreground mt-1.5 leading-tight truncate">
           {r.comune}
           {r.provincia ? ` (${r.provincia})` : ""}
         </h3>
-        <p className="text-sm text-muted-foreground mt-1">
+        <p className="text-sm text-muted-foreground mt-0.5">
           {r.treeCount} {r.treeCount === 1 ? "pianta piantata" : "piante piantate"}
         </p>
-        <div className={`inline-flex items-center gap-1.5 mt-2 px-3 py-1.5 rounded-xl ${cfg.co2Bg}`}>
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={cfg.co2Text}>
+        <div className={`inline-flex items-center gap-1.5 mt-2.5 px-3 py-1.5 rounded-xl ${cfg.co2Bg}`}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={cfg.co2Text}>
             <path d="M12 22V14"/>
             <path d="M12 14C12 14 7 13 5 9C3 5 6 2 9 3C10.5 3.5 11.5 5 12 7C12.5 5 13.5 3.5 15 3C18 2 21 5 19 9C17 13 12 14 12 14Z"/>
           </svg>
@@ -153,6 +176,18 @@ export default function Co2Page() {
             La classifica viene aggiornata il <strong className="text-foreground">1° di aprile, luglio, ottobre e gennaio alle 00:01</strong> ora di Roma.{" "}
             <span className="italic">I valori sono stime indicative.</span>
           </div>
+        </div>
+
+        <div className="flex items-center gap-2 mb-5 text-xs text-muted-foreground">
+          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 font-semibold">
+            <LeafIcon className="text-emerald-600" /> Super Green
+          </span>
+          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 font-semibold">
+            <LeafIcon className="text-green-500" /> Green
+          </span>
+          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-teal-100 dark:bg-teal-900/30 text-teal-700 dark:text-teal-400 font-semibold">
+            <LeafIcon className="text-teal-500" /> Eco
+          </span>
         </div>
 
         {loading && (
