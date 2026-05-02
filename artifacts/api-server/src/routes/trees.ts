@@ -17,6 +17,7 @@ import {
   GetRecentTreesQueryParams,
 } from "@workspace/api-zod";
 import { z } from "zod";
+import { getUnlockedPhotoSlots, getCurrentQuarterString } from "@workspace/treeshare-utils";
 
 const PatchTreeBody = z.object({
   plantName: z.string().max(100).nullable().optional(),
@@ -35,40 +36,12 @@ function buildMapsUrl(lat: number, lng: number): string {
   return `https://www.google.com/maps?q=${lat},${lng}&z=17`;
 }
 
-// Finestre fisse di aggiornamento: 15 feb, 15 mag, 15 ago, 15 nov
-const UPDATE_WINDOWS = [
-  { month: 1, day: 15 },  // 15 febbraio
-  { month: 4, day: 15 },  // 15 maggio
-  { month: 7, day: 15 },  // 15 agosto
-  { month: 10, day: 15 }, // 15 novembre
-];
-
-/** Numero di slot foto sbloccati in base alle finestre fisse trimestrali. */
-function getUnlockedPhotoSlots(createdAt: Date, now = new Date()): number {
-  let count = 0;
-  for (let year = createdAt.getFullYear(); year <= now.getFullYear() + 1; year++) {
-    for (const { month, day } of UPDATE_WINDOWS) {
-      const windowDate = new Date(year, month, day);
-      if (windowDate > createdAt && windowDate <= now) count++;
-    }
-  }
-  return count;
-}
-
 const StatusReportParams = z.object({ treeId: z.coerce.number().int().positive() });
 const StatusReportBody = z.object({
   quarter: z.string().regex(/^\d{4}-Q[1-4]$/),
   status: z.enum(["alive", "dead"]),
   photoUrl: z.string().nullable().optional(),
 });
-
-/** Restituisce la stringa trimestre corrente, es. "2026-Q2". */
-function getCurrentQuarterString(now = new Date()): string {
-  const year = now.getFullYear();
-  const month = now.getMonth() + 1;
-  const q = month <= 3 ? 1 : month <= 6 ? 2 : month <= 9 ? 3 : 4;
-  return `${year}-Q${q}`;
-}
 
 // ── Formattazione sincrona: nessuna query aggiuntiva ──────────────────────────
 // username e userPhotoUrl vengono passati già risolti dal chiamante.

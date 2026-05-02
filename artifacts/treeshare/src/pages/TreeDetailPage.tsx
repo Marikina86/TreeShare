@@ -17,6 +17,7 @@ import LocationSearch, { type LocationResult } from "@/components/LocationSearch
 import ReportModal from "@/components/ReportModal";
 import SunButton from "@/components/SunButton";
 import { resizeToBlob } from "@/lib/imageUtils";
+import { getUnlockedPhotoSlots, getCurrentQuarterString, getNextSlotDate } from "@workspace/treeshare-utils";
 
 function photoSrc(url: string) {
   if (url.startsWith("/objects/")) return `/api/storage${url}`;
@@ -25,46 +26,6 @@ function photoSrc(url: string) {
 
 function googleEarthUrl(lat: number, lng: number) {
   return `https://earth.google.com/web/@${lat},${lng},0a,500d,35y,0h,45t,0r`;
-}
-
-// Finestre fisse di aggiornamento: 15 feb, 15 mag, 15 ago, 15 nov
-const UPDATE_WINDOWS = [
-  { month: 1, day: 15 },  // 15 febbraio
-  { month: 4, day: 15 },  // 15 maggio
-  { month: 7, day: 15 },  // 15 agosto
-  { month: 10, day: 15 }, // 15 novembre
-];
-
-function getUnlockedPhotoSlots(createdAtStr: string, now = new Date()): number {
-  const createdAt = new Date(createdAtStr);
-  let count = 0;
-  for (let year = createdAt.getFullYear(); year <= now.getFullYear() + 1; year++) {
-    for (const { month, day } of UPDATE_WINDOWS) {
-      const windowDate = new Date(year, month, day);
-      if (windowDate > createdAt && windowDate <= now) count++;
-    }
-  }
-  return count;
-}
-
-function getCurrentQuarterString(now = new Date()): string {
-  const year = now.getFullYear();
-  const month = now.getMonth() + 1;
-  const q = month <= 3 ? 1 : month <= 6 ? 2 : month <= 9 ? 3 : 4;
-  return `${year}-Q${q}`;
-}
-
-function getNextSlotDate(): string {
-  const now = new Date();
-  for (let year = now.getFullYear(); year <= now.getFullYear() + 2; year++) {
-    for (const { month, day } of UPDATE_WINDOWS) {
-      const windowDate = new Date(year, month, day);
-      if (windowDate > now) {
-        return windowDate.toLocaleDateString("it-IT", { day: "numeric", month: "long", year: "numeric" });
-      }
-    }
-  }
-  return "prossima finestra";
 }
 
 export default function TreeDetailPage() {
