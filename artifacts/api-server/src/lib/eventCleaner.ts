@@ -166,21 +166,20 @@ function msUntilNextRome2359(): number {
   return getRomeExpiryDate(1, now).getTime() - now.getTime();
 }
 
-const EVENT_CLEANUP_INTERVAL_MS = 60 * 1000;
-const CAMPAIGN_CLEANUP_INTERVAL_MS = 24 * 60 * 60 * 1000;
+const DAILY_INTERVAL_MS = 24 * 60 * 60 * 1000;
 
 export function startEventCleaner(): void {
   deleteExpiredEvents();
   archiveExpiredCampaigns();
   expireTreeAdoptions();
-  setInterval(deleteExpiredEvents, EVENT_CLEANUP_INTERVAL_MS);
-  setInterval(archiveExpiredCampaigns, CAMPAIGN_CLEANUP_INTERVAL_MS);
-  setInterval(expireTreeAdoptions, CAMPAIGN_CLEANUP_INTERVAL_MS);
+  setInterval(deleteExpiredEvents, DAILY_INTERVAL_MS);
+  setInterval(archiveExpiredCampaigns, DAILY_INTERVAL_MS);
+  setInterval(expireTreeAdoptions, DAILY_INTERVAL_MS);
   setTimeout(() => {
     notifyExpiringCampaigns();
     notifyExpiringAdoptions();
-    setInterval(notifyExpiringCampaigns, CAMPAIGN_CLEANUP_INTERVAL_MS);
-    setInterval(notifyExpiringAdoptions, CAMPAIGN_CLEANUP_INTERVAL_MS);
+    setInterval(notifyExpiringCampaigns, DAILY_INTERVAL_MS);
+    setInterval(notifyExpiringAdoptions, DAILY_INTERVAL_MS);
   }, msUntilNextRome2359());
-  logger.info("[eventCleaner] Auto-cleanup scheduler started (events: 60s, campaign archive: 24h, expiry notifications: 23:59 Europe/Rome, adoption expiry: 24h)");
+  logger.info("[eventCleaner] Auto-cleanup scheduler started (all jobs: 24h)");
 }
