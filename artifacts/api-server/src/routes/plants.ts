@@ -15,27 +15,31 @@ const MODELS_FALLBACK: Array<{ model: string; apiVersion: "v1" | "v1beta" }> = [
 
 const PROMPT = `Analizza l'immagine fornita.
 
-Obiettivo: verificare se l'immagine mostra una pianta o un albero da esterno (in natura, giardino o spazio aperto) come soggetto principale o chiaramente visibile.
+Obiettivo: verificare se l'immagine mostra un ALBERO o una PIANTA DA ESTERNO di dimensioni significative (non un arbusto, non un cespuglio, non un'erbacea spontanea) come soggetto principale o chiaramente visibile, in un contesto naturale, giardino o spazio aperto.
 
 Regole di ACCETTAZIONE:
-- ACCETTA alberi, arbusti e cespugli in natura, giardini o spazi aperti.
-- ACCETTA piante da giardino, anche se in vaso ma collocate all'aperto o in contesti naturali.
-- ACCETTA piante in fiore (alberi in fiore, cespugli fioriti, piante da giardino fiorite) — i fiori che crescono sulla pianta sono ammessi.
-- ACCETTA piante con frutti o bacche naturali che crescono sull'albero o cespuglio.
-- ACCETTA anche se ci sono sfondi come cielo, terra, erba, muri, recinzioni o altri elementi tipici di esterni.
+- ACCETTA alberi (latifoglie, aghifoglie, palme, ulivi, alberi da frutto, ecc.) piantati in terra o in vaso grande all'aperto.
+- ACCETTA piante da giardino con fusto o tronco riconoscibile (es. magnolie, ortensie a cespuglio alto, rose con gambo sviluppato, bambù), purché la pianta sia il soggetto principale e chiaramente piantata all'esterno.
+- ACCETTA piante con frutti o fiori visibili solo se crescono su un albero o su una pianta con fusto/tronco riconoscibile.
+- ACCETTA sfondi tipici di esterni (cielo, terra, erba, muri, recinzioni).
 
-Regole di RIFIUTO:
-- RIFIUTA fiori recisi, mazzi di fiori, composizioni floreali o fiori in vaso da appartamento senza pianta visibile (soggetto: solo il fiore, non la pianta).
-- RIFIUTA piante orticole, verdure e colture alimentari: ortaggi, insalate, pomodori, peperoni, zucchine, carote, erbe aromatiche in vaso da cucina, piante da orto.
+Regole di RIFIUTO (applica con RIGORE):
+- RIFIUTA arbusti bassi, cespugli, siepi o piante senza fusto/tronco riconoscibile.
+- RIFIUTA erbacce, erbe infestanti, piante erbacee spontanee, erba alta, muschi e licheni.
+- RIFIUTA piante orticole, verdure e colture alimentari (ortaggi, insalate, pomodori, peperoni, zucchine, carote, erbe aromatiche da cucina).
+- RIFIUTA fiori recisi, mazzi di fiori, composizioni floreali, fiori in vaso da appartamento.
 - RIFIUTA immagini in cui il soggetto principale non è una pianta o un albero (persone, animali, oggetti, documenti, schermi, veicoli).
-- RIFIUTA immagini di sola terra, erba senza piante riconoscibili, o vegetazione del tutto irriconoscibile.
+- RIFIUTA immagini di sola terra, sola erba, o vegetazione irriconoscibile o troppo generica.
+- RIFIUTA piante da interno (piante d'appartamento, tropicali in vaso al chiuso).
 
 Casi limite:
-- Piante succulente o cactus in giardino esterno → ACCETTA.
-- Rosa in giardino con gambo e foglie visibili → ACCETTA (pianta in fiore).
-- Bouquet di rose recise → RIFIUTA.
-- Pomodori su pianta in orto → RIFIUTA.
-- In caso di dubbio, ACCETTA.
+- Quercia, pino, abete, cipresso, betulla, ulivo, palma → ACCETTA.
+- Albero da frutto (melo, pero, ciliegio) in giardino → ACCETTA.
+- Cactus grande o succulenta in giardino esterno con fusto visibile → ACCETTA.
+- Arbusto basso senza tronco riconoscibile → RIFIUTA.
+- Cespuglio di lavanda o rosmarino → RIFIUTA.
+- Prato o campo di erba senza alberi → RIFIUTA.
+- In caso di dubbio, RIFIUTA.
 
 Output richiesto (OBBLIGATORIO in JSON):
 {
@@ -44,7 +48,8 @@ Output richiesto (OBBLIGATORIO in JSON):
 }
 
 Importante:
-- Rispondi SOLO con JSON valido, senza testo extra.`;
+- Rispondi SOLO con JSON valido, senza testo extra.
+- Sii RIGOROSO: preferisci rifiutare un caso dubbio piuttosto che accettarlo.`;
 
 function extractJson(raw: string): { valid?: boolean; reason?: string; species1?: string; species2?: string } {
   const stripped = raw.replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/, "").trim();
