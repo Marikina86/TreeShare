@@ -129,25 +129,26 @@ async function batchLoadUsers(userIds: string[]): Promise<Map<string, { username
 // Costo: 2 query aggregate COUNT + MAX su indici, nessun join, nessun dato pesante.
 router.get("/trees/feed-meta", async (req, res) => {
   try {
-    const [{ cnt }] = await db
-      .select({ cnt: count() })
-      .from(treesTable)
-      .where(eq(treesTable.photoStatus, "approved"));
+    // 2 query parallele invece di 3 sequenziali:
+    // – trees: count + MAX(createdAt) in un'unica aggregate query
+    // – updates: MAX(createdAt) solo su aggiornamenti approvati (evita refresh spurio per pending)
+    const [[treeAgg], [{ latestUpdate }]] = await Promise.all([
+      db.select({
+        cnt: count(),
+        latest: sql<string>`COALESCE(MAX(${treesTable.createdAt}), '1970-01-01')`,
+      })
+        .from(treesTable)
+        .where(eq(treesTable.photoStatus, "approved")),
+      db.select({ latestUpdate: sql<string>`COALESCE(MAX(${treeUpdatesTable.createdAt}), '1970-01-01')` })
+        .from(treeUpdatesTable)
+        .where(eq(treeUpdatesTable.photoStatus, "approved")),
+    ]);
 
-    const [{ latest }] = await db
-      .select({ latest: sql<string>`COALESCE(MAX(${treesTable.createdAt}), '1970-01-01')` })
-      .from(treesTable)
-      .where(eq(treesTable.photoStatus, "approved"));
-
-    const [{ latestUpdate }] = await db
-      .select({ latestUpdate: sql<string>`COALESCE(MAX(${treeUpdatesTable.createdAt}), '1970-01-01')` })
-      .from(treeUpdatesTable);
-
-    const latestTree = new Date(latest).getTime();
+    const latestTree = new Date(treeAgg.latest).getTime();
     const latestUpd = new Date(latestUpdate).getTime();
     const lastUpdatedAt = new Date(Math.max(latestTree, latestUpd)).toISOString();
 
-    res.json({ total: Number(cnt), lastUpdatedAt });
+    res.json({ total: Number(treeAgg.cnt), lastUpdatedAt });
   } catch (err) {
     req.log.error({ err }, "Error fetching feed meta");
     res.status(500).json({ error: "Internal server error" });

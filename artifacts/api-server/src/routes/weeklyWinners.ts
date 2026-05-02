@@ -34,22 +34,29 @@ router.get("/weekly-winners/current", async (req, res) => {
     const updateMap = new Map(updates.map((u) => [u.treeId, u.cnt]));
     const sunMap = new Map(suns.map((s) => [s.treeId, s.cnt]));
 
+    // Batch load users — una query per tutti i vincitori invece di N query nel loop
+    const uniqueUserIds = [...new Set(winnerTrees.map((t) => t.userId))];
+    const userRows = uniqueUserIds.length > 0
+      ? await db
+          .select({ clerkUserId: usersTable.clerkUserId, username: usersTable.username, photoUrl: usersTable.photoUrl })
+          .from(usersTable)
+          .where(inArray(usersTable.clerkUserId, uniqueUserIds))
+      : [];
+    const userMap = new Map(userRows.map((u) => [u.clerkUserId, { username: u.username, photoUrl: u.photoUrl }]));
+
     const result: Record<string, object> = {};
 
     for (const [province, winner] of Object.entries(winnersMap)) {
       const tree = winnerTrees.find((t) => t.id === winner.treeId);
       if (!tree) continue;
 
-      const [user] = await db
-        .select({ username: usersTable.username, photoUrl: usersTable.photoUrl })
-        .from(usersTable)
-        .where(eq(usersTable.clerkUserId, tree.userId));
+      const u = userMap.get(tree.userId);
 
       result[province] = {
         treeId: tree.id,
         userId: tree.userId,
-        username: user?.username ?? "Unknown",
-        userPhotoUrl: user?.photoUrl ?? null,
+        username: u?.username ?? "Unknown",
+        userPhotoUrl: u?.photoUrl ?? null,
         photoUrl: tree.photoUrl,
         photoThumbnailUrl: tree.photoThumbnailUrl ?? null,
         plantName: tree.plantName ?? null,

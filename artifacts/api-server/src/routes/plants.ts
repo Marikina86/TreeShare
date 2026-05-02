@@ -131,26 +131,26 @@ router.post("/plants/verify", requireAuth, async (req, res) => {
 
       if (apiRes.status === 429) {
         lastError = `${model}: quota esaurita (429)`;
-        console.warn(`[plants/verify] ${lastError} — provo modello successivo`);
+        req.log.warn({ model }, "[plants/verify] quota esaurita (429) — provo modello successivo");
         continue;
       }
 
       if (!apiRes.ok) {
         const errBody = await apiRes.text().catch(() => "");
         lastError = `${model}: HTTP ${apiRes.status} — ${errBody.slice(0, 200)}`;
-        console.warn(`[plants/verify] ${lastError} — provo modello successivo`);
+        req.log.warn({ model, status: apiRes.status }, "[plants/verify] risposta non OK — provo modello successivo");
         continue;
       }
 
       const data = await apiRes.json() as GeminiResponse;
       const raw = extractResponseText(data);
-      console.info(`[plants/verify] Modello ${model} (${apiVersion}) risposta: ${raw.slice(0, 100)}`);
+      req.log.info({ model, apiVersion, preview: raw.slice(0, 100) }, "[plants/verify] risposta ricevuta");
 
       let parsed: { valid?: boolean; reason?: string };
       try {
         parsed = extractJson(raw);
       } catch {
-        console.warn(`[plants/verify] Modello ${model}: risposta non parsabile — fallback a revisione manuale`);
+        req.log.warn({ model }, "[plants/verify] risposta non parsabile — fallback a revisione manuale");
         res.json({ isPlant: null, aiUnavailable: true, reason: "Risposta AI non valida. Revisione manuale richiesta." });
         return;
       }
@@ -164,11 +164,11 @@ router.post("/plants/verify", requireAuth, async (req, res) => {
 
     } catch (err) {
       lastError = `${model}: errore di rete — ${String(err).slice(0, 100)}`;
-      console.warn(`[plants/verify] ${lastError} — provo modello successivo`);
+      req.log.warn({ model, err }, "[plants/verify] errore di rete — provo modello successivo");
     }
   }
 
-  console.error(`[plants/verify] Tutti i modelli hanno fallito. Ultimo errore: ${lastError}`);
+  req.log.error({ lastError }, "[plants/verify] tutti i modelli hanno fallito");
   res.json({ isPlant: null, aiUnavailable: true, reason: lastError });
 });
 
@@ -301,14 +301,14 @@ router.post("/plants/verify-update", requireAuth, async (req, res) => {
 
       if (apiRes.status === 429) {
         lastError = `${model}: quota esaurita (429)`;
-        console.warn(`[plants/verify-update] ${lastError} — provo modello successivo`);
+        req.log.warn({ model }, "[plants/verify-update] quota esaurita (429) — provo modello successivo");
         continue;
       }
 
       if (!apiRes.ok) {
         const errBody = await apiRes.text().catch(() => "");
         lastError = `${model}: HTTP ${apiRes.status} — ${errBody.slice(0, 200)}`;
-        console.warn(`[plants/verify-update] ${lastError} — provo modello successivo`);
+        req.log.warn({ model, status: apiRes.status }, "[plants/verify-update] risposta non OK — provo modello successivo");
         continue;
       }
 
@@ -319,12 +319,12 @@ router.post("/plants/verify-update", requireAuth, async (req, res) => {
       try {
         parsed = extractJson(raw);
       } catch {
-        console.warn(`[plants/verify-update] Risposta non parsabile — fallback a revisione manuale`);
+        req.log.warn({ model }, "[plants/verify-update] risposta non parsabile — fallback a revisione manuale");
         res.json({ sameSpecies: null, aiUnavailable: true, reason: "Risposta AI non valida. Revisione manuale." });
         return;
       }
 
-      console.info(`[plants/verify-update] Modello ${model} — specie1="${parsed.species1 ?? "?"}" specie2="${parsed.species2 ?? "?"}" valid=${parsed.valid} — ${parsed.reason?.slice(0, 80) ?? ""}`);
+      req.log.info({ model, species1: parsed.species1, species2: parsed.species2, valid: parsed.valid }, "[plants/verify-update] risposta ricevuta");
 
       res.json({
         sameSpecies: parsed.valid === true,
@@ -337,11 +337,11 @@ router.post("/plants/verify-update", requireAuth, async (req, res) => {
 
     } catch (err) {
       lastError = `${model}: errore di rete — ${String(err).slice(0, 100)}`;
-      console.warn(`[plants/verify-update] ${lastError} — provo modello successivo`);
+      req.log.warn({ model, err }, "[plants/verify-update] errore di rete — provo modello successivo");
     }
   }
 
-  console.error(`[plants/verify-update] Tutti i modelli hanno fallito. Ultimo errore: ${lastError}`);
+  req.log.error({ lastError }, "[plants/verify-update] tutti i modelli hanno fallito");
   res.json({ sameSpecies: null, aiUnavailable: true, reason: lastError });
 });
 
