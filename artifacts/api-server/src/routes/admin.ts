@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { usersTable, treesTable, reportsTable, treeUpdatesTable, treeSunsTable, eventsTable, eventParticipantsTable, problemReportsTable, userConsentsTable, cookieConsentsTable, userNotificationsTable, donationCampaignsTable, weeklyWinnersTable, organizationsTable, alertsTable, adoptableTreesTable, bannedEmailsTable } from "@workspace/db";
+import { usersTable, treesTable, reportsTable, treeUpdatesTable, treeSunsTable, treeStatusReportsTable, eventsTable, eventParticipantsTable, problemReportsTable, userConsentsTable, cookieConsentsTable, userNotificationsTable, donationCampaignsTable, weeklyWinnersTable, organizationsTable, alertsTable, adoptableTreesTable, bannedEmailsTable } from "@workspace/db";
 import { eq, desc, sql, count, ilike, or, inArray, and } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
 import { requireAdmin } from "../middlewares/requireAdmin";
@@ -286,6 +286,7 @@ router.delete(
         const treeIds = userTreeIds.map(t => t.id);
 
         if (treeIds.length > 0) {
+          await tx.delete(treeStatusReportsTable).where(inArray(treeStatusReportsTable.treeId, treeIds));
           await tx.delete(treeSunsTable).where(inArray(treeSunsTable.treeId, treeIds));
           await tx.delete(treeUpdatesTable).where(inArray(treeUpdatesTable.treeId, treeIds));
         }

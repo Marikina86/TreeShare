@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { usersTable, treesTable, treeSunsTable, treeUpdatesTable, eventsTable, eventParticipantsTable, problemReportsTable, userConsentsTable, cookieConsentsTable, userNotificationsTable, donationCampaignsTable, weeklyWinnersTable, reportsTable, organizationsTable, alertsTable } from "@workspace/db";
+import { usersTable, treesTable, treeSunsTable, treeUpdatesTable, treeStatusReportsTable, eventsTable, eventParticipantsTable, problemReportsTable, userConsentsTable, cookieConsentsTable, userNotificationsTable, donationCampaignsTable, weeklyWinnersTable, reportsTable, organizationsTable, alertsTable } from "@workspace/db";
 import { eq, desc, count, sql, inArray } from "drizzle-orm";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth";
 import { UpsertMyProfileBody } from "@workspace/api-zod";
@@ -236,6 +236,7 @@ router.delete("/users/me/delete", requireAuth, async (req, res) => {
       const treeIds = userTreeIds.map(t => t.id);
 
       if (treeIds.length > 0) {
+        await tx.delete(treeStatusReportsTable).where(inArray(treeStatusReportsTable.treeId, treeIds));
         await tx.delete(treeSunsTable).where(inArray(treeSunsTable.treeId, treeIds));
         await tx.delete(treeUpdatesTable).where(inArray(treeUpdatesTable.treeId, treeIds));
       }

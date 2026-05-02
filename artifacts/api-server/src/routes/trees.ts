@@ -470,11 +470,16 @@ router.delete("/trees/:treeId", requireAuth, async (req, res) => {
       res.status(403).json({ error: "Forbidden" });
       return;
     }
-    await db.delete(treesTable).where(eq(treesTable.id, treeId));
-    await db
-      .update(usersTable)
-      .set({ treesPlanted: sql`GREATEST(${usersTable.treesPlanted} - 1, 0)` })
-      .where(eq(usersTable.clerkUserId, userId));
+    await db.transaction(async (tx) => {
+      await tx.delete(treeStatusReportsTable).where(eq(treeStatusReportsTable.treeId, treeId));
+      await tx.delete(treeUpdatesTable).where(eq(treeUpdatesTable.treeId, treeId));
+      await tx.delete(treeSunsTable).where(eq(treeSunsTable.treeId, treeId));
+      await tx.delete(treesTable).where(eq(treesTable.id, treeId));
+      await tx
+        .update(usersTable)
+        .set({ treesPlanted: sql`GREATEST(${usersTable.treesPlanted} - 1, 0)` })
+        .where(eq(usersTable.clerkUserId, userId));
+    });
     res.status(204).send();
   } catch (err) {
     req.log.error({ err }, "Error deleting tree");
