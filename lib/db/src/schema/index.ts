@@ -51,6 +51,7 @@ export const treeUpdatesTable = pgTable("tree_updates", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 }, (table) => [
   index("tree_updates_tree_id_idx").on(table.treeId),
+  index("tree_updates_tree_id_photo_status_idx").on(table.treeId, table.photoStatus),
 ]);
 
 export const treeSunsTable = pgTable("tree_suns", {
@@ -186,7 +187,9 @@ export const weeklyWinnersTable = pgTable("weekly_winners", {
   province: text("province").notNull(),
   sunCount: integer("sun_count").notNull(),
   weekStart: timestamp("week_start").notNull(),
-});
+}, (table) => [
+  index("weekly_winners_week_start_idx").on(table.weekStart),
+]);
 
 // ── GDPR ────────────────────────────────────────────────────────────────────
 
@@ -451,7 +454,9 @@ export const co2RankingsTable = pgTable("co2_rankings", {
   co2Kg: real("co2_kg").notNull(),
   badge: text("badge").notNull(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
-});
+}, (table) => [
+  index("co2_rankings_month_idx").on(table.month),
+]);
 
 // ── Tree status reports (quarterly alive/dead confirmation) ───────────────────
 
