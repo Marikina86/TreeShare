@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { Switch, Route, Router as WouterRouter, Redirect, useLocation } from "wouter";
 import { QueryClientProvider, useQueryClient } from "@tanstack/react-query";
 import { SupabaseAuthProvider, useAuth, useUser, useClerk, Show } from "@/lib/auth";
@@ -7,37 +7,38 @@ import { setAuthTokenGetter } from "@workspace/api-client-react";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { queryClient } from "@/lib/queryClient";
-import { LanguageProvider, useLang } from "@/lib/i18n";
-import LandingPage from "@/pages/LandingPage";
-import FeedPage from "@/pages/FeedPage";
-import MapPage from "@/pages/MapPage";
-import PostPage from "@/pages/PostPage";
-import TreeDetailPage from "@/pages/TreeDetailPage";
-import ProfilePage from "@/pages/ProfilePage";
-import OnboardingPage from "@/pages/OnboardingPage";
-import PrivacyPage from "@/pages/PrivacyPage";
-import TermsPage from "@/pages/TermsPage";
-import CookiePage from "@/pages/CookiePage";
-import EventsPage from "@/pages/EventsPage";
-import AlertsPage from "@/pages/AlertsPage";
-import TipsPage from "@/pages/TipsPage";
-import SettingsPage from "@/pages/SettingsPage";
-import AdminPage from "@/pages/AdminPage";
-import OrganizationSignupPage from "@/pages/OrganizationSignupPage";
-import RegisterChoicePage from "@/pages/RegisterChoicePage";
-import PrivateSignupPage from "@/pages/PrivateSignupPage";
-import SignInPage from "@/pages/SignInPage";
-import CampaignsPage from "@/pages/CampaignsPage";
-import Co2Page from "@/pages/Co2Page";
-import AdoptableTreesPage from "@/pages/AdoptableTreesPage";
-import AdoptableTreeDetailPage from "@/pages/AdoptableTreeDetailPage";
-import CreateAdoptableTreePage from "@/pages/CreateAdoptableTreePage";
-import OrgAdoptionsPage from "@/pages/OrgAdoptionsPage";
-import ResetPasswordPage from "@/pages/ResetPasswordPage";
-import RegisterEnteActivatePage from "@/pages/RegisterEnteActivatePage";
-import RegisterPrivatoActivatePage from "@/pages/RegisterPrivatoActivatePage";
-import NotFound from "@/pages/not-found";
+import { LanguageProvider } from "@/lib/i18n";
 import InstallPrompt from "@/components/InstallPrompt";
+
+const LandingPage = lazy(() => import("@/pages/LandingPage"));
+const FeedPage = lazy(() => import("@/pages/FeedPage"));
+const MapPage = lazy(() => import("@/pages/MapPage"));
+const PostPage = lazy(() => import("@/pages/PostPage"));
+const TreeDetailPage = lazy(() => import("@/pages/TreeDetailPage"));
+const ProfilePage = lazy(() => import("@/pages/ProfilePage"));
+const OnboardingPage = lazy(() => import("@/pages/OnboardingPage"));
+const PrivacyPage = lazy(() => import("@/pages/PrivacyPage"));
+const TermsPage = lazy(() => import("@/pages/TermsPage"));
+const CookiePage = lazy(() => import("@/pages/CookiePage"));
+const EventsPage = lazy(() => import("@/pages/EventsPage"));
+const AlertsPage = lazy(() => import("@/pages/AlertsPage"));
+const TipsPage = lazy(() => import("@/pages/TipsPage"));
+const SettingsPage = lazy(() => import("@/pages/SettingsPage"));
+const AdminPage = lazy(() => import("@/pages/AdminPage"));
+const OrganizationSignupPage = lazy(() => import("@/pages/OrganizationSignupPage"));
+const RegisterChoicePage = lazy(() => import("@/pages/RegisterChoicePage"));
+const PrivateSignupPage = lazy(() => import("@/pages/PrivateSignupPage"));
+const SignInPage = lazy(() => import("@/pages/SignInPage"));
+const CampaignsPage = lazy(() => import("@/pages/CampaignsPage"));
+const Co2Page = lazy(() => import("@/pages/Co2Page"));
+const AdoptableTreesPage = lazy(() => import("@/pages/AdoptableTreesPage"));
+const AdoptableTreeDetailPage = lazy(() => import("@/pages/AdoptableTreeDetailPage"));
+const CreateAdoptableTreePage = lazy(() => import("@/pages/CreateAdoptableTreePage"));
+const OrgAdoptionsPage = lazy(() => import("@/pages/OrgAdoptionsPage"));
+const ResetPasswordPage = lazy(() => import("@/pages/ResetPasswordPage"));
+const RegisterEnteActivatePage = lazy(() => import("@/pages/RegisterEnteActivatePage"));
+const RegisterPrivatoActivatePage = lazy(() => import("@/pages/RegisterPrivatoActivatePage"));
+const NotFound = lazy(() => import("@/pages/not-found"));
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -222,39 +223,41 @@ function AuthProviderWithRoutes() {
         <ProfileAutoSync />
         <TooltipProvider>
           <MobileBackButton />
-          <Switch>
-            <Route path="/" component={HomeRedirect} />
-            <Route path="/sign-in/*?" component={SignInPage} />
-            <Route path="/sign-up/*?" component={() => <Redirect to="/register" />} />
-            <Route path="/reset-password" component={ResetPasswordPage} />
-            <Route path="/onboarding" component={() => <ProtectedRoute component={OnboardingPage} />} />
-            <Route path="/feed" component={() => <ProtectedRoute component={FeedPage} />} />
-            <Route path="/map" component={() => <ProtectedRoute component={MapPage} />} />
-            <Route path="/post" component={() => <ProtectedRoute component={PostPage} />} />
-            <Route path="/tree/:treeId" component={() => <ProtectedRoute component={TreeDetailPage} />} />
-            <Route path="/profile" component={() => <ProtectedRoute component={ProfilePage} />} />
-            <Route path="/profile/:userId" component={() => <ProtectedRoute component={ProfilePage} />} />
-            <Route path="/events" component={() => <ProtectedRoute component={EventsPage} />} />
-            <Route path="/alerts" component={() => <ProtectedRoute component={AlertsPage} />} />
-            <Route path="/tips" component={() => <ProtectedRoute component={TipsPage} />} />
-            <Route path="/settings" component={() => <ProtectedRoute component={SettingsPage} />} />
-            <Route path="/campaigns" component={CampaignsPage} />
-            <Route path="/co2" component={Co2Page} />
-            <Route path="/adopt" component={AdoptableTreesPage} />
-            <Route path="/adopt/create" component={() => <ProtectedRoute component={CreateAdoptableTreePage} />} />
-            <Route path="/adopt/manage" component={() => <ProtectedRoute component={OrgAdoptionsPage} />} />
-            <Route path="/adopt/:id" component={AdoptableTreeDetailPage} />
-            <Route path="/admin" component={() => <AdminRoute component={AdminPage} />} />
-            <Route path="/privacy" component={PrivacyPage} />
-            <Route path="/terms" component={TermsPage} />
-            <Route path="/cookies" component={CookiePage} />
-            <Route path="/register" component={RegisterChoicePage} />
-            <Route path="/register-privato" component={PrivateSignupPage} />
-            <Route path="/register-privato/activate" component={RegisterPrivatoActivatePage} />
-            <Route path="/register-ente" component={OrganizationSignupPage} />
-            <Route path="/register-ente/activate" component={RegisterEnteActivatePage} />
-            <Route component={NotFound} />
-          </Switch>
+          <Suspense fallback={<div className="fixed inset-0 flex items-center justify-center bg-background"><div className="w-8 h-8 rounded-full border-2 border-primary/20 border-t-primary animate-spin" /></div>}>
+            <Switch>
+              <Route path="/" component={HomeRedirect} />
+              <Route path="/sign-in/*?" component={SignInPage} />
+              <Route path="/sign-up/*?" component={() => <Redirect to="/register" />} />
+              <Route path="/reset-password" component={ResetPasswordPage} />
+              <Route path="/onboarding" component={() => <ProtectedRoute component={OnboardingPage} />} />
+              <Route path="/feed" component={() => <ProtectedRoute component={FeedPage} />} />
+              <Route path="/map" component={() => <ProtectedRoute component={MapPage} />} />
+              <Route path="/post" component={() => <ProtectedRoute component={PostPage} />} />
+              <Route path="/tree/:treeId" component={() => <ProtectedRoute component={TreeDetailPage} />} />
+              <Route path="/profile" component={() => <ProtectedRoute component={ProfilePage} />} />
+              <Route path="/profile/:userId" component={() => <ProtectedRoute component={ProfilePage} />} />
+              <Route path="/events" component={() => <ProtectedRoute component={EventsPage} />} />
+              <Route path="/alerts" component={() => <ProtectedRoute component={AlertsPage} />} />
+              <Route path="/tips" component={() => <ProtectedRoute component={TipsPage} />} />
+              <Route path="/settings" component={() => <ProtectedRoute component={SettingsPage} />} />
+              <Route path="/campaigns" component={CampaignsPage} />
+              <Route path="/co2" component={Co2Page} />
+              <Route path="/adopt" component={AdoptableTreesPage} />
+              <Route path="/adopt/create" component={() => <ProtectedRoute component={CreateAdoptableTreePage} />} />
+              <Route path="/adopt/manage" component={() => <ProtectedRoute component={OrgAdoptionsPage} />} />
+              <Route path="/adopt/:id" component={AdoptableTreeDetailPage} />
+              <Route path="/admin" component={() => <AdminRoute component={AdminPage} />} />
+              <Route path="/privacy" component={PrivacyPage} />
+              <Route path="/terms" component={TermsPage} />
+              <Route path="/cookies" component={CookiePage} />
+              <Route path="/register" component={RegisterChoicePage} />
+              <Route path="/register-privato" component={PrivateSignupPage} />
+              <Route path="/register-privato/activate" component={RegisterPrivatoActivatePage} />
+              <Route path="/register-ente" component={OrganizationSignupPage} />
+              <Route path="/register-ente/activate" component={RegisterEnteActivatePage} />
+              <Route component={NotFound} />
+            </Switch>
+          </Suspense>
           <Toaster />
           <InstallPrompt />
         </TooltipProvider>
