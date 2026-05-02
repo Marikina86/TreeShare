@@ -361,16 +361,11 @@ export default function Layout({ children }: LayoutProps) {
           <Link
             href="/co2"
             title={t.nav.co2}
-            className={`p-2 rounded-lg transition-colors ${
+            className={`px-2 py-1 rounded-lg transition-colors text-xs font-bold tracking-tight ${
               location === "/co2" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground"
             }`}
           >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M2 22C2 22 7 15 12 15C17 15 22 22 22 22"/>
-              <path d="M12 15V10"/>
-              <path d="M12 10C12 10 9 7 6 8C3 9 2 13 5 14C8 15 12 10 12 10Z"/>
-              <path d="M12 10C12 10 15 7 18 8C21 9 22 13 19 14C16 15 12 10 12 10Z"/>
-            </svg>
+            CO₂
           </Link>
           {isAdmin && (
             <Link
@@ -449,16 +444,11 @@ export default function Layout({ children }: LayoutProps) {
           <Link
             href="/co2"
             title={t.nav.co2}
-            className={`p-2 rounded-lg transition-colors ${
+            className={`px-2 py-1 rounded-lg transition-colors text-xs font-bold tracking-tight ${
               location === "/co2" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"
             }`}
           >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M2 22C2 22 7 15 12 15C17 15 22 22 22 22"/>
-              <path d="M12 15V10"/>
-              <path d="M12 10C12 10 9 7 6 8C3 9 2 13 5 14C8 15 12 10 12 10Z"/>
-              <path d="M12 10C12 10 15 7 18 8C21 9 22 13 19 14C16 15 12 10 12 10Z"/>
-            </svg>
+            CO₂
           </Link>
           {isAdmin && (
             <Link
