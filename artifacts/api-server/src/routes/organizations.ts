@@ -196,6 +196,7 @@ router.post("/register-ente", async (req, res) => {
     const { data: linkData, error: linkErr } = await supabaseAdmin.auth.admin.generateLink({
       type: "signup",
       email: data.emailUfficiale,
+      password: "",
       options: redirectTo ? { redirectTo } : {},
     });
 
@@ -337,7 +338,7 @@ router.post("/register-ente/activate", requireAuth, async (req, res) => {
           username: pendingOrg.username as string,
           hashedPassword: pendingOrg.hashedPassword as string,
           ruoloUtente: pendingOrg.ruoloUtente as string,
-          numeroLicenze: pendingOrg.numeroLicenze as number | null,
+          numeroLicenze: (pendingOrg.numeroLicenze as number | null) ?? undefined,
         })
         .returning();
 
@@ -407,6 +408,7 @@ router.post("/register-ente/resend-verification", async (req, res) => {
       const { data: linkData, error: linkErr } = await supabaseAdmin.auth.admin.generateLink({
         type: "signup",
         email: trimmedEmail,
+        password: "",
         options: redirectTo ? { redirectTo } : {},
       });
 

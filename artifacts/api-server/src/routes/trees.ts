@@ -350,7 +350,7 @@ router.get("/trees/:treeId", async (req, res) => {
 // e lettura del valore aggiornato tramite RETURNING.
 router.post("/trees/:treeId/sun", requireAuth, async (req, res) => {
   const userId = (req as AuthenticatedRequest).userId;
-  const treeId = parseInt(req.params.treeId ?? "0");
+  const treeId = parseInt((req.params.treeId as string) ?? "0");
   if (!treeId) { res.status(400).json({ error: "Invalid tree ID" }); return; }
   try {
     const [existing] = await db

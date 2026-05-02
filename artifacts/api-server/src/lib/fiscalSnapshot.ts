@@ -1,6 +1,8 @@
 import { db } from "@workspace/db";
 import { usersTable, organizationsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
+import { NodePgDatabase } from "drizzle-orm/node-postgres";
+import * as schema from "@workspace/db/schema";
 
 export interface FiscalSnapshot {
   entityUserId: string;
@@ -21,7 +23,7 @@ export interface FiscalSnapshot {
  */
 export async function fetchFiscalSnapshot(
   clerkUserId: string,
-  tx: typeof db = db,
+  tx: NodePgDatabase<typeof schema> = db,
 ): Promise<FiscalSnapshot> {
   const [user] = await tx
     .select()

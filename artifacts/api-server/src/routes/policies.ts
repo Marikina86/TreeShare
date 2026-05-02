@@ -94,7 +94,7 @@ router.post("/policies", requireAuth, requireAdmin, async (req, res) => {
 
 // PUT /policies/:id/activate — attiva una versione, disattiva le altre dello stesso tipo (admin)
 router.put("/policies/:id/activate", requireAuth, requireAdmin, async (req, res) => {
-  const { id } = req.params;
+  const id = req.params.id as string;
 
   try {
     const [target] = await db

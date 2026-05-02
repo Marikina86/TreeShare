@@ -78,7 +78,7 @@ router.get("/admin/problem-reports", requireAuth, requireAdmin, async (req, res)
 
 // PATCH /admin/problem-reports/:id/status — aggiorna stato (admin)
 router.patch("/admin/problem-reports/:id/status", requireAuth, requireAdmin, async (req, res) => {
-  const id = parseInt(req.params.id, 10);
+  const id = parseInt(req.params.id as string, 10);
   if (isNaN(id)) { res.status(400).json({ error: "ID non valido" }); return; }
 
   const { status, adminNote } = req.body ?? {};
@@ -112,7 +112,7 @@ router.patch("/admin/problem-reports/:id/status", requireAuth, requireAdmin, asy
 
 // PATCH /admin/problem-reports/:id/reply — salva risposta admin e crea notifica personale all'utente
 router.patch("/admin/problem-reports/:id/reply", requireAuth, requireAdmin, async (req, res) => {
-  const id = parseInt(req.params.id, 10);
+  const id = parseInt(req.params.id as string, 10);
   if (isNaN(id)) { res.status(400).json({ error: "ID non valido" }); return; }
 
   const { replyText } = req.body ?? {};
@@ -136,7 +136,7 @@ router.patch("/admin/problem-reports/:id/reply", requireAuth, requireAdmin, asyn
     const [updated] = await db
       .update(problemReportsTable)
       .set({
-        adminReply: replyText.trim(),
+        replyText: replyText.trim(),
         repliedAt: new Date(),
         status: report.status === "new" ? "in_progress" : report.status,
       })

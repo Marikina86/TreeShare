@@ -65,7 +65,7 @@ router.get("/admin/payment-ledger", requireAuth, requireAdmin, async (req, res) 
  * Fallback for entries that don't have fiscal data embedded yet.
  */
 router.get("/admin/ledger/billing/:entityUserId", requireAuth, requireAdmin, async (req, res) => {
-  const { entityUserId } = req.params;
+  const entityUserId = req.params.entityUserId as string;
   if (!entityUserId) { res.status(400).json({ error: "entityUserId obbligatorio" }); return; }
   try {
     const [user] = await db
@@ -198,7 +198,7 @@ router.post("/admin/payment-ledger/refund", requireAuth, requireAdmin, async (re
  */
 router.delete("/admin/payment-ledger/:id", requireAuth, requireAdmin, async (req, res) => {
   const adminId = (req as AuthenticatedRequest).userId;
-  const id = parseInt(req.params.id, 10);
+  const id = parseInt(req.params.id as string, 10);
   if (isNaN(id)) { res.status(400).json({ error: "ID non valido" }); return; }
   try {
     const [entry] = await db

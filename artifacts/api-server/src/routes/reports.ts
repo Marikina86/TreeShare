@@ -214,7 +214,7 @@ router.get("/admin/reports", requireAuth, requireAdmin, async (req, res) => {
 
 // PATCH /admin/reports/:id/reviewed
 router.patch("/admin/reports/:id/reviewed", requireAuth, requireAdmin, async (req, res) => {
-  const id = parseInt(req.params.id, 10);
+  const id = parseInt(req.params.id as string, 10);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
   try {
     const [updated] = await db.update(reportsTable).set({ status: "reviewed" }).where(eq(reportsTable.id, id)).returning();
@@ -228,7 +228,7 @@ router.patch("/admin/reports/:id/reviewed", requireAuth, requireAdmin, async (re
 
 // PATCH /admin/reports/:id/dismissed
 router.patch("/admin/reports/:id/dismissed", requireAuth, requireAdmin, async (req, res) => {
-  const id = parseInt(req.params.id, 10);
+  const id = parseInt(req.params.id as string, 10);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
   try {
     const [updated] = await db.update(reportsTable).set({ status: "dismissed" }).where(eq(reportsTable.id, id)).returning();
@@ -242,7 +242,7 @@ router.patch("/admin/reports/:id/dismissed", requireAuth, requireAdmin, async (r
 
 // DELETE /admin/events/:eventId — delete an event (admin, from report panel)
 router.delete("/admin/events/:eventId", requireAuth, requireAdmin, async (req, res) => {
-  const eventId = parseInt(req.params.eventId, 10);
+  const eventId = parseInt(req.params.eventId as string, 10);
   if (isNaN(eventId)) { res.status(400).json({ error: "Invalid eventId" }); return; }
   try {
     const [deleted] = await db.delete(eventsTable).where(eq(eventsTable.id, eventId)).returning({ id: eventsTable.id });

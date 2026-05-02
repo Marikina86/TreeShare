@@ -161,7 +161,7 @@ router.post("/discount-codes", requireAuth, requireAdmin, async (req, res) => {
 // ─── admin: update code ──────────────────────────────────────────────────────
 
 router.patch("/discount-codes/:id", requireAuth, requireAdmin, async (req, res) => {
-  const id = parseInt(req.params.id, 10);
+  const id = parseInt(req.params.id as string, 10);
   if (isNaN(id)) { res.status(400).json({ error: "ID non valido" }); return; }
   try {
     const updates: Record<string, unknown> = {};
@@ -191,7 +191,7 @@ router.patch("/discount-codes/:id", requireAuth, requireAdmin, async (req, res) 
 // ─── admin: delete code ──────────────────────────────────────────────────────
 
 router.delete("/discount-codes/:id", requireAuth, requireAdmin, async (req, res) => {
-  const id = parseInt(req.params.id, 10);
+  const id = parseInt(req.params.id as string, 10);
   if (isNaN(id)) { res.status(400).json({ error: "ID non valido" }); return; }
   try {
     const [deleted] = await db
@@ -209,7 +209,7 @@ router.delete("/discount-codes/:id", requireAuth, requireAdmin, async (req, res)
 // ─── admin: send notifications for a code ───────────────────────────────────
 
 router.post("/discount-codes/:id/notify", requireAuth, requireAdmin, async (req, res) => {
-  const id = parseInt(req.params.id, 10);
+  const id = parseInt(req.params.id as string, 10);
   if (isNaN(id)) { res.status(400).json({ error: "ID non valido" }); return; }
   try {
     const { target, type } = req.body;

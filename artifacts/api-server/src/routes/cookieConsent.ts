@@ -38,7 +38,7 @@ router.post("/cookie-consent", async (req, res) => {
   const userAgent = req.headers["user-agent"] || null;
 
   // Recupera userId se l'utente è autenticato (opzionale — non blocca la richiesta)
-  const userId = (req as AuthenticatedRequest).userId ?? null;
+  const userId = (req as unknown as AuthenticatedRequest).userId ?? null;
 
   try {
     // Inserisce sempre un nuovo record (storico completo — non sovrascrive mai)
@@ -69,7 +69,7 @@ router.post("/cookie-consent", async (req, res) => {
 
 // GET /cookie-consent/:sessionId — recupera le preferenze cookie più recenti per sessione
 router.get("/cookie-consent/:sessionId", async (req, res) => {
-  const { sessionId } = req.params;
+  const sessionId = req.params.sessionId as string;
 
   if (!sessionId || sessionId.length > 128) {
     res.status(400).json({ error: "sessionId non valido" });
@@ -98,7 +98,7 @@ router.get("/cookie-consent/:sessionId", async (req, res) => {
 
 // PATCH /cookie-consent/:sessionId — aggiorna preferenze (aggiunge nuovo record storico)
 router.patch("/cookie-consent/:sessionId", async (req, res) => {
-  const { sessionId } = req.params;
+  const sessionId = req.params.sessionId as string;
 
   const parsed = UpdateCookieConsentSchema.safeParse(req.body);
   if (!parsed.success) {
@@ -111,7 +111,7 @@ router.patch("/cookie-consent/:sessionId", async (req, res) => {
     req.socket?.remoteAddress ||
     null;
   const userAgent = req.headers["user-agent"] || null;
-  const userId = (req as AuthenticatedRequest).userId ?? null;
+  const userId = (req as unknown as AuthenticatedRequest).userId ?? null;
 
   try {
     // Recupera il record più recente per questa sessione

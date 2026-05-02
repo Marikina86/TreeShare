@@ -156,7 +156,7 @@ router.get("/consent/status", requireAuth, async (req, res) => {
 // DELETE /consent/:policyId — revoca consenso (GDPR right to withdraw)
 router.delete("/consent/:policyId", requireAuth, async (req, res) => {
   const userId = (req as AuthenticatedRequest).userId;
-  const { policyId } = req.params;
+  const policyId = req.params.policyId as string;
 
   const ipAddress =
     (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() ||

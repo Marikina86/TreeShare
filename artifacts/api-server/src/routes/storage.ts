@@ -90,7 +90,7 @@ router.put(
   "/storage/upload-direct/:uuid",
   express.raw({ type: "*/*", limit: "25mb" }),
   async (req: Request, res: Response) => {
-    const uuid = req.params.uuid;
+    const uuid = req.params.uuid as string;
     if (!uuid || uuid.length > 100 || /[^a-zA-Z0-9.\-_]/.test(uuid)) {
       res.status(400).json({ error: "Invalid upload ID" });
       return;
@@ -126,7 +126,7 @@ router.put(
 );
 
 router.get("/storage/objects/uploads/:uuid", (req: Request, res: Response) => {
-  const uuid = req.params.uuid;
+  const uuid = req.params.uuid as string;
   if (!uuid || uuid.length > 100 || /[^a-zA-Z0-9.\-_]/.test(uuid)) {
     res.status(400).json({ error: "Invalid file ID" });
     return;

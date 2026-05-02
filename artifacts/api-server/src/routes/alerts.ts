@@ -106,7 +106,7 @@ router.post("/admin/alerts", requireAuth, requireAdmin, async (req, res) => {
 
 // PATCH /admin/alerts/:id — modifica avviso
 router.patch("/admin/alerts/:id", requireAuth, requireAdmin, async (req, res) => {
-  const id = parseInt(req.params.id, 10);
+  const id = parseInt(req.params.id as string, 10);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
 
   const { title, message, priority, targetGroup } = req.body ?? {};
@@ -143,7 +143,7 @@ router.patch("/admin/alerts/:id", requireAuth, requireAdmin, async (req, res) =>
 
 // DELETE /admin/alerts/:id — elimina avviso
 router.delete("/admin/alerts/:id", requireAuth, requireAdmin, async (req, res) => {
-  const id = parseInt(req.params.id, 10);
+  const id = parseInt(req.params.id as string, 10);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
 
   try {

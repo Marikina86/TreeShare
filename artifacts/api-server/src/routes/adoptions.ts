@@ -246,7 +246,7 @@ router.get("/adopt/my-trees", requireAuth, async (req, res) => {
 // ─── Public: tree detail (includes ownerStripeReady) ─────────────────────────
 
 router.get("/adopt/trees/:id", async (req, res) => {
-  const id = parseInt(req.params.id, 10);
+  const id = parseInt(req.params.id as string, 10);
   if (isNaN(id)) { res.status(400).json({ error: "ID non valido" }); return; }
   try {
     const [row] = await db
@@ -393,7 +393,7 @@ router.post("/adopt/trees", requireAuth, async (req, res) => {
 
 router.patch("/adopt/trees/:id", requireAuth, async (req, res) => {
   const userId = (req as AuthenticatedRequest).userId;
-  const id = parseInt(req.params.id, 10);
+  const id = parseInt(req.params.id as string, 10);
   if (isNaN(id)) { res.status(400).json({ error: "ID non valido" }); return; }
   try {
     const accountType = await getAccountType(userId);
@@ -434,7 +434,7 @@ router.patch("/adopt/trees/:id", requireAuth, async (req, res) => {
 
 router.delete("/adopt/trees/:id", requireAuth, async (req, res) => {
   const userId = (req as AuthenticatedRequest).userId;
-  const id = parseInt(req.params.id, 10);
+  const id = parseInt(req.params.id as string, 10);
   if (isNaN(id)) { res.status(400).json({ error: "ID non valido" }); return; }
   try {
     const accountType = await getAccountType(userId);
@@ -457,7 +457,7 @@ router.delete("/adopt/trees/:id", requireAuth, async (req, res) => {
 
 router.patch("/adopt/trees/:id/pause", requireAuth, async (req, res) => {
   const userId = (req as AuthenticatedRequest).userId;
-  const id = parseInt(req.params.id, 10);
+  const id = parseInt(req.params.id as string, 10);
   if (isNaN(id)) { res.status(400).json({ error: "ID non valido" }); return; }
   try {
     const accountType = await getAccountType(userId);
@@ -481,7 +481,7 @@ router.patch("/adopt/trees/:id/pause", requireAuth, async (req, res) => {
 
 router.patch("/adopt/trees/:id/resume", requireAuth, async (req, res) => {
   const userId = (req as AuthenticatedRequest).userId;
-  const id = parseInt(req.params.id, 10);
+  const id = parseInt(req.params.id as string, 10);
   if (isNaN(id)) { res.status(400).json({ error: "ID non valido" }); return; }
   try {
     const accountType = await getAccountType(userId);
@@ -923,7 +923,7 @@ router.post("/adopt/confirm", requireAuth, async (req, res) => {
 
 router.post("/adopt/my-adoptions/:id/shipping", requireAuth, async (req, res) => {
   const userId = (req as AuthenticatedRequest).userId;
-  const id = parseInt(req.params.id, 10);
+  const id = parseInt(req.params.id as string, 10);
   if (isNaN(id)) { res.status(400).json({ error: "ID non valido" }); return; }
   try {
     const [adoption] = await db
@@ -1016,7 +1016,7 @@ router.get("/adopt/org/adoptions", requireAuth, async (req, res) => {
 
 router.patch("/adopt/org/adoptions/:id/status", requireAuth, async (req, res) => {
   const userId = (req as AuthenticatedRequest).userId;
-  const id = parseInt(req.params.id, 10);
+  const id = parseInt(req.params.id as string, 10);
   if (isNaN(id)) { res.status(400).json({ error: "ID non valido" }); return; }
   try {
     const accountType = await getAccountType(userId);
@@ -1196,7 +1196,7 @@ router.get("/admin/adopt/trees/pending", requireAuth, requireAdmin, async (req, 
 // ─── Admin: approve adoptable tree ───────────────────────────────────────────
 
 router.patch("/admin/adopt/trees/:id/approve", requireAuth, requireAdmin, async (req, res) => {
-  const id = parseInt(req.params.id, 10);
+  const id = parseInt(req.params.id as string, 10);
   if (isNaN(id)) { res.status(400).json({ error: "ID non valido" }); return; }
   try {
     const [tree] = await db
@@ -1221,7 +1221,7 @@ router.patch("/admin/adopt/trees/:id/approve", requireAuth, requireAdmin, async 
 // ─── Admin: reject adoptable tree ────────────────────────────────────────────
 
 router.patch("/admin/adopt/trees/:id/reject", requireAuth, requireAdmin, async (req, res) => {
-  const id = parseInt(req.params.id, 10);
+  const id = parseInt(req.params.id as string, 10);
   if (isNaN(id)) { res.status(400).json({ error: "ID non valido" }); return; }
   const { message } = req.body;
   try {

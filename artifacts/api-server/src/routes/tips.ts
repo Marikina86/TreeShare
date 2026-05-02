@@ -84,7 +84,7 @@ router.post("/admin/tips", requireAuth, requireAdmin, async (req, res) => {
 
 // ── PATCH /admin/tips/:id — modifica consiglio (admin) ──────────────────────
 router.patch("/admin/tips/:id", requireAuth, requireAdmin, async (req, res) => {
-  const id = parseInt(req.params.id, 10);
+  const id = parseInt(req.params.id as string, 10);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
 
   const { title, description, category, imageUrl } = req.body ?? {};
@@ -121,7 +121,7 @@ router.patch("/admin/tips/:id", requireAuth, requireAdmin, async (req, res) => {
 
 // ── DELETE /admin/tips/:id — elimina consiglio (admin) ──────────────────────
 router.delete("/admin/tips/:id", requireAuth, requireAdmin, async (req, res) => {
-  const id = parseInt(req.params.id, 10);
+  const id = parseInt(req.params.id as string, 10);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
 
   try {

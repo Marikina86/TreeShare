@@ -35,7 +35,7 @@ async function getCredentials(): Promise<{ publishableKey: string; secretKey: st
     },
   });
 
-  const data = await response.json();
+  const data = await response.json() as { items?: Array<{ settings: { publishable: string; secret: string } }> };
   const connectionSettings = data.items?.[0];
 
   if (

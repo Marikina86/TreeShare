@@ -157,7 +157,7 @@ router.patch(
   requireAuth,
   requireAdmin,
   async (req, res) => {
-    const { clerkUserId } = req.params;
+    const clerkUserId = req.params.clerkUserId as string;
     const adminId = (req as any).userId;
     if (clerkUserId === adminId) {
       res.status(400).json({ error: "Cannot block yourself" });
@@ -208,7 +208,7 @@ router.patch(
   requireAuth,
   requireAdmin,
   async (req, res) => {
-    const { clerkUserId } = req.params;
+    const clerkUserId = req.params.clerkUserId as string;
     try {
       const [target] = await db
         .select({ accountType: usersTable.accountType, username: usersTable.username })
@@ -251,7 +251,7 @@ router.delete(
   requireAuth,
   requireAdmin,
   async (req, res) => {
-    const { clerkUserId } = req.params;
+    const clerkUserId = req.params.clerkUserId as string;
     const adminId = (req as any).userId;
     if (clerkUserId === adminId) {
       res.status(400).json({ error: "Cannot delete yourself" });
@@ -480,7 +480,7 @@ router.get("/admin/trees/pending", requireAuth, requireAdmin, async (req, res) =
 
 // PATCH /admin/trees/:treeId/approve — approve a pending tree
 router.patch("/admin/trees/:treeId/approve", requireAuth, requireAdmin, async (req, res) => {
-  const treeId = parseInt(req.params.treeId, 10);
+  const treeId = parseInt(req.params.treeId as string, 10);
   if (isNaN(treeId)) { res.status(400).json({ error: "Invalid treeId" }); return; }
   try {
     const [updated] = await db
@@ -498,7 +498,7 @@ router.patch("/admin/trees/:treeId/approve", requireAuth, requireAdmin, async (r
 
 // PATCH /admin/trees/:treeId/reject — reject a pending tree
 router.patch("/admin/trees/:treeId/reject", requireAuth, requireAdmin, async (req, res) => {
-  const treeId = parseInt(req.params.treeId, 10);
+  const treeId = parseInt(req.params.treeId as string, 10);
   if (isNaN(treeId)) { res.status(400).json({ error: "Invalid treeId" }); return; }
   try {
     const [updated] = await db
@@ -516,7 +516,7 @@ router.patch("/admin/trees/:treeId/reject", requireAuth, requireAdmin, async (re
 
 // DELETE /admin/trees/:treeId — delete a tree
 router.delete("/admin/trees/:treeId", requireAuth, requireAdmin, async (req, res) => {
-  const treeId = parseInt(req.params.treeId, 10);
+  const treeId = parseInt(req.params.treeId as string, 10);
   if (isNaN(treeId)) { res.status(400).json({ error: "Invalid treeId" }); return; }
   try {
     const [tree] = await db.select({ userId: treesTable.userId }).from(treesTable).where(eq(treesTable.id, treeId));
@@ -578,7 +578,7 @@ router.get("/admin/tree-updates/pending", requireAuth, requireAdmin, async (req,
 
 // PATCH /admin/tree-updates/:updateId/approve — approve a pending tree update
 router.patch("/admin/tree-updates/:updateId/approve", requireAuth, requireAdmin, async (req, res) => {
-  const updateId = parseInt(req.params.updateId, 10);
+  const updateId = parseInt(req.params.updateId as string, 10);
   if (isNaN(updateId)) { res.status(400).json({ error: "Invalid updateId" }); return; }
   try {
     const [updated] = await db
@@ -609,7 +609,7 @@ router.patch("/admin/tree-updates/:updateId/approve", requireAuth, requireAdmin,
 
 // PATCH /admin/tree-updates/:updateId/reject — reject (delete) a pending tree update
 router.patch("/admin/tree-updates/:updateId/reject", requireAuth, requireAdmin, async (req, res) => {
-  const updateId = parseInt(req.params.updateId, 10);
+  const updateId = parseInt(req.params.updateId as string, 10);
   if (isNaN(updateId)) { res.status(400).json({ error: "Invalid updateId" }); return; }
   try {
     // Recupera prima i dati prima di eliminare
@@ -640,7 +640,7 @@ router.patch("/admin/tree-updates/:updateId/reject", requireAuth, requireAdmin, 
 
 // DELETE /admin/reports/:id/delete-tree — delete tree from report and mark reviewed
 router.delete("/admin/reports/:id/delete-tree", requireAuth, requireAdmin, async (req, res) => {
-  const id = parseInt(req.params.id, 10);
+  const id = parseInt(req.params.id as string, 10);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
   try {
     const [report] = await db.select().from(reportsTable).where(eq(reportsTable.id, id));
@@ -672,7 +672,7 @@ router.delete("/admin/reports/:id/delete-tree", requireAuth, requireAdmin, async
 
 // DELETE /admin/reports/:id/delete-tree-update — remove a tree update photo from report and mark reviewed
 router.delete("/admin/reports/:id/delete-tree-update", requireAuth, requireAdmin, async (req, res) => {
-  const id = parseInt(req.params.id, 10);
+  const id = parseInt(req.params.id as string, 10);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
   try {
     const [report] = await db.select().from(reportsTable).where(eq(reportsTable.id, id));

@@ -362,7 +362,7 @@ router.get("/admin/events/pending", requireAuth, requireAdmin, async (req: Authe
 });
 
 async function reviewEvent(req: AuthenticatedRequest, res: any, status: "approved" | "rejected") {
-  const eventId = parseInt(req.params.eventId, 10);
+  const eventId = parseInt(req.params.eventId as string, 10);
   if (isNaN(eventId)) {
     res.status(400).json({ error: "Invalid eventId" });
     return;
