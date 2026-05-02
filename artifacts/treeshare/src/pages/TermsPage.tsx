@@ -15,7 +15,7 @@ export default function TermsPage() {
 
       <main className="max-w-3xl mx-auto px-6 py-12">
         <h1 className="text-3xl font-bold text-foreground mb-2">Termini e Condizioni di Utilizzo</h1>
-        <p className="text-sm text-muted-foreground mb-10">Ultimo aggiornamento: 28/04/2026</p>
+        <p className="text-sm text-muted-foreground mb-10">Ultimo aggiornamento: 02/05/2026</p>
 
         <p className="text-sm text-muted-foreground leading-relaxed mb-10">
           Benvenuto/a su TreeShare, una piattaforma social dedicata alla condivisione di alberi piantati, iniziative ambientali e attività legate alla sostenibilità.{" "}
@@ -318,25 +318,78 @@ export default function TermsPage() {
             </div>
           </section>
 
-          {/* 23 */}
+          {/* 23 — NEW */}
           <section>
-            <h2 className="text-lg font-semibold mb-3 text-foreground">23. Modifiche ai Termini</h2>
+            <h2 className="text-lg font-semibold mb-3 text-foreground">23. Classifiche, ranking e indicatori ambientali</h2>
+            <p className="text-muted-foreground mb-3">
+              La piattaforma può generare classifiche e statistiche basate sulle attività degli utenti, inclusa la classifica trimestrale della CO₂ per comuni, determinata in base al numero di alberi piantati.
+            </p>
+            <p className="text-muted-foreground mb-2">Le classifiche:</p>
+            <ul className="list-disc list-outside ml-5 space-y-2 text-muted-foreground mb-4">
+              <li>Sono generate automaticamente sulla base dei dati inseriti dagli utenti</li>
+              <li>Hanno finalità esclusivamente informative, educative e di sensibilizzazione ambientale</li>
+              <li>Sono basate su modelli di calcolo stimati e non certificati</li>
+            </ul>
+            <p className="text-muted-foreground mb-2">TreeShare non garantisce:</p>
+            <ul className="list-disc list-outside ml-5 space-y-2 text-muted-foreground mb-4">
+              <li>L'accuratezza scientifica dei dati ambientali</li>
+              <li>La precisione del calcolo della CO₂</li>
+              <li>L'assenza di errori, omissioni o variazioni nei risultati</li>
+            </ul>
+            <p className="text-muted-foreground mb-2">Tali informazioni non costituiscono:</p>
+            <ul className="list-disc list-outside ml-5 space-y-2 text-muted-foreground mb-4">
+              <li>Certificazioni ambientali ufficiali</li>
+              <li>Crediti di carbonio</li>
+              <li>Dichiarazioni ambientali verificabili ai fini normativi o commerciali</li>
+            </ul>
+            <p className="text-muted-foreground">
+              Gli utenti accettano che i dati aggregati relativi alle proprie attività possano essere utilizzati per la generazione di tali classifiche.
+            </p>
+          </section>
+
+          {/* 24 — NEW */}
+          <section>
+            <h2 className="text-lg font-semibold mb-3 text-foreground">24. Dichiarazioni ambientali (Green Claims)</h2>
+            <p className="text-muted-foreground mb-3">
+              Le informazioni, i dati e le metriche ambientali presenti sulla piattaforma (inclusi dati relativi alla CO₂ e alla piantumazione di alberi):
+            </p>
+            <ul className="list-disc list-outside ml-5 space-y-2 text-muted-foreground mb-4">
+              <li>Hanno finalità informative e divulgative</li>
+              <li>Non costituiscono dichiarazioni ambientali certificate</li>
+              <li>Non devono essere utilizzate per finalità commerciali, pubblicitarie o legali senza adeguata verifica indipendente</li>
+            </ul>
+            <p className="text-muted-foreground mb-2">TreeShare non garantisce che tali dati possano essere utilizzati per:</p>
+            <ul className="list-disc list-outside ml-5 space-y-2 text-muted-foreground mb-4">
+              <li>Ottenere certificazioni ambientali</li>
+              <li>Dimostrare compensazioni di emissioni</li>
+              <li>Supportare dichiarazioni di sostenibilità aziendale</li>
+            </ul>
+            <div className="bg-muted/40 border border-border rounded-xl px-5 py-4">
+              <p className="text-muted-foreground">
+                L'utente è l'unico responsabile dell'eventuale utilizzo di tali informazioni al di fuori della piattaforma.
+              </p>
+            </div>
+          </section>
+
+          {/* 25 */}
+          <section>
+            <h2 className="text-lg font-semibold mb-3 text-foreground">25. Modifiche ai Termini</h2>
             <p className="text-muted-foreground">
               I Termini possono essere modificati in qualsiasi momento.
             </p>
           </section>
 
-          {/* 24 */}
+          {/* 26 */}
           <section>
-            <h2 className="text-lg font-semibold mb-3 text-foreground">24. Legge applicabile</h2>
+            <h2 className="text-lg font-semibold mb-3 text-foreground">26. Legge applicabile</h2>
             <p className="text-muted-foreground">
               Legge italiana – Foro competente: Cuneo.
             </p>
           </section>
 
-          {/* 25 */}
+          {/* 27 */}
           <section>
-            <h2 className="text-lg font-semibold mb-3 text-foreground">25. Contatti</h2>
+            <h2 className="text-lg font-semibold mb-3 text-foreground">27. Contatti</h2>
             <p className="text-muted-foreground">
               Email:{" "}
               <a href="mailto:treeshare@treeshareapp.com" className="text-primary hover:underline">
