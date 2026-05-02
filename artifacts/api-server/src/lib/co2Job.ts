@@ -1,6 +1,6 @@
 import { db } from "@workspace/db";
 import { treesTable, co2RankingsTable, treeStatusReportsTable } from "@workspace/db";
-import { sql, and, eq, isNotNull, isNull, gte, lt, desc, or } from "drizzle-orm";
+import { sql, and, eq, isNotNull, isNull, lt, desc } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { logger } from "./logger";
 
@@ -97,14 +97,12 @@ export async function calculateCo2Rankings(): Promise<void> {
       "[co2Job] Querying trees for quarter"
     );
 
-    // Alias per il doppio join sulla stessa tabella
-    const aliveReports = alias(treeStatusReportsTable, "alive_reports");
-    const deadReports  = alias(treeStatusReportsTable, "dead_reports");
+    const deadReports = alias(treeStatusReportsTable, "dead_reports");
 
-    // Conta solo alberi "vivi confermati":
-    // 1. Alberi piantati NEL trimestre → contano solo se NON hanno report "dead" per il trimestre
-    // 2. Alberi piantati PRIMA del trimestre → contano solo se hanno report "alive" + foto
-    //    e NON hanno report "dead" per il trimestre
+    // Conta tutte le piante approvate e non morte nel trimestre:
+    // - approvate (photoStatus = "approved")
+    // - piantate entro la fine del trimestre (anche meno di 3 mesi di vita)
+    // - senza report "dead" per il trimestre corrente
     const rows = await db
       .select({
         comune: treesTable.locationName,
@@ -112,15 +110,6 @@ export async function calculateCo2Rankings(): Promise<void> {
         treeCount: sql<number>`cast(count(*) as int)`,
       })
       .from(treesTable)
-      .leftJoin(
-        aliveReports,
-        and(
-          eq(aliveReports.treeId, treesTable.id),
-          eq(aliveReports.quarter, quarterStr),
-          eq(aliveReports.status, "alive"),
-          isNotNull(aliveReports.photoUrl),
-        )
-      )
       .leftJoin(
         deadReports,
         and(
@@ -133,11 +122,8 @@ export async function calculateCo2Rankings(): Promise<void> {
         and(
           eq(treesTable.photoStatus, "approved"),
           isNotNull(treesTable.locationName),
-          isNull(deadReports.id),          // escludi qualsiasi albero con report "dead"
-          or(
-            and(gte(treesTable.createdAt, start), lt(treesTable.createdAt, end)),
-            and(lt(treesTable.createdAt, start), isNotNull(aliveReports.id)),
-          )
+          lt(treesTable.createdAt, end),   // piantata entro la fine del trimestre
+          isNull(deadReports.id),          // escludi alberi con report "dead"
         )
       )
       .groupBy(treesTable.locationName, treesTable.province)

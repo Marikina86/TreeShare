@@ -27,17 +27,24 @@ function googleEarthUrl(lat: number, lng: number) {
   return `https://earth.google.com/web/@${lat},${lng},0a,500d,35y,0h,45t,0r`;
 }
 
+// Finestre fisse di aggiornamento: 15 feb, 15 mag, 15 ago, 15 nov
+const UPDATE_WINDOWS = [
+  { month: 1, day: 15 },  // 15 febbraio
+  { month: 4, day: 15 },  // 15 maggio
+  { month: 7, day: 15 },  // 15 agosto
+  { month: 10, day: 15 }, // 15 novembre
+];
+
 function getUnlockedPhotoSlots(createdAtStr: string, now = new Date()): number {
   const createdAt = new Date(createdAtStr);
-  const quarters = [0, 3, 6, 9];
   let count = 0;
   for (let year = createdAt.getFullYear(); year <= now.getFullYear() + 1; year++) {
-    for (const month of quarters) {
-      const boundary = new Date(year, month, 1);
-      if (boundary > createdAt && boundary <= now) count++;
+    for (const { month, day } of UPDATE_WINDOWS) {
+      const windowDate = new Date(year, month, day);
+      if (windowDate > createdAt && windowDate <= now) count++;
     }
   }
-  return Math.min(count, 9);
+  return count;
 }
 
 function getCurrentQuarterString(now = new Date()): string {
@@ -47,19 +54,17 @@ function getCurrentQuarterString(now = new Date()): string {
   return `${year}-Q${q}`;
 }
 
-function getNextSlotDate(createdAtStr: string): string {
-  const createdAt = new Date(createdAtStr);
+function getNextSlotDate(): string {
   const now = new Date();
-  const quarters = [0, 3, 6, 9];
   for (let year = now.getFullYear(); year <= now.getFullYear() + 2; year++) {
-    for (const month of quarters) {
-      const boundary = new Date(year, month, 1);
-      if (boundary > now && boundary > createdAt) {
-        return boundary.toLocaleDateString("it-IT", { day: "numeric", month: "long", year: "numeric" });
+    for (const { month, day } of UPDATE_WINDOWS) {
+      const windowDate = new Date(year, month, day);
+      if (windowDate > now) {
+        return windowDate.toLocaleDateString("it-IT", { day: "numeric", month: "long", year: "numeric" });
       }
     }
   }
-  return "prossimo trimestre";
+  return "prossima finestra";
 }
 
 export default function TreeDetailPage() {
@@ -615,7 +620,7 @@ export default function TreeDetailPage() {
                 const unlockedSlots = t.createdAt ? getUnlockedPhotoSlots(t.createdAt) : 0;
                 const atLimit = unlockedSlots === 0 || updateCount >= unlockedSlots;
                 const title = unlockedSlots === 0
-                  ? `Nessuno slot disponibile. Si sblocca il ${getNextSlotDate(t.createdAt)}`
+                  ? `Nessuno slot disponibile. Prossima finestra: ${getNextSlotDate()}`
                   : atLimit
                   ? `Hai usato tutti gli ${unlockedSlots} slot disponibili`
                   : "Aggiungi aggiornamento fotografico";

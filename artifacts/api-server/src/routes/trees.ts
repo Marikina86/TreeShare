@@ -35,17 +35,24 @@ function buildMapsUrl(lat: number, lng: number): string {
   return `https://www.google.com/maps?q=${lat},${lng}&z=17`;
 }
 
-/** Numero di slot foto sbloccati in base ai trimestri passati dalla piantagione. */
+// Finestre fisse di aggiornamento: 15 feb, 15 mag, 15 ago, 15 nov
+const UPDATE_WINDOWS = [
+  { month: 1, day: 15 },  // 15 febbraio
+  { month: 4, day: 15 },  // 15 maggio
+  { month: 7, day: 15 },  // 15 agosto
+  { month: 10, day: 15 }, // 15 novembre
+];
+
+/** Numero di slot foto sbloccati in base alle finestre fisse trimestrali. */
 function getUnlockedPhotoSlots(createdAt: Date, now = new Date()): number {
-  const quarters = [0, 3, 6, 9]; // gen, apr, lug, ott
   let count = 0;
   for (let year = createdAt.getFullYear(); year <= now.getFullYear() + 1; year++) {
-    for (const month of quarters) {
-      const boundary = new Date(year, month, 1);
-      if (boundary > createdAt && boundary <= now) count++;
+    for (const { month, day } of UPDATE_WINDOWS) {
+      const windowDate = new Date(year, month, day);
+      if (windowDate > createdAt && windowDate <= now) count++;
     }
   }
-  return Math.min(count, 9);
+  return count;
 }
 
 const StatusReportParams = z.object({ treeId: z.coerce.number().int().positive() });
