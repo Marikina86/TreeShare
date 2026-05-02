@@ -1,7 +1,7 @@
 import express, { Router, type IRouter, type Request, type Response } from "express";
 import { randomUUID } from "crypto";
 import { createWriteStream, createReadStream, existsSync, mkdirSync, statSync } from "fs";
-import { join } from "path";
+import { join, resolve } from "path";
 import { RequestUploadUrlBody } from "@workspace/api-zod";
 import { v2 as cloudinary } from "cloudinary";
 
@@ -109,6 +109,10 @@ router.put(
         res.status(200).json({ success: true, finalObjectPath: cdnUrl });
       } else {
         const filePath = join(UPLOADS_DIR, uuid);
+        if (!resolve(filePath).startsWith(resolve(UPLOADS_DIR) + "/")) {
+          res.status(400).json({ error: "Invalid upload ID" });
+          return;
+        }
         await new Promise<void>((resolve, reject) => {
           const ws = createWriteStream(filePath);
           ws.write(body, (err) => {
@@ -133,6 +137,10 @@ router.get("/storage/objects/uploads/:uuid", (req: Request, res: Response) => {
   }
 
   const filePath = join(UPLOADS_DIR, uuid);
+  if (!resolve(filePath).startsWith(resolve(UPLOADS_DIR) + "/")) {
+    res.status(400).json({ error: "Invalid file ID" });
+    return;
+  }
   if (!existsSync(filePath)) {
     res.status(404).json({ error: "File not found" });
     return;

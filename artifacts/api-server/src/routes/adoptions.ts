@@ -22,6 +22,10 @@ function generateAdoptionCode(): string {
   return "ADO-" + randomUUID().replace(/-/g, "").toUpperCase().substring(0, 8);
 }
 
+function escHtml(str: string): string {
+  return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+}
+
 function buildOwnerAdoptionEmail(opts: {
   treeName: string;
   adoptionId: number;
@@ -40,7 +44,7 @@ function buildOwnerAdoptionEmail(opts: {
       ? `${Math.round(opts.durationDays / 365)} anno${Math.round(opts.durationDays / 365) > 1 ? "i" : ""}`
       : `${opts.durationDays} giorni`;
 
-  const subject = `🌳 Nuova adozione ricevuta per "${opts.treeName}"`;
+  const subject = `🌳 Nuova adozione ricevuta per "${escHtml(opts.treeName)}"`;
 
   const html = `
 <!DOCTYPE html>
@@ -65,7 +69,7 @@ function buildOwnerAdoptionEmail(opts: {
         <tr>
           <td style="padding:32px;">
             <p style="margin:0 0 20px;color:#444;font-size:15px;line-height:1.6;">
-              Ottima notizia! Il tuo albero <strong style="color:#1a5c38;">${opts.treeName}</strong>
+              Ottima notizia! Il tuo albero <strong style="color:#1a5c38;">${escHtml(opts.treeName)}</strong>
               ha ricevuto una nuova adozione. Ecco il riepilogo:
             </p>
 

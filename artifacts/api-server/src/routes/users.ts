@@ -8,7 +8,7 @@ import { isAdmin } from "../middlewares/requireAdmin";
 import { createClient } from "@supabase/supabase-js";
 import { v2 as cloudinary } from "cloudinary";
 import { existsSync, unlinkSync } from "fs";
-import { join } from "path";
+import { join, resolve } from "path";
 
 function getSupabaseAdmin() {
   const url = process.env.SUPABASE_URL;
@@ -34,7 +34,9 @@ async function deletePhotoFromStorage(photoUrl: string): Promise<void> {
       }
     } else if (photoUrl.startsWith("/objects/uploads/")) {
       const filename = photoUrl.replace("/objects/uploads/", "");
-      const filePath = join(process.cwd(), "uploads", filename);
+      const uploadsDir = join(process.cwd(), "uploads");
+      const filePath = join(uploadsDir, filename);
+      if (!resolve(filePath).startsWith(resolve(uploadsDir) + "/")) return;
       if (existsSync(filePath)) unlinkSync(filePath);
     }
   } catch {}

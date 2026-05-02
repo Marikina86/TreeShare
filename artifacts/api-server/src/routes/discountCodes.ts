@@ -18,6 +18,10 @@ const router = Router();
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
+function escHtml(str: string): string {
+  return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+}
+
 function computeDiscountedCents(
   originalCents: number,
   discountType: string,
@@ -51,14 +55,14 @@ function discountEmailHtml(
     return `<div style="font-family:sans-serif;max-width:600px;margin:auto">
       <h2 style="color:#16a34a">Codice sconto esclusivo TreeShare</h2>
       <p>Hai ricevuto un codice sconto di <strong>${discount}</strong> per la pubblicazione di una campagna su TreeShare.</p>
-      <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:16px 24px;font-size:22px;font-weight:bold;letter-spacing:2px;color:#15803d;text-align:center">${code}</div>
+      <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:16px 24px;font-size:22px;font-weight:bold;letter-spacing:2px;color:#15803d;text-align:center">${escHtml(code)}</div>
       <p style="color:#6b7280;font-size:13px">Valido fino al ${expiry}. Inserisci il codice al momento del pagamento della campagna.</p>
     </div>`;
   }
   return `<div style="font-family:sans-serif;max-width:600px;margin:auto">
     <h2 style="color:#16a34a">Exclusive TreeShare discount code</h2>
-    <p>You received a discount of <strong>${discount}</strong> for publishing a campaign on TreeShare.</p>
-    <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:16px 24px;font-size:22px;font-weight:bold;letter-spacing:2px;color:#15803d;text-align:center">${code}</div>
+    <p>You received a discount of <strong>${escHtml(discount)}</strong> for publishing a campaign on TreeShare.</p>
+    <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:16px 24px;font-size:22px;font-weight:bold;letter-spacing:2px;color:#15803d;text-align:center">${escHtml(code)}</div>
     <p style="color:#6b7280;font-size:13px">Valid until ${expiry}. Enter the code at campaign payment checkout.</p>
   </div>`;
 }
