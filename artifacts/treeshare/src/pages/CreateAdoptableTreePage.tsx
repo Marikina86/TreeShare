@@ -176,7 +176,7 @@ export default function CreateAdoptableTreePage() {
       if (!res.ok) return { adoptionsEnabled: true };
       return res.json();
     },
-    staleTime: 30_000,
+    staleTime: Infinity,
   });
   const adoptionsEnabled = settingsQuery.data?.adoptionsEnabled ?? true;
 

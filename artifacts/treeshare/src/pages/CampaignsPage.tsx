@@ -141,7 +141,7 @@ export default function CampaignsPage() {
       if (!res.ok) return [];
       return res.json();
     },
-    staleTime: 30_000,
+    staleTime: Infinity,
   });
 
   return (

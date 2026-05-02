@@ -176,7 +176,7 @@ export default function AdoptableTreesPage() {
       if (!res.ok) throw new Error("Failed to load");
       return res.json();
     },
-    staleTime: 60_000,
+    staleTime: Infinity,
   });
 
   const settingsQuery = useQuery<{ adoptionsEnabled: boolean }>({
@@ -186,7 +186,7 @@ export default function AdoptableTreesPage() {
       if (!res.ok) return { adoptionsEnabled: true };
       return res.json();
     },
-    staleTime: 30_000,
+    staleTime: Infinity,
   });
   const adoptionsEnabled = settingsQuery.data?.adoptionsEnabled ?? true;
 

@@ -309,7 +309,7 @@ export default function OrgAdoptionsPage() {
       return res.json();
     },
     enabled: isOrg,
-    staleTime: 30_000,
+    staleTime: Infinity,
   });
 
   if (profile.isLoading) {

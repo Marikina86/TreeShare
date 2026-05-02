@@ -298,7 +298,7 @@ function StripeConnectPanel({ treeId, t }: { treeId: number; t: typeof T.it }) {
       if (!res.ok) throw new Error("failed");
       return res.json();
     },
-    staleTime: 30_000,
+    staleTime: Infinity,
   });
 
   const queryClient = useQueryClient();
@@ -678,7 +678,7 @@ export default function AdoptableTreeDetailPage() {
       if (!res.ok) return { adoptionsEnabled: true };
       return res.json();
     },
-    staleTime: 30_000,
+    staleTime: Infinity,
   });
   const adoptionsEnabled = settingsQuery.data?.adoptionsEnabled ?? true;
 
@@ -689,7 +689,7 @@ export default function AdoptableTreeDetailPage() {
       if (!res.ok) throw new Error("not found");
       return res.json();
     },
-    staleTime: 30_000,
+    staleTime: Infinity,
     enabled: !isNaN(treeId),
   });
 
@@ -702,7 +702,7 @@ export default function AdoptableTreeDetailPage() {
       return res.json();
     },
     enabled: !!userId,
-    staleTime: 30_000,
+    staleTime: Infinity,
   });
 
   const activeAdoption = myAdoptionsQuery.data?.find(
