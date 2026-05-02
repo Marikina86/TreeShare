@@ -235,11 +235,13 @@ export default function TreeDetailPage() {
       setVerifyState("verifying");
       try {
         const base64 = dataUrl.includes(",") ? dataUrl.split(",")[1] : dataUrl;
+        const token = await getToken();
+        const authHeader: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
 
         // 1️⃣ Check: è una pianta?
         const verRes = await fetch("/api/plants/verify", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", ...authHeader },
           body: JSON.stringify({ imageBase64: base64 }),
         });
         if (!verRes.ok) throw new Error("verify failed");
@@ -277,7 +279,7 @@ export default function TreeDetailPage() {
 
             const speciesRes = await fetch("/api/plants/verify-update", {
               method: "POST",
-              headers: { "Content-Type": "application/json" },
+              headers: { "Content-Type": "application/json", ...authHeader },
               body: JSON.stringify({
                 newImageBase64: base64,
                 referenceImageBase64,

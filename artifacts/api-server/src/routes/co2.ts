@@ -3,6 +3,8 @@ import { db } from "@workspace/db";
 import { co2RankingsTable } from "@workspace/db";
 import { eq, desc } from "drizzle-orm";
 import { calculateCo2Rankings } from "../lib/co2Job";
+import { requireAuth } from "../middlewares/requireAuth";
+import { requireAdmin } from "../middlewares/requireAdmin";
 
 const router = Router();
 
@@ -50,7 +52,7 @@ router.get("/co2/rankings", async (req, res) => {
   }
 });
 
-router.post("/co2/recalculate", async (req, res) => {
+router.post("/co2/recalculate", requireAuth, requireAdmin, async (req, res) => {
   try {
     await calculateCo2Rankings();
     return res.json({ ok: true });

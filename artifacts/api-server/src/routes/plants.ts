@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { requireAuth } from "../middlewares/requireAuth";
 
 const router = Router();
 
@@ -95,7 +96,7 @@ async function callGemini(apiKey: string, model: string, apiVersion: string, mim
   );
 }
 
-router.post("/plants/verify", async (req, res) => {
+router.post("/plants/verify", requireAuth, async (req, res) => {
   const { imageBase64 } = req.body as { imageBase64?: string };
 
   if (!imageBase64 || typeof imageBase64 !== "string") {
@@ -260,7 +261,7 @@ async function callGeminiTwoImages(
   );
 }
 
-router.post("/plants/verify-update", async (req, res) => {
+router.post("/plants/verify-update", requireAuth, async (req, res) => {
   const { newImageBase64, referenceImageBase64, species } = req.body as {
     newImageBase64?: string;
     referenceImageBase64?: string;

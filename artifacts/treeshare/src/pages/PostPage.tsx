@@ -148,9 +148,13 @@ export default function PostPage() {
     let canUpload = false;
     try {
       const base64 = await resizeToBase64(file, 768);
+      const token = await getToken();
       const verifyRes = await fetch("/api/plants/verify", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({ imageBase64: base64 }),
       });
 

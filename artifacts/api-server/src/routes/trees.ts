@@ -665,6 +665,10 @@ router.post("/trees/:treeId/status-report", requireAuth, async (req, res) => {
   }
   const { treeId } = parsedParams.data;
   const { quarter, status, photoUrl } = parsedBody.data;
+  if (quarter !== getCurrentQuarterString()) {
+    res.status(422).json({ error: "Puoi segnalare solo il trimestre corrente." });
+    return;
+  }
   if (status === "alive" && !photoUrl) {
     res.status(422).json({ error: "Foto obbligatoria per segnalare l'albero come vivo." });
     return;
