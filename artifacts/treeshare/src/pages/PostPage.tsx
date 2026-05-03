@@ -11,6 +11,7 @@ import { ITALIAN_PROVINCES } from "@/lib/italianProvinces";
 import { resizeToBlob, resizeToThumbnailBlob, resizeToBase64 } from "@/lib/imageUtils";
 
 type UploadState = "idle" | "uploading" | "done" | "error";
+type VerifyState = "idle" | "verifying" | "ok" | "pending" | "rejected";
 
 export default function PostPage() {
   const [, setLocation] = useLocation();
@@ -25,6 +26,8 @@ export default function PostPage() {
   const [uploadedThumbnailPath, setUploadedThumbnailPath] = useState<string | null>(null);
   const [uploadState, setUploadState] = useState<UploadState>("idle");
   const [imageBase64ForVerify, setImageBase64ForVerify] = useState<string | null>(null);
+  const [verifyState, setVerifyState] = useState<VerifyState>("idle");
+  const [verifyReason, setVerifyReason] = useState<string | null>(null);
   const [plantName, setPlantName] = useState("");
   const [caption, setCaption] = useState("");
   const [species, setSpecies] = useState("");
@@ -147,26 +150,72 @@ export default function PostPage() {
     setUploadedPath(null);
     setUploadedThumbnailPath(null);
     setImageBase64ForVerify(null);
+    setVerifyState("verifying");
+    setVerifyReason(null);
 
-    // Genera base64 ridimensionata per la verifica AI in background
+    // Genera base64 e avvia upload + verifica AI in parallelo
+    let base64: string | null = null;
     try {
-      const base64 = await resizeToBase64(file, 768);
+      base64 = await resizeToBase64(file, 768);
       setImageBase64ForVerify(base64);
     } catch { /* la verifica proseguirà senza AI */ }
 
-    // Upload immediato senza attendere la verifica
-    setUploadState("uploading");
-    try {
-      const { path, thumbnailPath } = await uploadPhoto(file);
-      setUploadedPath(path);
-      setUploadedThumbnailPath(thumbnailPath);
-      setUploadState("done");
-    } catch (err) {
-      console.error("[upload] handlePhotoTaken errore:", err);
-      setUploadState("error");
-      const msg = err instanceof Error ? err.message : "Impossibile caricare la foto. Riprova.";
-      toast({ title: "Errore upload", description: msg, variant: "destructive" });
-    }
+    // Verifica AI real-time
+    const runVerify = async () => {
+      if (!base64) {
+        // Nessun base64: rimanda ad admin
+        setVerifyState("pending");
+        return;
+      }
+      try {
+        const token = await getToken();
+        const verRes = await fetch("/api/plants/verify", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify({ imageBase64: base64 }),
+        });
+        if (!verRes.ok) throw new Error("verify failed");
+        const verData = await verRes.json() as { isPlant?: boolean | null; aiUnavailable?: boolean; reason?: string };
+        if (verData.isPlant === false) {
+          setVerifyState("rejected");
+          setVerifyReason(verData.reason ?? "L'immagine non sembra contenere una pianta idonea.");
+          // Blocca: svuota foto e upload
+          setPhotoFile(null);
+          setPhotoPreview(null);
+          setUploadedPath(null);
+          setUploadedThumbnailPath(null);
+          setUploadState("idle");
+          if (cameraInputRef.current) cameraInputRef.current.value = "";
+        } else if (verData.aiUnavailable) {
+          setVerifyState("pending");
+        } else {
+          setVerifyState("ok");
+        }
+      } catch {
+        setVerifyState("pending");
+      }
+    };
+
+    // Upload + verifica in parallelo
+    const runUpload = async () => {
+      setUploadState("uploading");
+      try {
+        const { path, thumbnailPath } = await uploadPhoto(file);
+        setUploadedPath(path);
+        setUploadedThumbnailPath(thumbnailPath);
+        setUploadState("done");
+      } catch (err) {
+        console.error("[upload] handlePhotoTaken errore:", err);
+        setUploadState("error");
+        const msg = err instanceof Error ? err.message : "Impossibile caricare la foto. Riprova.";
+        toast({ title: "Errore upload", description: msg, variant: "destructive" });
+      }
+    };
+
+    await Promise.all([runVerify(), runUpload()]);
   }
 
   async function detectLocation() {
@@ -199,8 +248,12 @@ export default function PostPage() {
       toast({ title: "Foto obbligatoria", description: "Scatta una foto prima di pubblicare.", variant: "destructive" });
       return;
     }
-    if (uploadState === "uploading") {
-      toast({ title: "Attendere", description: "La foto è ancora in caricamento, attendi un momento.", variant: "destructive" });
+    if (verifyState === "verifying" || uploadState === "uploading") {
+      toast({ title: "Attendere", description: "Verifica e caricamento in corso, attendi un momento.", variant: "destructive" });
+      return;
+    }
+    if (verifyState === "rejected") {
+      toast({ title: "Foto non valida", description: verifyReason ?? "Scegli una foto diversa.", variant: "destructive" });
       return;
     }
     if (uploadState === "error") {
@@ -250,8 +303,10 @@ export default function PostPage() {
           longitude: lng ?? 0,
           locationName: locationName || null,
           country: country || null,
-          photoStatus: "pending" as const,
-          ...(imageBase64ForVerify ? { imageBase64: imageBase64ForVerify } : {}),
+          // ok → approved (visibile subito); pending → admin review; altri → pending
+          photoStatus: verifyState === "ok" ? "approved" : "pending",
+          // Invia imageBase64 solo se pending (per coda AI / admin review in background)
+          ...(verifyState !== "ok" && imageBase64ForVerify ? { imageBase64: imageBase64ForVerify } : {}),
         }),
       });
 
@@ -266,7 +321,11 @@ export default function PostPage() {
       }
 
       queryClient.invalidateQueries({ queryKey: getListTreesQueryKey() });
-      toast({ title: "⏳ Pianta registrata!", description: "La tua foto è in verifica — riceverai una notifica quando sarà approvata." });
+      if (verifyState === "ok") {
+        toast({ title: "Pianta pubblicata!", description: "La tua pianta è ora visibile nella mappa e nel feed." });
+      } else {
+        toast({ title: "Pianta registrata!", description: "La foto sarà revisionata da un admin — riceverai una notifica." });
+      }
       setLocation("/feed");
     } catch {
       toast({ title: "Errore", description: "Pubblicazione fallita. Riprova.", variant: "destructive" });
@@ -298,28 +357,40 @@ export default function PostPage() {
             {photoPreview ? (
               <div className="relative rounded-xl overflow-hidden aspect-video bg-black/5 dark:bg-white/5">
                 <img src={photoPreview} alt="Anteprima" className="w-full h-full object-contain" />
-                {uploadState === "uploading" && (
+                {/* Overlay: upload in corso */}
+                {uploadState === "uploading" && verifyState !== "rejected" && (
                   <div className="absolute inset-0 bg-black/50 flex flex-col items-center justify-center gap-2">
                     <div className="w-8 h-8 border-3 border-white/30 border-t-white rounded-full animate-spin" />
-                    <span className="text-white text-sm font-medium">Caricamento in corso...</span>
+                    <span className="text-white text-sm font-medium">Caricamento...</span>
                   </div>
                 )}
-                {uploadState === "done" && (
+                {/* Badge verifica AI */}
+                {verifyState === "verifying" && uploadState !== "uploading" && (
+                  <div className="absolute top-2 right-2 bg-black/60 text-white text-xs px-2 py-1 rounded-full flex items-center gap-1.5">
+                    <span className="w-3 h-3 border-2 border-white/40 border-t-white rounded-full animate-spin inline-block" />
+                    Verifica AI...
+                  </div>
+                )}
+                {verifyState === "ok" && (
+                  <div className="absolute top-2 right-2 bg-green-500 text-white text-xs px-2 py-1 rounded-full flex items-center gap-1">
+                    <svg width="10" height="10" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3"><path d="M5 13l4 4L19 7" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                    Verificata
+                  </div>
+                )}
+                {verifyState === "pending" && (
                   <div className="absolute top-2 right-2 bg-amber-500 text-white text-xs px-2 py-1 rounded-full flex items-center gap-1">
-                    <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
-                      <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12" strokeLinecap="round"/><line x1="12" y1="16" x2="12.01" y2="16" strokeLinecap="round"/>
-                    </svg>
-                    In verifica
+                    <svg width="10" height="10" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12" strokeLinecap="round"/><line x1="12" y1="16" x2="12.01" y2="16" strokeLinecap="round"/></svg>
+                    Revisione admin
                   </div>
                 )}
                 {uploadState === "error" && (
                   <div className="absolute top-2 right-2 bg-red-500 text-white text-xs px-2 py-1 rounded-full">
-                    Errore
+                    Errore upload
                   </div>
                 )}
                 <button
                   type="button"
-                  onClick={() => { setPhotoPreview(null); setPhotoFile(null); setUploadedPath(null); setUploadedThumbnailPath(null); setUploadState("idle"); setImageBase64ForVerify(null); }}
+                  onClick={() => { setPhotoPreview(null); setPhotoFile(null); setUploadedPath(null); setUploadedThumbnailPath(null); setUploadState("idle"); setImageBase64ForVerify(null); setVerifyState("idle"); setVerifyReason(null); }}
                   className="absolute top-2 left-2 bg-black/60 text-white w-8 h-8 rounded-full flex items-center justify-center hover:bg-black/80 transition-colors"
                 >
                   <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
@@ -358,6 +429,13 @@ export default function PostPage() {
               className="hidden"
               onChange={(e) => e.target.files?.[0] && handlePhotoTaken(e.target.files[0])}
             />
+            {/* Messaggio di rifiuto AI */}
+            {verifyState === "rejected" && verifyReason && (
+              <p className="mt-2 text-sm text-destructive font-medium">{verifyReason}</p>
+            )}
+            {verifyState === "pending" && !photoPreview && (
+              <p className="mt-2 text-sm text-amber-600 dark:text-amber-400">L'AI non ha potuto verificare la foto. Sarà revisionata manualmente da un admin.</p>
+            )}
           </div>
 
           {/* Plant name */}
@@ -535,10 +613,10 @@ export default function PostPage() {
           <button
             type="button"
             onClick={handlePublishClick}
-            disabled={isPublishing || uploadState === "uploading"}
+            disabled={isPublishing || uploadState === "uploading" || verifyState === "verifying" || verifyState === "rejected"}
             className="w-full py-3 bg-primary text-primary-foreground rounded-xl font-semibold text-base hover:opacity-90 transition-opacity disabled:opacity-50"
           >
-            {isPublishing ? "Pubblicazione..." : "Pubblica"}
+            {isPublishing ? "Pubblicazione..." : verifyState === "verifying" ? "Verifica in corso..." : "Pubblica"}
           </button>
         </div>
       </div>
