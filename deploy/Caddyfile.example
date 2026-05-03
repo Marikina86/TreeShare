@@ -1,0 +1,60 @@
+# ─── TreeShare — Caddyfile example ───────────────────────────────────────────
+#
+# Prerequisiti:
+#   - Frontend buildato: pnpm --filter @workspace/treeshare run build
+#     (output: artifacts/treeshare/dist/public)
+#   - API server in esecuzione su localhost:8080 (es. con PM2 o systemd)
+#   - Caddy gestisce SSL automaticamente via Let's Encrypt
+#
+# Copia in: /etc/caddy/Caddyfile  (o includi con `import`)
+# Reload:   systemctl reload caddy
+
+tuodominio.it {
+
+    # ── Root frontend (file statici buildati) ────────────────────────────────
+    root * /var/www/treeshare/artifacts/treeshare/dist/public
+
+    # ── Header di sicurezza ───────────────────────────────────────────────────
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+        X-Frame-Options            "DENY"
+        X-Content-Type-Options     "nosniff"
+        Referrer-Policy            "strict-origin-when-cross-origin"
+        Permissions-Policy         "camera=(), microphone=(), geolocation=(self)"
+
+        # ── Content Security Policy ───────────────────────────────────────────
+        # Domini mappati dal codice sorgente (vedi nginx.conf.example per dettagli)
+        Content-Security-Policy "default-src 'self'; script-src 'self' https://js.stripe.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https://*.supabase.co https://res.cloudinary.com https://*.tile.openstreetmap.org https://server.arcgisonline.com https://unpkg.com; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.stripe.com https://m.stripe.com; frame-src https://js.stripe.com; worker-src blob:; base-uri 'self'; form-action 'self';"
+
+        # Rimuovi header che espongono info sul server
+        -Server
+        -X-Powered-By
+    }
+
+    # ── API → Node.js (Express) ───────────────────────────────────────────────
+    handle /api/* {
+        reverse_proxy 127.0.0.1:8080 {
+            header_up Host              {host}
+            header_up X-Real-IP        {remote_host}
+            header_up X-Forwarded-For  {remote_host}
+            header_up X-Forwarded-Proto {scheme}
+
+            # SSE: disabilita buffering per /api/alerts/sse
+            flush_interval -1
+        }
+    }
+
+    # ── Frontend SPA ──────────────────────────────────────────────────────────
+    handle {
+        # Cache per asset con hash Vite (JS/CSS immutabili)
+        @hashed_assets path_regexp \.(js|css|woff2?|ttf|svg|png|jpg|webp|ico)$
+        header @hashed_assets Cache-Control "public, max-age=31536000, immutable"
+
+        file_server
+        try_files {path} {path}/ /index.html
+    }
+
+    # ── Blocca accesso a file nascosti ─────────────────────────────────────────
+    @hidden path_regexp ^/\.
+    respond @hidden 403
+}

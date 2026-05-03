@@ -1,0 +1,110 @@
+# ─── TreeShare — nginx configuration example ─────────────────────────────────
+#
+# Prerequisiti:
+#   - Frontend buildato: pnpm --filter @workspace/treeshare run build
+#     (output: artifacts/treeshare/dist/public)
+#   - API server in esecuzione su localhost:8080 (es. con PM2 o systemd)
+#   - Certificato SSL gestito da Certbot (Let's Encrypt) o simile
+#
+# Copia in: /etc/nginx/sites-available/treeshare
+# Attiva:   ln -s /etc/nginx/sites-available/treeshare /etc/nginx/sites-enabled/
+# Test:     nginx -t
+# Reload:   systemctl reload nginx
+
+server {
+    listen 80;
+    listen [::]:80;
+    server_name tuodominio.it;
+
+    # Redirige tutto il traffico HTTP su HTTPS
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 443 ssl http2;
+    listen [::]:443 ssl http2;
+    server_name tuodominio.it;
+
+    # ── SSL (gestito da Certbot) ──────────────────────────────────────────────
+    ssl_certificate     /etc/letsencrypt/live/tuodominio.it/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/tuodominio.it/privkey.pem;
+    include             /etc/letsencrypt/options-ssl-nginx.conf;
+    ssl_dhparam         /etc/letsencrypt/ssl-dhparams.pem;
+
+    # ── Root frontend (file statici buildati) ────────────────────────────────
+    root /var/www/treeshare/artifacts/treeshare/dist/public;
+    index index.html;
+
+    # ── Header di sicurezza ───────────────────────────────────────────────────
+    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains; preload" always;
+    add_header X-Frame-Options "DENY" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+    add_header Permissions-Policy "camera=(), microphone=(), geolocation=(self)" always;
+
+    # ── Content Security Policy ───────────────────────────────────────────────
+    # Domenni mappati dal codice sorgente:
+    #   *.supabase.co          — Auth, Database API, Storage, Realtime (WebSocket)
+    #   js.stripe.com          — Stripe.js (pagamenti)
+    #   api.stripe.com         — Stripe API calls dal browser
+    #   m.stripe.com           — Stripe fraud detection / telemetry
+    #   fonts.googleapis.com   — Google Fonts CSS
+    #   fonts.gstatic.com      — Google Fonts file binari
+    #   *.tile.openstreetmap.org — Tile mappa stradale (Leaflet)
+    #   server.arcgisonline.com  — Tile mappa satellite (Leaflet)
+    #   unpkg.com              — Icone marker Leaflet (caricate a runtime)
+    #   res.cloudinary.com     — Immagini alberi / profili
+    add_header Content-Security-Policy "
+        default-src 'self';
+        script-src 'self' https://js.stripe.com;
+        style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
+        font-src 'self' https://fonts.gstatic.com;
+        img-src 'self' data: blob:
+            https://*.supabase.co
+            https://res.cloudinary.com
+            https://*.tile.openstreetmap.org
+            https://server.arcgisonline.com
+            https://unpkg.com;
+        connect-src 'self'
+            https://*.supabase.co
+            wss://*.supabase.co
+            https://api.stripe.com
+            https://m.stripe.com;
+        frame-src https://js.stripe.com;
+        worker-src blob:;
+        base-uri 'self';
+        form-action 'self';
+    " always;
+
+    # ── API → Node.js (Express) ───────────────────────────────────────────────
+    location /api/ {
+        proxy_pass         http://127.0.0.1:8080;
+        proxy_http_version 1.1;
+        proxy_set_header   Host              $host;
+        proxy_set_header   X-Real-IP         $remote_addr;
+        proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header   X-Forwarded-Proto $scheme;
+
+        # SSE (Server-Sent Events per alerts)
+        proxy_set_header   Connection        '';
+        proxy_buffering    off;
+        proxy_cache        off;
+        proxy_read_timeout 86400s;
+    }
+
+    # ── Frontend SPA: tutto il resto → index.html ─────────────────────────────
+    location / {
+        try_files $uri $uri/ /index.html;
+
+        # Cache aggressiva per asset con hash (JS/CSS buildati da Vite)
+        location ~* \.(js|css|woff2|woff|ttf|svg|png|jpg|webp|ico)$ {
+            expires 1y;
+            add_header Cache-Control "public, immutable";
+        }
+    }
+
+    # ── Blocca accesso a file nascosti (.env, .git, ecc.) ─────────────────────
+    location ~ /\. {
+        deny all;
+    }
+}
