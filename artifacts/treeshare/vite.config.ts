@@ -116,10 +116,17 @@ export default defineConfig({
       },
     },
   },
+  // Pre-bundla React come singolo modulo stabile per evitare istanze duplicate
+  // in dev mode quando HMR WebSocket non funziona (Replit proxy)
+  optimizeDeps: {
+    include: ["react", "react-dom", "react/jsx-runtime", "react/jsx-dev-runtime"],
+  },
   server: {
     port,
     host: "0.0.0.0",
     allowedHosts: true,
+    // HMR WebSocket fallisce nel proxy Replit → disabilitato per stabilità
+    hmr: false,
     fs: {
       strict: true,
       deny: ["**/.*"],
