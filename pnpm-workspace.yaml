@@ -169,3 +169,4 @@ overrides:
   follow-redirects: "^1.16.0"
   fast-xml-parser: "^5.7.2"
   uuid: "^14.0.0"
+  "@tootallnate/once": "^3.0.1"
