@@ -31,7 +31,9 @@ function cspPlugin(): Plugin {
   };
   return {
     name: "csp-headers",
-    configureServer(server) { server.middlewares.use(setHeader(DEV_CSP)); },
+    // In dev Vite carica i moduli lazy da un sottodominio Replit diverso:
+    // script-src 'self' bloccherebbe i dynamic import. La CSP dev è omessa.
+    // In produzione la CSP è gestita da nginx/caddy (deploy/).
     configurePreviewServer(server) { server.middlewares.use(setHeader(STRICT_CSP)); },
   };
 }
