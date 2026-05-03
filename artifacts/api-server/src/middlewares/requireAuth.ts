@@ -77,6 +77,8 @@ export const requireAuth = async (
       return;
     }
   } catch {
+    res.status(503).json({ error: "Service temporarily unavailable" });
+    return;
   }
 
   (req as AuthenticatedRequest).userId = userId;
