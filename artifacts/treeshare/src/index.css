@@ -206,12 +206,11 @@
   animation: sun-pulse 0.6s ease-out;
 }
 
-/* Hide Stripe Link global badge injected into document.body by Stripe.js.
-   The badge persists after Elements unmounts — we suppress it entirely via CSS
-   and remove it via useEffect cleanup in the payment page components. */
-body > div[id*="stripe-link-widget"],
-body > div[id*="stripe-link-modal"],
-body > div[id*="stripe-link"] {
+/* Hide Stripe "Link in Card Test Mode" marquee banner injected into document.body
+   by Stripe.js when running in test mode with Stripe Link enabled.
+   Stripe appends: <marquee id="test-mode-banner" style="position:fixed;top:0;z-index:9999999">
+   This persists after Elements unmounts — suppressed here and cleaned up via useEffect. */
+#test-mode-banner {
   display: none !important;
 }
 

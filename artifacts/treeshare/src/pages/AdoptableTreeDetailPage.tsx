@@ -673,7 +673,7 @@ export default function AdoptableTreeDetailPage() {
 
   useEffect(() => {
     return () => {
-      document.querySelectorAll('[id*="stripe-link-widget"],[id*="stripe-link-modal"],[id*="stripe-link"]').forEach((el) => el.remove());
+      document.getElementById("test-mode-banner")?.remove();
     };
   }, []);
 
