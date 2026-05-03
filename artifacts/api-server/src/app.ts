@@ -1,4 +1,4 @@
-import express, { type Express } from "express";
+import express, { type Express, type Request, type Response, type NextFunction } from "express";
 import cors from "cors";
 import pinoHttp from "pino-http";
 import helmet from "helmet";
@@ -7,9 +7,30 @@ import router from "./routes";
 import { webhookHandler } from "./routes/donations";
 import { logger } from "./lib/logger";
 
+/**
+ * Middleware difensivo: impone Secure + HttpOnly + SameSite=Strict su ogni
+ * cookie impostato dall'applicazione, indipendentemente da chi chiama res.cookie().
+ * L'app usa Bearer token; questo è una rete di sicurezza per cookie futuri.
+ */
+function secureCookieDefaults(req: Request, res: Response, next: NextFunction): void {
+  const originalCookie = res.cookie.bind(res);
+  res.cookie = function (name: string, value: string, options: express.CookieOptions = {}) {
+    const safeOptions: express.CookieOptions = {
+      ...options,
+      httpOnly: true,
+      secure: true,
+      sameSite: "strict",
+    };
+    return originalCookie(name, value, safeOptions);
+  } as typeof res.cookie;
+  next();
+}
+
 const app: Express = express();
 
 app.set("trust proxy", 1);
+
+app.use(secureCookieDefaults);
 
 app.use(
   pinoHttp({
