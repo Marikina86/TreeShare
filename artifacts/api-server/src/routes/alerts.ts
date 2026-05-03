@@ -5,6 +5,21 @@ import { eq, desc, or } from "drizzle-orm";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth";
 import { requireAdmin } from "../middlewares/requireAdmin";
 import { addSSEClient, broadcastSSE } from "../lib/sseBroadcaster";
+import { z } from "zod";
+
+const CreateAlertBody = z.object({
+  title: z.string().min(1).max(200),
+  message: z.string().min(1).max(2000),
+  priority: z.enum(["low", "normal", "high", "critical"]).default("normal"),
+  targetGroup: z.enum(["all", "organization", "user"]).default("all"),
+});
+
+const PatchAlertBody = z.object({
+  title: z.string().min(1).max(200).optional(),
+  message: z.string().min(1).max(2000).optional(),
+  priority: z.enum(["low", "normal", "high", "critical"]).optional(),
+  targetGroup: z.enum(["all", "organization", "user"]).optional(),
+});
 
 const router = Router();
 
@@ -61,29 +76,21 @@ router.get("/alerts", requireAuth, async (req, res) => {
 // POST /admin/alerts — crea avviso
 router.post("/admin/alerts", requireAuth, requireAdmin, async (req, res) => {
   const adminId = (req as AuthenticatedRequest).userId;
-  const { title, message, priority, targetGroup } = req.body ?? {};
-
-  if (typeof title !== "string" || !title.trim()) {
-    res.status(400).json({ error: "title required" });
-    return;
-  }
-  if (typeof message !== "string" || !message.trim()) {
+  const parsed = CreateAlertBody.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    const fields = parsed.error.issues.map((i) => i.path[0]);
+    if (fields.includes("title")) { res.status(400).json({ error: "title required" }); return; }
     res.status(400).json({ error: "message required" });
     return;
   }
-
-  const validPriorities = ["low", "normal", "high", "critical"];
-  const resolvedPriority = validPriorities.includes(priority) ? priority : "normal";
-
-  const validGroups = ["all", "organization", "user"];
-  const resolvedGroup = validGroups.includes(targetGroup) ? targetGroup : "all";
+  const { title, message, priority: resolvedPriority, targetGroup: resolvedGroup } = parsed.data;
 
   try {
     const [alert] = await db
       .insert(alertsTable)
       .values({
-        title: title.trim().slice(0, 200),
-        message: message.trim().slice(0, 2000),
+        title: title.trim(),
+        message: message.trim(),
         priority: resolvedPriority,
         targetGroup: resolvedGroup,
         createdBy: adminId,
@@ -109,17 +116,19 @@ router.patch("/admin/alerts/:id", requireAuth, requireAdmin, async (req, res) =>
   const id = parseInt(req.params.id as string, 10);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
 
-  const { title, message, priority, targetGroup } = req.body ?? {};
-  const validPriorities = ["low", "normal", "high", "critical"];
-  const validGroups = ["all", "organization", "user"];
+  const parsed = PatchAlertBody.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    res.status(400).json({ error: "Dati non validi", details: parsed.error.issues });
+    return;
+  }
 
   const updates: Partial<typeof alertsTable.$inferInsert> = {
     updatedAt: new Date(),
   };
-  if (typeof title === "string" && title.trim()) updates.title = title.trim().slice(0, 200);
-  if (typeof message === "string" && message.trim()) updates.message = message.trim().slice(0, 2000);
-  if (validPriorities.includes(priority)) updates.priority = priority;
-  if (validGroups.includes(targetGroup)) updates.targetGroup = targetGroup;
+  if (parsed.data.title !== undefined) updates.title = parsed.data.title.trim();
+  if (parsed.data.message !== undefined) updates.message = parsed.data.message.trim();
+  if (parsed.data.priority !== undefined) updates.priority = parsed.data.priority;
+  if (parsed.data.targetGroup !== undefined) updates.targetGroup = parsed.data.targetGroup;
 
   try {
     const [updated] = await db

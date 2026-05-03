@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { z } from "zod";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth";
 import { requireAdmin } from "../middlewares/requireAdmin";
 import {
@@ -39,6 +40,8 @@ router.get(
   },
 );
 
+const ToggleAdoptionsBody = z.object({ enabled: z.boolean() });
+
 // Admin: toggle adoptions
 router.put(
   "/admin/app-settings/adoptions",
@@ -46,11 +49,12 @@ router.put(
   requireAdmin,
   async (req, res) => {
     try {
-      const { enabled } = req.body ?? {};
-      if (typeof enabled !== "boolean") {
+      const parsed = ToggleAdoptionsBody.safeParse(req.body ?? {});
+      if (!parsed.success) {
         res.status(400).json({ error: "Campo 'enabled' booleano richiesto" });
         return;
       }
+      const { enabled } = parsed.data;
       const userId = (req as AuthenticatedRequest).userId;
       await setSetting(
         SETTING_KEYS.ADOPTIONS_ENABLED,

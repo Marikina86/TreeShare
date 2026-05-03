@@ -17,6 +17,7 @@ import { getRomeExpiryDate } from "../lib/eventCleaner";
 import { logger } from "../lib/logger";
 import { sendEmail } from "../lib/email";
 import { isAdoptionsEnabled } from "../lib/appSettings";
+import { z } from "zod";
 
 function generateAdoptionCode(): string {
   return "ADO-" + randomUUID().replace(/-/g, "").toUpperCase().substring(0, 8);
@@ -25,6 +26,63 @@ function generateAdoptionCode(): string {
 function escHtml(str: string): string {
   return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 }
+
+const CreateAdoptableTreeBody = z.object({
+  title: z.string().trim().min(1, { message: "Il nome dell'albero è obbligatorio" }).max(200),
+  description: z.string().trim().min(1, { message: "La descrizione è obbligatoria" }).max(5000),
+  speciesName: z.string().trim().min(1, { message: "La specie botanica è obbligatoria" }).max(200),
+  locationName: z.string().trim().min(1, { message: "Il luogo è obbligatorio" }).max(300),
+  productDescription: z.string().trim().min(1, { message: "I prodotti offerti sono obbligatori" }).max(2000),
+  ownerEmail: z.string().email({ message: "Email dell'ente non valida" }),
+  latitude: z.coerce.number().min(-90).max(90),
+  longitude: z.coerce.number().min(-180).max(180),
+  priceCents: z.coerce.number().int().min(50, { message: "Prezzo minimo 50 centesimi" }),
+  durationDays: z.coerce.number().int().min(1, { message: "Durata minima 1 giorno" }),
+  maxAdoptions: z.coerce.number().int().min(1).max(100).default(10),
+  imageUrl: z.string().optional(),
+  thumbnailUrl: z.string().optional(),
+});
+
+const PatchAdoptableTreeBody = z.object({
+  title: z.string().trim().max(200).optional(),
+  description: z.string().trim().max(5000).optional(),
+  speciesName: z.string().trim().max(200).nullable().optional(),
+  locationName: z.string().trim().max(300).nullable().optional(),
+  productDescription: z.string().trim().max(2000).nullable().optional(),
+  ownerEmail: z.string().email().optional(),
+  imageUrl: z.string().nullable().optional(),
+  thumbnailUrl: z.string().nullable().optional(),
+  priceCents: z.coerce.number().int().min(50).optional(),
+  durationDays: z.coerce.number().int().min(1).optional(),
+  maxAdoptions: z.coerce.number().int().min(1).max(100).optional(),
+});
+
+const InitiateAdoptionBody = z.object({
+  treeId: z.coerce.number().int().positive({ message: "treeId obbligatorio" }),
+  selectedDurationDays: z.coerce.number().int().positive().optional(),
+});
+
+const ConfirmAdoptionBody = z.object({
+  paymentIntentId: z.string().min(1, { message: "paymentIntentId obbligatorio" }),
+});
+
+const ShippingBody = z.object({
+  fullName: z.string().trim().min(1, { message: "Nome completo obbligatorio" }).max(200),
+  address: z.string().trim().min(1, { message: "Indirizzo obbligatorio" }).max(500),
+  city: z.string().trim().min(1, { message: "Città obbligatoria" }).max(200),
+  country: z.string().trim().min(1, { message: "Paese obbligatorio" }).max(100),
+  phone: z.string().trim().max(50).optional(),
+  postalCode: z.string().trim().max(20).optional(),
+  notes: z.string().trim().max(1000).optional(),
+});
+
+const OrgStatusBody = z.object({
+  orgStatus: z.enum(["pending_shipping", "shipping_received", "shipped"]),
+});
+
+const RejectAdoptTreeBody = z.object({
+  message: z.string().trim().max(1000).optional(),
+});
 
 function buildOwnerAdoptionEmail(opts: {
   treeName: string;
@@ -322,47 +380,17 @@ router.post("/adopt/trees", requireAuth, async (req, res) => {
       return;
     }
 
+    const bodyParsed = CreateAdoptableTreeBody.safeParse(req.body);
+    if (!bodyParsed.success) {
+      const msg = bodyParsed.error.issues[0]?.message ?? "Dati non validi";
+      res.status(400).json({ error: msg });
+      return;
+    }
     const {
-      title, description, speciesName, locationName, latitude, longitude,
+      title, description, speciesName, locationName, latitude: lat, longitude: lng,
       imageUrl, thumbnailUrl, productDescription,
-      priceCents, durationDays, maxAdoptions, ownerEmail,
-    } = req.body;
-
-    if (!title || typeof title !== "string" || title.trim().length === 0) {
-      res.status(400).json({ error: "Il nome dell'albero è obbligatorio" }); return;
-    }
-    if (!description || typeof description !== "string" || description.trim().length === 0) {
-      res.status(400).json({ error: "La descrizione è obbligatoria" }); return;
-    }
-    if (!speciesName || typeof speciesName !== "string" || speciesName.trim().length === 0) {
-      res.status(400).json({ error: "La specie botanica è obbligatoria" }); return;
-    }
-    if (!locationName || typeof locationName !== "string" || locationName.trim().length === 0) {
-      res.status(400).json({ error: "Il luogo è obbligatorio" }); return;
-    }
-    if (!productDescription || typeof productDescription !== "string" || productDescription.trim().length === 0) {
-      res.status(400).json({ error: "I prodotti offerti sono obbligatori" }); return;
-    }
-    if (!ownerEmail || typeof ownerEmail !== "string") {
-      res.status(400).json({ error: "Email dell'ente obbligatoria" }); return;
-    }
-    const lat = Number(latitude);
-    const lng = Number(longitude);
-    if (isNaN(lat) || isNaN(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) {
-      res.status(400).json({ error: "Coordinate non valide" }); return;
-    }
-    const price = Number(priceCents);
-    if (isNaN(price) || price < 50) {
-      res.status(400).json({ error: "Prezzo minimo 50 centesimi" }); return;
-    }
-    const days = Number(durationDays);
-    if (isNaN(days) || days < 1) {
-      res.status(400).json({ error: "Durata minima 1 giorno" }); return;
-    }
-    const maxAdopt = maxAdoptions !== undefined ? Number(maxAdoptions) : 10;
-    if (isNaN(maxAdopt) || maxAdopt < 1 || maxAdopt > 100) {
-      res.status(400).json({ error: "maxAdoptions deve essere tra 1 e 100" }); return;
-    }
+      priceCents: price, durationDays: days, maxAdoptions: maxAdopt, ownerEmail,
+    } = bodyParsed.data;
 
     const [created] = await db
       .insert(adoptableTreesTable)
@@ -408,18 +436,23 @@ router.patch("/adopt/trees/:id", requireAuth, async (req, res) => {
     if (!tree) { res.status(404).json({ error: "Albero non trovato" }); return; }
     if (tree.ownerId !== userId) { res.status(403).json({ error: "Non autorizzato" }); return; }
 
+    const patchParsed = PatchAdoptableTreeBody.safeParse(req.body ?? {});
+    if (!patchParsed.success) {
+      res.status(400).json({ error: "Dati non validi" });
+      return;
+    }
     const updates: Record<string, unknown> = { updatedAt: new Date() };
-    if (req.body.title !== undefined) updates.title = String(req.body.title).trim();
-    if (req.body.description !== undefined) updates.description = String(req.body.description).trim();
-    if (req.body.speciesName !== undefined) updates.speciesName = req.body.speciesName ? String(req.body.speciesName).trim() : null;
-    if (req.body.locationName !== undefined) updates.locationName = req.body.locationName ? String(req.body.locationName).trim() : null;
-    if (req.body.imageUrl !== undefined) updates.imageUrl = req.body.imageUrl || null;
-    if (req.body.thumbnailUrl !== undefined) updates.thumbnailUrl = req.body.thumbnailUrl || null;
-    if (req.body.productDescription !== undefined) updates.productDescription = req.body.productDescription?.trim() || null;
-    if (req.body.priceCents !== undefined) updates.priceCents = Number(req.body.priceCents);
-    if (req.body.durationDays !== undefined) updates.durationDays = Number(req.body.durationDays);
-    if (req.body.maxAdoptions !== undefined) updates.maxAdoptions = Number(req.body.maxAdoptions);
-    if (req.body.ownerEmail !== undefined) updates.ownerEmail = String(req.body.ownerEmail).trim();
+    if (patchParsed.data.title !== undefined) updates.title = patchParsed.data.title;
+    if (patchParsed.data.description !== undefined) updates.description = patchParsed.data.description;
+    if (patchParsed.data.speciesName !== undefined) updates.speciesName = patchParsed.data.speciesName ?? null;
+    if (patchParsed.data.locationName !== undefined) updates.locationName = patchParsed.data.locationName ?? null;
+    if (patchParsed.data.imageUrl !== undefined) updates.imageUrl = patchParsed.data.imageUrl ?? null;
+    if (patchParsed.data.thumbnailUrl !== undefined) updates.thumbnailUrl = patchParsed.data.thumbnailUrl ?? null;
+    if (patchParsed.data.productDescription !== undefined) updates.productDescription = patchParsed.data.productDescription ?? null;
+    if (patchParsed.data.priceCents !== undefined) updates.priceCents = patchParsed.data.priceCents;
+    if (patchParsed.data.durationDays !== undefined) updates.durationDays = patchParsed.data.durationDays;
+    if (patchParsed.data.maxAdoptions !== undefined) updates.maxAdoptions = patchParsed.data.maxAdoptions;
+    if (patchParsed.data.ownerEmail !== undefined) updates.ownerEmail = patchParsed.data.ownerEmail;
 
     const [updated] = await db
       .update(adoptableTreesTable)
@@ -664,13 +697,17 @@ router.post("/adopt/initiate", requireAuth, async (req, res) => {
       return;
     }
 
-    const { treeId, selectedDurationDays } = req.body;
-    if (!treeId) { res.status(400).json({ error: "treeId obbligatorio" }); return; }
+    const initParsed = InitiateAdoptionBody.safeParse(req.body);
+    if (!initParsed.success) {
+      res.status(400).json({ error: "treeId obbligatorio" });
+      return;
+    }
+    const { treeId, selectedDurationDays } = initParsed.data;
 
     const [tree] = await db
       .select()
       .from(adoptableTreesTable)
-      .where(eq(adoptableTreesTable.id, Number(treeId)));
+      .where(eq(adoptableTreesTable.id, treeId));
 
     if (!tree) { res.status(404).json({ error: "Albero non trovato" }); return; }
     if (tree.paused) {
@@ -763,8 +800,12 @@ router.post("/adopt/initiate", requireAuth, async (req, res) => {
 router.post("/adopt/confirm", requireAuth, async (req, res) => {
   const userId = (req as AuthenticatedRequest).userId;
   try {
-    const { paymentIntentId } = req.body;
-    if (!paymentIntentId) { res.status(400).json({ error: "paymentIntentId obbligatorio" }); return; }
+    const confirmParsed = ConfirmAdoptionBody.safeParse(req.body);
+    if (!confirmParsed.success) {
+      res.status(400).json({ error: "paymentIntentId obbligatorio" });
+      return;
+    }
+    const { paymentIntentId } = confirmParsed.data;
 
     const stripe = await getUncachableStripeClient();
     const pi = await stripe.paymentIntents.retrieve(paymentIntentId);
@@ -936,19 +977,12 @@ router.post("/adopt/my-adoptions/:id/shipping", requireAuth, async (req, res) =>
       .where(and(eq(treeAdoptionsTable.id, id), eq(treeAdoptionsTable.userId, userId)));
     if (!adoption) { res.status(404).json({ error: "Adozione non trovata" }); return; }
 
-    const { fullName, phone, address, city, postalCode, country, notes } = req.body;
-    if (!fullName || typeof fullName !== "string") {
-      res.status(400).json({ error: "Nome completo obbligatorio" }); return;
+    const shippingParsed = ShippingBody.safeParse(req.body);
+    if (!shippingParsed.success) {
+      const msg = shippingParsed.error.issues[0]?.message ?? "Dati non validi";
+      res.status(400).json({ error: msg }); return;
     }
-    if (!address || typeof address !== "string") {
-      res.status(400).json({ error: "Indirizzo obbligatorio" }); return;
-    }
-    if (!city || typeof city !== "string") {
-      res.status(400).json({ error: "Città obbligatoria" }); return;
-    }
-    if (!country || typeof country !== "string") {
-      res.status(400).json({ error: "Paese obbligatorio" }); return;
-    }
+    const { fullName, phone, address, city, postalCode, country, notes } = shippingParsed.data;
 
     const shippingData = JSON.stringify({
       fullName: fullName.trim(),
@@ -1028,11 +1062,11 @@ router.patch("/adopt/org/adoptions/:id/status", requireAuth, async (req, res) =>
       res.status(403).json({ error: "Accesso riservato alle organizzazioni" }); return;
     }
 
-    const { orgStatus } = req.body;
-    const validStatuses = ["pending_shipping", "shipping_received", "shipped"];
-    if (!orgStatus || !validStatuses.includes(orgStatus)) {
-      res.status(400).json({ error: `Stato non valido. Valori ammessi: ${validStatuses.join(", ")}` }); return;
+    const statusParsed = OrgStatusBody.safeParse(req.body ?? {});
+    if (!statusParsed.success) {
+      res.status(400).json({ error: "Stato non valido. Valori ammessi: pending_shipping, shipping_received, shipped" }); return;
     }
+    const { orgStatus } = statusParsed.data;
 
     const [adoption] = await db
       .select({ id: treeAdoptionsTable.id, treeId: treeAdoptionsTable.treeId })
@@ -1227,7 +1261,11 @@ router.patch("/admin/adopt/trees/:id/approve", requireAuth, requireAdmin, async 
 router.patch("/admin/adopt/trees/:id/reject", requireAuth, requireAdmin, async (req, res) => {
   const id = parseInt(req.params.id as string, 10);
   if (isNaN(id)) { res.status(400).json({ error: "ID non valido" }); return; }
-  const { message } = req.body;
+  const rejectParsed = RejectAdoptTreeBody.safeParse(req.body ?? {});
+  if (!rejectParsed.success) {
+    res.status(400).json({ error: "Dati non validi" }); return;
+  }
+  const { message } = rejectParsed.data;
   try {
     const [tree] = await db
       .update(adoptableTreesTable)

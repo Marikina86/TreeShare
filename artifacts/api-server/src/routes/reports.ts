@@ -4,6 +4,7 @@ import { reportsTable, usersTable, treesTable, eventsTable, treeUpdatesTable } f
 import { eq, and, desc } from "drizzle-orm";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth";
 import { requireAdmin } from "../middlewares/requireAdmin";
+import { z } from "zod";
 
 const router = Router();
 
@@ -19,23 +20,28 @@ const VALID_REASONS = [
   "altro",
 ];
 
+const CreateReportBody = z.object({
+  reportedUserId: z.string().optional(),
+  treeId: z.coerce.number().int().positive().optional(),
+  treeUpdateId: z.coerce.number().int().positive().optional(),
+  eventId: z.coerce.number().int().positive().optional(),
+  reason: z.string().refine((v) => VALID_REASONS.includes(v), { message: "Invalid reason" }),
+  notes: z.string().max(500).optional(),
+});
+
 // POST /reports — submit a report (user, tree, tree_update, or event)
 router.post("/reports", requireAuth, async (req, res) => {
   const reporterUserId = (req as AuthenticatedRequest).userId;
-  const { reportedUserId, treeId, treeUpdateId, eventId, reason, notes } = req.body ?? {};
-
-  if (!reason || !VALID_REASONS.includes(reason)) {
+  const parsed = CreateReportBody.safeParse(req.body ?? {});
+  if (!parsed.success) {
     res.status(400).json({ error: "Invalid reason" });
     return;
   }
 
-  const parsedEventId = eventId != null ? parseInt(String(eventId), 10) : null;
-  const parsedTreeId = treeId != null ? parseInt(String(treeId), 10) : null;
-  const parsedTreeUpdateId = treeUpdateId != null ? parseInt(String(treeUpdateId), 10) : null;
-
-  if (treeId != null && isNaN(parsedTreeId!)) { res.status(400).json({ error: "Invalid treeId" }); return; }
-  if (eventId != null && isNaN(parsedEventId!)) { res.status(400).json({ error: "Invalid eventId" }); return; }
-  if (treeUpdateId != null && isNaN(parsedTreeUpdateId!)) { res.status(400).json({ error: "Invalid treeUpdateId" }); return; }
+  const { reportedUserId, reason, notes } = parsed.data;
+  const parsedEventId = parsed.data.eventId ?? null;
+  const parsedTreeId = parsed.data.treeId ?? null;
+  const parsedTreeUpdateId = parsed.data.treeUpdateId ?? null;
 
   try {
     let resolvedReportedUserId = typeof reportedUserId === "string" ? reportedUserId : null;

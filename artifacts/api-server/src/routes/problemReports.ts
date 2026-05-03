@@ -4,6 +4,7 @@ import { problemReportsTable, usersTable, userNotificationsTable } from "@worksp
 import { eq, desc } from "drizzle-orm";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth";
 import { requireAdmin } from "../middlewares/requireAdmin";
+import { z } from "zod";
 
 const router = Router();
 
@@ -15,23 +16,30 @@ const VALID_CATEGORIES = [
   "altro",
 ];
 
+const CreateProblemReportBody = z.object({
+  category: z.string().refine((v) => VALID_CATEGORIES.includes(v), { message: "Categoria non valida" }),
+  description: z.string().trim().min(10, { message: "Descrizione troppo breve (minimo 10 caratteri)" }).max(1000, { message: "Descrizione troppo lunga (massimo 1000 caratteri)" }),
+});
+
+const PatchProblemReportStatusBody = z.object({
+  status: z.enum(["new", "in_progress", "resolved", "dismissed"]),
+  adminNote: z.string().max(500).optional(),
+});
+
+const PatchProblemReportReplyBody = z.object({
+  replyText: z.string().trim().min(5, { message: "Testo risposta troppo breve" }).max(2000, { message: "Testo risposta troppo lungo (massimo 2000 caratteri)" }),
+});
+
 // POST /problem-reports — utente invia segnalazione problema
 router.post("/problem-reports", requireAuth, async (req, res) => {
   const userId = (req as AuthenticatedRequest).userId;
-  const { category, description } = req.body ?? {};
-
-  if (!category || !VALID_CATEGORIES.includes(category)) {
-    res.status(400).json({ error: "Categoria non valida" });
+  const parsed = CreateProblemReportBody.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    const msg = parsed.error.issues[0]?.message ?? "Dati non validi";
+    res.status(400).json({ error: msg });
     return;
   }
-  if (!description || typeof description !== "string" || description.trim().length < 10) {
-    res.status(400).json({ error: "Descrizione troppo breve (minimo 10 caratteri)" });
-    return;
-  }
-  if (description.trim().length > 1000) {
-    res.status(400).json({ error: "Descrizione troppo lunga (massimo 1000 caratteri)" });
-    return;
-  }
+  const { category, description } = parsed.data;
 
   try {
     const [user] = await db
@@ -81,19 +89,19 @@ router.patch("/admin/problem-reports/:id/status", requireAuth, requireAdmin, asy
   const id = parseInt(req.params.id as string, 10);
   if (isNaN(id)) { res.status(400).json({ error: "ID non valido" }); return; }
 
-  const { status, adminNote } = req.body ?? {};
-  const VALID_STATUSES = ["new", "in_progress", "resolved", "dismissed"];
-  if (!status || !VALID_STATUSES.includes(status)) {
+  const parsed = PatchProblemReportStatusBody.safeParse(req.body ?? {});
+  if (!parsed.success) {
     res.status(400).json({ error: "Stato non valido" });
     return;
   }
+  const { status, adminNote } = parsed.data;
 
   try {
     const [updated] = await db
       .update(problemReportsTable)
       .set({
         status,
-        adminNote: typeof adminNote === "string" ? adminNote.trim().slice(0, 500) : null,
+        adminNote: adminNote?.trim() ?? null,
       })
       .where(eq(problemReportsTable.id, id))
       .returning();
@@ -115,15 +123,13 @@ router.patch("/admin/problem-reports/:id/reply", requireAuth, requireAdmin, asyn
   const id = parseInt(req.params.id as string, 10);
   if (isNaN(id)) { res.status(400).json({ error: "ID non valido" }); return; }
 
-  const { replyText } = req.body ?? {};
-  if (!replyText || typeof replyText !== "string" || replyText.trim().length < 5) {
-    res.status(400).json({ error: "Testo risposta troppo breve" });
+  const parsed = PatchProblemReportReplyBody.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    const msg = parsed.error.issues[0]?.message ?? "Testo risposta non valido";
+    res.status(400).json({ error: msg });
     return;
   }
-  if (replyText.trim().length > 2000) {
-    res.status(400).json({ error: "Testo risposta troppo lungo (massimo 2000 caratteri)" });
-    return;
-  }
+  const { replyText } = parsed.data;
 
   try {
     const [report] = await db
