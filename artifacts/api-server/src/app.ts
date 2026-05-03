@@ -42,7 +42,7 @@ app.use(cors({ credentials: true, origin: true }));
 
 const globalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  limit: 300,
+  limit: 600,
   standardHeaders: "draft-8",
   legacyHeaders: false,
   message: { error: "Troppe richieste. Riprova tra qualche minuto." },
