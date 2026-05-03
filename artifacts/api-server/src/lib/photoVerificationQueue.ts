@@ -1,5 +1,5 @@
 import { db } from "@workspace/db";
-import { treesTable, treeUpdatesTable, userNotificationsTable } from "@workspace/db";
+import { treesTable, treeUpdatesTable, treeStatusReportsTable, userNotificationsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { logger } from "./logger";
 import { getAdminIds } from "../middlewares/requireAdmin";
@@ -30,7 +30,16 @@ type UpdateJob = {
   species?: string | null;
 };
 
-export type VerificationJob = TreeJob | UpdateJob;
+type StatusJob = {
+  kind: "status";
+  reportId: number;
+  treeId: number;
+  userId: string;
+  imageBase64: string;
+  mimeType: string;
+};
+
+export type VerificationJob = TreeJob | UpdateJob | StatusJob;
 
 // ── In-memory sequential queue ────────────────────────────────────────────────
 
@@ -142,7 +151,7 @@ async function approvePhoto(job: VerificationJob): Promise<void> {
       type: "photo_approved",
       relatedId: job.treeId,
     });
-  } else {
+  } else if (job.kind === "update") {
     await db.update(treeUpdatesTable)
       .set({ photoStatus: "approved" })
       .where(eq(treeUpdatesTable.id, job.updateId));
@@ -150,6 +159,17 @@ async function approvePhoto(job: VerificationJob): Promise<void> {
       userId: job.userId,
       title: "Aggiornamento approvato! 🌿",
       message: "La tua foto di aggiornamento è ora visibile.",
+      type: "photo_approved",
+      relatedId: job.treeId,
+    });
+  } else {
+    await db.update(treeStatusReportsTable)
+      .set({ photoStatus: "approved" })
+      .where(eq(treeStatusReportsTable.id, job.reportId));
+    await db.insert(userNotificationsTable).values({
+      userId: job.userId,
+      title: "Segnalazione stato approvata! ✅",
+      message: "La tua foto per la segnalazione trimestrale è stata verificata.",
       type: "photo_approved",
       relatedId: job.treeId,
     });
@@ -168,7 +188,7 @@ async function rejectPhoto(job: VerificationJob, reason: string): Promise<void> 
       type: "photo_rejected",
       relatedId: job.treeId,
     });
-  } else {
+  } else if (job.kind === "update") {
     await db.update(treeUpdatesTable)
       .set({ photoStatus: "rejected" })
       .where(eq(treeUpdatesTable.id, job.updateId));
@@ -179,6 +199,17 @@ async function rejectPhoto(job: VerificationJob, reason: string): Promise<void> 
       type: "photo_rejected",
       relatedId: job.treeId,
     });
+  } else {
+    await db.update(treeStatusReportsTable)
+      .set({ photoStatus: "rejected" })
+      .where(eq(treeStatusReportsTable.id, job.reportId));
+    await db.insert(userNotificationsTable).values({
+      userId: job.userId,
+      title: "Foto segnalazione non approvata",
+      message: `La foto per la segnalazione trimestrale non è stata approvata. Motivo: ${reason}`,
+      type: "photo_rejected",
+      relatedId: job.treeId,
+    });
   }
 }
 
@@ -186,12 +217,13 @@ async function notifyAdminsForManualReview(job: VerificationJob): Promise<void> 
   const adminIds = getAdminIds();
   if (adminIds.length === 0) return;
 
+  const [treeRow] = await db
+    .select({ plantName: treesTable.plantName })
+    .from(treesTable)
+    .where(eq(treesTable.id, job.treeId));
+  const label = treeRow?.plantName ? `"${treeRow.plantName}"` : `#${job.treeId}`;
+
   if (job.kind === "tree") {
-    const [treeRow] = await db
-      .select({ plantName: treesTable.plantName })
-      .from(treesTable)
-      .where(eq(treesTable.id, job.treeId));
-    const label = treeRow?.plantName ? `"${treeRow.plantName}"` : `#${job.treeId}`;
     await db.insert(userNotificationsTable).values(
       adminIds.map((adminId) => ({
         userId: adminId,
@@ -202,12 +234,7 @@ async function notifyAdminsForManualReview(job: VerificationJob): Promise<void> 
         isRead: false,
       }))
     );
-  } else {
-    const [treeRow] = await db
-      .select({ plantName: treesTable.plantName })
-      .from(treesTable)
-      .where(eq(treesTable.id, job.treeId));
-    const label = treeRow?.plantName ? `"${treeRow.plantName}"` : `#${job.treeId}`;
+  } else if (job.kind === "update") {
     await db.insert(userNotificationsTable).values(
       adminIds.map((adminId) => ({
         userId: adminId,
@@ -215,6 +242,17 @@ async function notifyAdminsForManualReview(job: VerificationJob): Promise<void> 
         message: `Una nuova foto per la pianta ${label} richiede revisione manuale (AI non disponibile). Vai nel pannello admin → Aggiorn. in attesa.`,
         type: "pending_tree_update",
         relatedId: job.updateId,
+        isRead: false,
+      }))
+    );
+  } else {
+    await db.insert(userNotificationsTable).values(
+      adminIds.map((adminId) => ({
+        userId: adminId,
+        title: "Segnalazione stato in attesa",
+        message: `La foto per la segnalazione trimestrale della pianta ${label} richiede revisione manuale (AI non disponibile). Vai nel pannello admin.`,
+        type: "pending_tree_update",
+        relatedId: job.treeId,
         isRead: false,
       }))
     );
@@ -242,6 +280,13 @@ async function processJob(job: VerificationJob): Promise<void> {
   if (!plantResult.isPlant) {
     logger.info({ kind: job.kind, reason: plantResult.reason }, "[photoQueue] foto rifiutata — non è una pianta idonea");
     await rejectPhoto(job, plantResult.reason ?? "L'immagine non mostra una pianta o albero idoneo.");
+    return;
+  }
+
+  // Segnalazione stato: solo verifica "è una pianta?", nessun confronto specie
+  if (job.kind === "status") {
+    logger.info({ reportId: job.reportId }, "[photoQueue] foto segnalazione approvata");
+    await approvePhoto(job);
     return;
   }
 

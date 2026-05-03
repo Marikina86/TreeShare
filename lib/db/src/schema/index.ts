@@ -466,6 +466,7 @@ export const treeStatusReportsTable = pgTable("tree_status_reports", {
   quarter: text("quarter").notNull(), // e.g. "2026-Q2"
   status: text("status").notNull(), // "alive" | "dead"
   photoUrl: text("photo_url"), // mandatory if status = "alive"
+  photoStatus: text("photo_status").default("pending"), // "pending" | "approved" | "rejected"
   reportedAt: timestamp("reported_at").notNull().defaultNow(),
 }, (table) => [
   index("tree_status_reports_tree_id_idx").on(table.treeId),

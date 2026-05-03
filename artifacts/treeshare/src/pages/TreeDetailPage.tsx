@@ -81,6 +81,7 @@ export default function TreeDetailPage() {
   const [statusPhotoPreview, setStatusPhotoPreview] = useState<string | null>(null);
   const [statusVerifyState, setStatusVerifyState] = useState<"idle" | "verifying" | "ok" | "pending" | "rejected">("idle");
   const [statusVerifyReason, setStatusVerifyReason] = useState<string | null>(null);
+  const [statusPhotoBase64, setStatusPhotoBase64] = useState<string | null>(null);
   const [statusPhotoStatusForUpload, setStatusPhotoStatusForUpload] = useState<"approved" | "pending">("approved");
   const [statusSaving, setStatusSaving] = useState(false);
   const statusFileInputRef = useRef<HTMLInputElement>(null);
@@ -285,6 +286,7 @@ export default function TreeDetailPage() {
     setStatusPhotoFile(file);
     setStatusVerifyState("idle");
     setStatusVerifyReason(null);
+    setStatusPhotoBase64(null);
     setStatusPhotoStatusForUpload("approved");
     const reader = new FileReader();
     reader.onload = async (ev) => {
@@ -293,9 +295,13 @@ export default function TreeDetailPage() {
       setStatusVerifyState("verifying");
       try {
         const base64 = dataUrl.includes(",") ? dataUrl.split(",")[1] : dataUrl;
+        const token = await getToken();
         const verRes = await fetch("/api/plants/verify", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
           body: JSON.stringify({ imageBase64: base64 }),
         });
         if (!verRes.ok) throw new Error("verify failed");
@@ -305,9 +311,12 @@ export default function TreeDetailPage() {
           setStatusVerifyReason(verData.reason ?? "L'immagine non sembra contenere una pianta.");
           setStatusPhotoFile(null);
           setStatusPhotoPreview(null);
+          setStatusPhotoBase64(null);
           if (statusFileInputRef.current) statusFileInputRef.current.value = "";
           return;
         }
+        // Salva base64 per invio in background al backend (sia ok che pending)
+        setStatusPhotoBase64(base64);
         if (verData.aiUnavailable) {
           setStatusVerifyState("pending");
           setStatusPhotoStatusForUpload("pending");
@@ -349,7 +358,12 @@ export default function TreeDetailPage() {
       const res = await fetch(`/api/trees/${treeId}/status-report`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-        body: JSON.stringify({ quarter, status: statusChoice, photoUrl: photoObjectPath }),
+        body: JSON.stringify({
+          quarter,
+          status: statusChoice,
+          photoUrl: photoObjectPath,
+          ...(statusChoice === "alive" && statusPhotoBase64 ? { imageBase64: statusPhotoBase64 } : {}),
+        }),
       });
       if (!res.ok) {
         const errData = await res.json().catch(() => ({})) as { error?: string };
@@ -378,6 +392,7 @@ export default function TreeDetailPage() {
     setStatusPhotoPreview(null);
     setStatusVerifyState("idle");
     setStatusVerifyReason(null);
+    setStatusPhotoBase64(null);
     if (statusFileInputRef.current) statusFileInputRef.current.value = "";
   }
 

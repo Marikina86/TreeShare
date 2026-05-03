@@ -43,6 +43,7 @@ const StatusReportBody = z.object({
   quarter: z.string().regex(/^\d{4}-Q[1-4]$/),
   status: z.enum(["alive", "dead"]),
   photoUrl: z.string().nullable().optional(),
+  imageBase64: z.string().optional(),
 });
 
 // ── Formattazione sincrona: nessuna query aggiuntiva ──────────────────────────
@@ -690,20 +691,51 @@ router.post("/trees/:treeId/status-report", requireAuth, async (req, res) => {
       res.status(422).json({ error: "Nessuna finestra disponibile. La prima segnalazione si sblocca alla prossima finestra trimestrale (15 feb, 15 mag, 15 ago, 15 nov) successiva alla data di registrazione della pianta." });
       return;
     }
+    const { imageBase64 } = parsedBody.data;
     const [report] = await db
       .insert(treeStatusReportsTable)
-      .values({ treeId, quarter, status, photoUrl: photoUrl ?? null })
+      .values({ treeId, quarter, status, photoUrl: photoUrl ?? null, photoStatus: photoUrl ? "pending" : null })
       .onConflictDoUpdate({
         target: [treeStatusReportsTable.treeId, treeStatusReportsTable.quarter],
-        set: { status, photoUrl: photoUrl ?? null, reportedAt: new Date() },
+        set: { status, photoUrl: photoUrl ?? null, photoStatus: photoUrl ? "pending" : null, reportedAt: new Date() },
       })
       .returning();
+
+    // Se foto presente con imageBase64: verifica AI in background
+    if (status === "alive" && photoUrl && imageBase64) {
+      const { base64, mimeType } = parseBase64Image(imageBase64);
+      enqueueVerification({
+        kind: "status",
+        reportId: report!.id,
+        treeId,
+        userId,
+        imageBase64: base64,
+        mimeType,
+      });
+    } else if (status === "alive" && photoUrl && !imageBase64) {
+      // Nessun base64: notifica admin per revisione manuale
+      const adminIds = getAdminIds();
+      if (adminIds.length > 0) {
+        await db.insert(userNotificationsTable).values(
+          adminIds.map((adminId) => ({
+            userId: adminId,
+            title: "Segnalazione stato in attesa",
+            message: `La foto per la segnalazione trimestrale della pianta #${treeId} richiede approvazione. Vai nel pannello admin.`,
+            type: "pending_tree_update",
+            relatedId: report!.id,
+            isRead: false,
+          }))
+        );
+      }
+    }
+
     res.status(201).json({
       id: report!.id,
       treeId: report!.treeId,
       quarter: report!.quarter,
       status: report!.status,
       photoUrl: report!.photoUrl ?? null,
+      photoStatus: report!.photoStatus ?? null,
       reportedAt: report!.reportedAt.toISOString(),
     });
   } catch (err) {
