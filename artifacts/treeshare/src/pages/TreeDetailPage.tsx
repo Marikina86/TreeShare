@@ -189,25 +189,59 @@ export default function TreeDetailPage() {
     const file = e.target.files?.[0];
     if (!file) return;
     setUpdatePhotoFile(file);
-    setVerifyState("idle");
+    setVerifyState("verifying");
     setVerifyReason(null);
-    setPhotoStatusForUpload("approved");
+    setPhotoStatusForUpload("pending");
 
-    // Genera anteprima e avvia verifica AI in parallelo
     const reader = new FileReader();
     reader.onload = async (ev) => {
       const dataUrl = ev.target?.result as string;
       setUpdatePhotoPreview(dataUrl);
 
-      // Genera base64 ridimensionata per la verifica AI in background
+      // Genera base64 per verifica AI real-time e invio al backend
+      let base64: string | null = null;
       try {
-        const base64 = await resizeToBase64(file, 768);
+        base64 = await resizeToBase64(file, 768);
         setUpdateBase64(base64);
       } catch { /* verifica proseguirà senza AI */ }
 
-      // Sempre pending: la verifica AI avviene in background dopo l'invio
-      setVerifyState("pending");
-      setPhotoStatusForUpload("pending");
+      if (!base64) {
+        setVerifyState("pending");
+        return;
+      }
+
+      // Verifica AI real-time: blocca non-piante subito
+      try {
+        const token = await getToken();
+        const verRes = await fetch("/api/plants/verify", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify({ imageBase64: base64 }),
+        });
+        if (!verRes.ok) throw new Error("verify failed");
+        const verData = await verRes.json() as { isPlant?: boolean | null; aiUnavailable?: boolean; reason?: string };
+        if (verData.isPlant === false) {
+          setVerifyState("rejected");
+          setVerifyReason(verData.reason ?? "L'immagine non sembra contenere una pianta idonea.");
+          // Blocca: svuota file e anteprima
+          setUpdatePhotoFile(null);
+          setUpdatePhotoPreview(null);
+          setUpdateBase64(null);
+          if (fileInputRef.current) fileInputRef.current.value = "";
+        } else if (verData.aiUnavailable) {
+          // AI non disponibile: rimanda a verifica admin in background
+          setVerifyState("pending");
+        } else {
+          // Pianta valida: badge verde, ma photoStatus resta "pending"
+          // perché il backend fa ancora il confronto specie in background
+          setVerifyState("ok");
+        }
+      } catch {
+        setVerifyState("pending");
+      }
     };
     reader.readAsDataURL(file);
   }
@@ -817,10 +851,10 @@ export default function TreeDetailPage() {
             <div className="flex gap-2">
               <button
                 type="submit"
-                disabled={uploading || !updatePhotoFile}
+                disabled={uploading || !updatePhotoFile || verifyState === "verifying" || verifyState === "rejected"}
                 className="px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:opacity-90 transition-opacity disabled:opacity-50"
               >
-                {uploading ? "Caricamento..." : "Aggiungi"}
+                {uploading ? "Caricamento..." : verifyState === "verifying" ? "Verifica..." : "Aggiungi"}
               </button>
               <button
                 type="button"
