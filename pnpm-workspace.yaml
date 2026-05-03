@@ -164,3 +164,8 @@ overrides:
   postcss: "^8.5.10"
   yaml: "^2.8.3"
   "brace-expansion@2": "2.0.3"
+  # Security: patch transitive vulnerabilities
+  lodash: "^4.18.1"
+  follow-redirects: "^1.16.0"
+  fast-xml-parser: "^5.7.2"
+  uuid: "^14.0.0"
