@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { useAuth } from "@/lib/auth";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLang } from "@/lib/i18n";
@@ -273,6 +273,12 @@ export default function DonationCampaignManager({ accountType }: {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const l = t[lang as Lang] || t.en;
+
+  useEffect(() => {
+    return () => {
+      document.querySelectorAll('[id*="stripe-link-widget"],[id*="stripe-link-modal"],[id*="stripe-link"]').forEach((el) => el.remove());
+    };
+  }, []);
 
   const [showForm, setShowForm] = useState(false);
   const [formStep, setFormStep] = useState<1 | 2 | 3>(1);

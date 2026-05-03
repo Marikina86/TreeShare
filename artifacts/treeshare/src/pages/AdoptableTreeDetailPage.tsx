@@ -671,6 +671,12 @@ export default function AdoptableTreeDetailPage() {
   const [adoptedCode, setAdoptedCode] = useState<string | null>(null);
   const [stripePromiseLoaded, setStripePromiseLoaded] = useState<ReturnType<typeof loadStripe> | null>(null);
 
+  useEffect(() => {
+    return () => {
+      document.querySelectorAll('[id*="stripe-link-widget"],[id*="stripe-link-modal"],[id*="stripe-link"]').forEach((el) => el.remove());
+    };
+  }, []);
+
   const settingsQuery = useQuery<{ adoptionsEnabled: boolean }>({
     queryKey: ["app-settings-public"],
     queryFn: async () => {
@@ -1111,7 +1117,7 @@ export default function AdoptableTreeDetailPage() {
                   <PaymentForm
                     clientSecret={clientSecret}
                     onSuccess={handlePaymentSuccess}
-                    onCancel={() => setShowPayment(false)}
+                    onCancel={() => { setShowPayment(false); setClientSecret(null); }}
                     t={t}
                   />
                 </Elements>
