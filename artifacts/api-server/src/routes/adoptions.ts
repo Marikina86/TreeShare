@@ -10,6 +10,7 @@ import {
 } from "@workspace/db";
 import { eq, and, desc, lt, lte, gte, isNull, inArray, count } from "drizzle-orm";
 import { requireAdmin } from "../middlewares/requireAdmin";
+import { logAdminAction } from "../lib/auditLog";
 import { fetchFiscalSnapshot } from "../lib/fiscalSnapshot";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth";
 import { getUncachableStripeClient, getStripePublishableKey } from "../lib/stripe";
@@ -1249,6 +1250,7 @@ router.patch("/admin/adopt/trees/:id/approve", requireAuth, requireAdmin, async 
       message: `Il tuo albero "${tree.title}" è stato approvato e pubblicato. Gli adottanti possono ora vederlo.`,
       isRead: false,
     });
+    await logAdminAction((req as any).userId, "adopt_tree_approve", "adopt_tree", id, { title: tree.title });
     res.json({ ok: true });
   } catch (err) {
     logger.error({ err }, "[admin] approve adopt tree error");
@@ -1282,6 +1284,7 @@ router.patch("/admin/adopt/trees/:id/reject", requireAuth, requireAdmin, async (
       message: notifMsg,
       isRead: false,
     });
+    await logAdminAction((req as any).userId, "adopt_tree_reject", "adopt_tree", id, { title: tree.title, message: message?.trim() || null });
     res.json({ ok: true });
   } catch (err) {
     logger.error({ err }, "[admin] reject adopt tree error");

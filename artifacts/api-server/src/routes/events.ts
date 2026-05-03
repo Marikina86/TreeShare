@@ -4,6 +4,7 @@ import { eventsTable, eventParticipantsTable, usersTable, userNotificationsTable
 import { eq, desc, count, and, lt, or, isNull, isNotNull } from "drizzle-orm";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth";
 import { requireAdmin } from "../middlewares/requireAdmin";
+import { logAdminAction } from "../lib/auditLog";
 import {
   CreateEventBody,
   DeleteEventParams,
@@ -400,6 +401,7 @@ async function reviewEvent(req: AuthenticatedRequest, res: any, status: "approve
       isRead: false,
     });
 
+    await logAdminAction(req.userId, `event_${status}`, "event", eventId, { title: event.title });
     const formatted = await formatEvent(updated, req.userId);
     res.json(formatted);
   } catch (err) {

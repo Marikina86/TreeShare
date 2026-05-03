@@ -1,8 +1,40 @@
-import { defineConfig } from "vite";
+import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import path from "path";
 import runtimeErrorOverlay from "@replit/vite-plugin-runtime-error-modal";
+
+function cspPlugin(): Plugin {
+  const BASE = [
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+    "font-src 'self' https://fonts.gstatic.com",
+    "img-src 'self' data: blob: https://*.supabase.co https://res.cloudinary.com https://*.tile.openstreetmap.org https://server.arcgisonline.com https://unpkg.com",
+    "frame-src https://js.stripe.com",
+    "worker-src blob:",
+  ];
+  const STRICT_CSP = [
+    "default-src 'self'",
+    "script-src 'self' https://js.stripe.com",
+    "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.stripe.com https://m.stripe.com",
+    ...BASE,
+  ].join("; ");
+  const DEV_CSP = [
+    "default-src 'self'",
+    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://js.stripe.com",
+    "connect-src 'self' ws: wss: https://*.supabase.co wss://*.supabase.co https://api.stripe.com https://m.stripe.com",
+    ...BASE,
+  ].join("; ");
+
+  const setHeader = (csp: string) => (_req: any, res: any, next: () => void) => {
+    res.setHeader("Content-Security-Policy", csp);
+    next();
+  };
+  return {
+    name: "csp-headers",
+    configureServer(server) { server.middlewares.use(setHeader(DEV_CSP)); },
+    configurePreviewServer(server) { server.middlewares.use(setHeader(STRICT_CSP)); },
+  };
+}
 
 const rawPort = process.env.PORT;
 
@@ -37,6 +69,7 @@ export default defineConfig({
     react(),
     tailwindcss(),
     runtimeErrorOverlay(),
+    cspPlugin(),
     ...(process.env.NODE_ENV !== "production" &&
     process.env.REPL_ID !== undefined
       ? [

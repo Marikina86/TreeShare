@@ -481,6 +481,21 @@ export const appSettingsTable = pgTable("app_settings", {
   updatedBy: text("updated_by"),
 });
 
+// ── Admin audit log — traccia ogni azione distruttiva/significativa degli admin ─
+
+export const adminAuditLogTable = pgTable("admin_audit_log", {
+  id: serial("id").primaryKey(),
+  adminId: text("admin_id").notNull(),
+  action: text("action").notNull(),
+  targetType: text("target_type").notNull(),
+  targetId: text("target_id"),
+  metadata: json("metadata"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (table) => [
+  index("admin_audit_log_admin_id_idx").on(table.adminId),
+  index("admin_audit_log_created_at_idx").on(table.createdAt),
+]);
+
 export const insertUserSchema = createInsertSchema(usersTable).omit({ id: true, createdAt: true });
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof usersTable.$inferSelect;

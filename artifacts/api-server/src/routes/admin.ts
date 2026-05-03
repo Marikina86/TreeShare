@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { logAdminAction } from "../lib/auditLog";
 import { db } from "@workspace/db";
 import { usersTable, treesTable, reportsTable, treeUpdatesTable, treeSunsTable, treeStatusReportsTable, eventsTable, eventParticipantsTable, problemReportsTable, userConsentsTable, cookieConsentsTable, userNotificationsTable, donationCampaignsTable, weeklyWinnersTable, organizationsTable, alertsTable, adoptableTreesTable, bannedEmailsTable } from "@workspace/db";
 import { eq, desc, sql, count, ilike, or, inArray, and } from "drizzle-orm";
@@ -191,6 +192,7 @@ router.patch(
         req.log.warn({ err, clerkUserId }, "Could not record banned email on block (non-fatal)");
       }
 
+      await logAdminAction(adminId, "user_block", "user", clerkUserId, { username: target.username });
       res.json(updated);
     } catch (err) {
       req.log.error({ err }, "Error blocking user");
@@ -234,6 +236,7 @@ router.patch(
         }
       }
 
+      await logAdminAction((req as any).userId, "user_unblock", "user", clerkUserId, { username: target?.username });
       res.json(updated);
     } catch (err) {
       req.log.error({ err }, "Error unblocking user");
@@ -344,6 +347,7 @@ router.delete(
       }
 
       req.log.info({ clerkUserId, username: targetUser.username }, "User hard-deleted successfully");
+      await logAdminAction(adminId, "user_delete", "user", clerkUserId, { username: targetUser.username });
       res.status(204).send();
     } catch (err) {
       req.log.error({ err, clerkUserId }, "Error deleting user (admin) — transaction rolled back");
@@ -491,6 +495,7 @@ router.patch("/admin/trees/:treeId/approve", requireAuth, requireAdmin, async (r
       .where(eq(treesTable.id, treeId))
       .returning({ id: treesTable.id, photoStatus: treesTable.photoStatus });
     if (!updated) { res.status(404).json({ error: "Tree not found" }); return; }
+    await logAdminAction((req as any).userId, "tree_approve", "tree", treeId);
     res.json(updated);
   } catch (err) {
     req.log.error({ err }, "Error approving tree");
@@ -509,6 +514,7 @@ router.patch("/admin/trees/:treeId/reject", requireAuth, requireAdmin, async (re
       .where(eq(treesTable.id, treeId))
       .returning({ id: treesTable.id, photoStatus: treesTable.photoStatus });
     if (!updated) { res.status(404).json({ error: "Tree not found" }); return; }
+    await logAdminAction((req as any).userId, "tree_reject", "tree", treeId);
     res.json(updated);
   } catch (err) {
     req.log.error({ err }, "Error rejecting tree");
@@ -532,6 +538,7 @@ router.delete("/admin/trees/:treeId", requireAuth, requireAdmin, async (req, res
         .set({ treesPlanted: sql`GREATEST(${usersTable.treesPlanted} - 1, 0)` })
         .where(eq(usersTable.clerkUserId, tree.userId));
     });
+    await logAdminAction((req as any).userId, "tree_delete", "tree", treeId);
     res.status(204).send();
   } catch (err) {
     req.log.error({ err }, "Error deleting tree (admin)");
@@ -605,6 +612,7 @@ router.patch("/admin/tree-updates/:updateId/approve", requireAuth, requireAdmin,
       isRead: false,
     });
 
+    await logAdminAction((req as any).userId, "tree_update_approve", "tree_update", updateId);
     res.json({ id: updated.id, photoStatus: updated.photoStatus });
   } catch (err) {
     req.log.error({ err }, "Error approving tree update");
@@ -636,6 +644,7 @@ router.patch("/admin/tree-updates/:updateId/reject", requireAuth, requireAdmin, 
       isRead: false,
     });
 
+    await logAdminAction((req as any).userId, "tree_update_reject", "tree_update", updateId);
     res.status(204).send();
   } catch (err) {
     req.log.error({ err }, "Error rejecting tree update");
@@ -668,6 +677,7 @@ router.delete("/admin/reports/:id/delete-tree", requireAuth, requireAdmin, async
       .where(eq(reportsTable.id, id))
       .returning();
 
+    await logAdminAction((req as any).userId, "report_delete_tree", "report", id, { treeId: report.treeId });
     res.json({ ...updated, createdAt: updated.createdAt.toISOString() });
   } catch (err) {
     req.log.error({ err }, "Error deleting tree from report");
@@ -705,6 +715,7 @@ router.delete("/admin/reports/:id/delete-tree-update", requireAuth, requireAdmin
       .where(eq(reportsTable.id, id))
       .returning();
 
+    await logAdminAction((req as any).userId, "report_delete_tree_update", "report", id, { treeUpdateId: report.treeUpdateId });
     res.json({ ...updated, createdAt: updated.createdAt.toISOString() });
   } catch (err) {
     req.log.error({ err }, "Error deleting tree update from report");

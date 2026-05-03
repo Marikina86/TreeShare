@@ -4,6 +4,7 @@ import { reportsTable, usersTable, treesTable, eventsTable, treeUpdatesTable } f
 import { eq, and, desc } from "drizzle-orm";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth";
 import { requireAdmin } from "../middlewares/requireAdmin";
+import { logAdminAction } from "../lib/auditLog";
 import { z } from "zod";
 
 const router = Router();
@@ -225,6 +226,7 @@ router.patch("/admin/reports/:id/reviewed", requireAuth, requireAdmin, async (re
   try {
     const [updated] = await db.update(reportsTable).set({ status: "reviewed" }).where(eq(reportsTable.id, id)).returning();
     if (!updated) { res.status(404).json({ error: "Report not found" }); return; }
+    await logAdminAction((req as any).userId, "report_reviewed", "report", id);
     res.json({ ...updated, createdAt: updated.createdAt.toISOString() });
   } catch (err) {
     req.log.error({ err }, "Error reviewing report");
@@ -239,6 +241,7 @@ router.patch("/admin/reports/:id/dismissed", requireAuth, requireAdmin, async (r
   try {
     const [updated] = await db.update(reportsTable).set({ status: "dismissed" }).where(eq(reportsTable.id, id)).returning();
     if (!updated) { res.status(404).json({ error: "Report not found" }); return; }
+    await logAdminAction((req as any).userId, "report_dismissed", "report", id);
     res.json({ ...updated, createdAt: updated.createdAt.toISOString() });
   } catch (err) {
     req.log.error({ err }, "Error dismissing report");
@@ -256,6 +259,7 @@ router.delete("/admin/events/:eventId", requireAuth, requireAdmin, async (req, r
     await db.update(reportsTable).set({ status: "reviewed" }).where(
       and(eq(reportsTable.eventId, eventId), eq(reportsTable.status, "pending"))
     );
+    await logAdminAction((req as any).userId, "event_delete", "event", eventId);
     res.json({ success: true, deletedEventId: deleted.id });
   } catch (err) {
     req.log.error({ err }, "Error deleting event");
