@@ -71,7 +71,7 @@ server {
             https://api.stripe.com
             https://m.stripe.com;
         frame-src https://js.stripe.com;
-        worker-src blob:;
+        worker-src 'self' blob:;
         base-uri 'self';
         form-action 'self';
     " always;

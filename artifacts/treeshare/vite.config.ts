@@ -10,7 +10,7 @@ function cspPlugin(): Plugin {
     "font-src 'self' https://fonts.gstatic.com",
     "img-src 'self' data: blob: https://*.supabase.co https://res.cloudinary.com https://*.tile.openstreetmap.org https://server.arcgisonline.com https://unpkg.com",
     "frame-src https://js.stripe.com",
-    "worker-src blob:",
+    "worker-src 'self' blob:",
   ];
   const STRICT_CSP = [
     "default-src 'self'",

@@ -24,7 +24,7 @@ tuodominio.it {
 
         # ── Content Security Policy ───────────────────────────────────────────
         # Domini mappati dal codice sorgente (vedi nginx.conf.example per dettagli)
-        Content-Security-Policy "default-src 'self'; script-src 'self' https://js.stripe.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https://*.supabase.co https://res.cloudinary.com https://*.tile.openstreetmap.org https://server.arcgisonline.com https://unpkg.com; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.stripe.com https://m.stripe.com; frame-src https://js.stripe.com; worker-src blob:; base-uri 'self'; form-action 'self';"
+        Content-Security-Policy "default-src 'self'; script-src 'self' https://js.stripe.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https://*.supabase.co https://res.cloudinary.com https://*.tile.openstreetmap.org https://server.arcgisonline.com https://unpkg.com; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.stripe.com https://m.stripe.com; frame-src https://js.stripe.com; worker-src 'self' blob:; base-uri 'self'; form-action 'self';"
 
         # Rimuovi header che espongono info sul server
         -Server
