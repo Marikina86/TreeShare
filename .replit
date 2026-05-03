@@ -59,7 +59,6 @@ ADMIN_CLERK_USER_IDS = "user_3BqLsbB6mhTnAEayEaSY9xcRqgO"
 VITE_SUPABASE_URL = "https://kxgnfhxvqbxzpglwpeee.supabase.co"
 VITE_SUPABASE_ANON_KEY = "sb_publishable_J99pqUQ-LyBWOuVndZzFjA_kLf4Abma"
 ADMIN_USER_IDS = "54727c82-ebca-4605-a3c9-e0e920b55cb6"
-GEMINI_API_KEY = "AIzaSyAfXeRvgk6yOD5vcYAO9ZZGbuVM3kIiuYo"
 
 [nix]
 channel = "stable-25_05"
