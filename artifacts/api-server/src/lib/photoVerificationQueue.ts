@@ -2,7 +2,6 @@ import { db } from "@workspace/db";
 import { treesTable, treeUpdatesTable, userNotificationsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { logger } from "./logger";
-import { getAdminIds } from "../middlewares/requireAdmin";
 import {
   MODELS_VERIFY, MODELS_UPDATE, buildPromptUpdate,
   GeminiResponse, extractResponseText, extractJson,
@@ -182,60 +181,22 @@ async function rejectPhoto(job: VerificationJob, reason: string): Promise<void> 
   }
 }
 
-async function notifyAdminsForManualReview(job: VerificationJob): Promise<void> {
-  const adminIds = getAdminIds();
-  if (adminIds.length === 0) return;
-
-  if (job.kind === "tree") {
-    const [treeRow] = await db
-      .select({ plantName: treesTable.plantName })
-      .from(treesTable)
-      .where(eq(treesTable.id, job.treeId));
-    const label = treeRow?.plantName ? `"${treeRow.plantName}"` : `#${job.treeId}`;
-    await db.insert(userNotificationsTable).values(
-      adminIds.map((adminId) => ({
-        userId: adminId,
-        title: "Nuova pianta in attesa di revisione",
-        message: `La pianta ${label} richiede revisione manuale (AI non disponibile). Vai nel pannello admin.`,
-        type: "pending_tree",
-        relatedId: job.treeId,
-        isRead: false,
-      }))
-    );
-  } else {
-    const [treeRow] = await db
-      .select({ plantName: treesTable.plantName })
-      .from(treesTable)
-      .where(eq(treesTable.id, job.treeId));
-    const label = treeRow?.plantName ? `"${treeRow.plantName}"` : `#${job.treeId}`;
-    await db.insert(userNotificationsTable).values(
-      adminIds.map((adminId) => ({
-        userId: adminId,
-        title: "Aggiornamento foto in attesa",
-        message: `Una nuova foto per la pianta ${label} richiede revisione manuale (AI non disponibile). Vai nel pannello admin → Aggiorn. in attesa.`,
-        type: "pending_tree_update",
-        relatedId: job.updateId,
-        isRead: false,
-      }))
-    );
-  }
-}
 
 // ── Job processor ─────────────────────────────────────────────────────────────
 
 async function processJob(job: VerificationJob): Promise<void> {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
-    logger.warn({ kind: job.kind }, "[photoQueue] GEMINI_API_KEY mancante — notifica admin per revisione manuale");
-    await notifyAdminsForManualReview(job);
+    logger.warn({ kind: job.kind }, "[photoQueue] GEMINI_API_KEY mancante — auto-approvazione");
+    await approvePhoto(job);
     return;
   }
 
   const plantResult = await verifyIsPlant(apiKey, job.imageBase64, job.mimeType);
 
   if (plantResult.aiUnavailable) {
-    logger.warn({ kind: job.kind }, "[photoQueue] AI non disponibile — notifica admin per revisione manuale");
-    await notifyAdminsForManualReview(job);
+    logger.warn({ kind: job.kind }, "[photoQueue] AI non disponibile (quota/errore) — auto-approvazione");
+    await approvePhoto(job);
     return;
   }
 
@@ -248,8 +209,8 @@ async function processJob(job: VerificationJob): Promise<void> {
   if (job.kind === "update" && job.referencePhotoUrl) {
     const refImage = await fetchImageAsBase64(job.referencePhotoUrl);
     if (!refImage) {
-      logger.warn({ updateId: job.updateId, url: job.referencePhotoUrl }, "[photoQueue] impossibile caricare foto originale — notifica admin");
-      await notifyAdminsForManualReview(job);
+      logger.warn({ updateId: job.updateId, url: job.referencePhotoUrl }, "[photoQueue] impossibile caricare foto originale — auto-approvazione");
+      await approvePhoto(job);
       return;
     }
 
@@ -258,8 +219,8 @@ async function processJob(job: VerificationJob): Promise<void> {
     );
 
     if (speciesResult.aiUnavailable) {
-      logger.warn({ updateId: job.updateId }, "[photoQueue] AI specie non disponibile — notifica admin");
-      await notifyAdminsForManualReview(job);
+      logger.warn({ updateId: job.updateId }, "[photoQueue] AI specie non disponibile (quota/errore) — auto-approvazione");
+      await approvePhoto(job);
       return;
     }
 
