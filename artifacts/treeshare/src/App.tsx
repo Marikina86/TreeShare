@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState, Component, type ReactNode, type ErrorInfo } from "react";
 import { Switch, Route, Router as WouterRouter, Redirect, useLocation } from "wouter";
 import { QueryClientProvider, useQueryClient } from "@tanstack/react-query";
 import { SupabaseAuthProvider, useAuth, useUser, useClerk, Show } from "@/lib/auth";
@@ -41,6 +41,47 @@ const RegisterPrivatoActivatePage = lazy(() => import("@/pages/RegisterPrivatoAc
 const NotFound = lazy(() => import("@/pages/not-found"));
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
+
+class ErrorBoundary extends Component<
+  { children: ReactNode },
+  { error: Error | null }
+> {
+  constructor(props: { children: ReactNode }) {
+    super(props);
+    this.state = { error: null };
+  }
+
+  static getDerivedStateFromError(error: Error) {
+    return { error };
+  }
+
+  componentDidCatch(error: Error, info: ErrorInfo) {
+    console.error("[ErrorBoundary]", error.message, info.componentStack?.slice(0, 200));
+  }
+
+  render() {
+    if (this.state.error) {
+      return (
+        <div className="fixed inset-0 flex flex-col items-center justify-center bg-background p-6 text-center gap-4">
+          <svg width="48" height="48" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5" className="text-muted-foreground">
+            <path d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+          <p className="text-foreground font-medium">Qualcosa è andato storto</p>
+          <p className="text-muted-foreground text-sm max-w-xs">
+            Si è verificato un errore imprevisto. Prova a tornare alla home.
+          </p>
+          <button
+            onClick={() => { this.setState({ error: null }); window.location.href = basePath + "/"; }}
+            className="px-5 py-2.5 bg-primary text-primary-foreground rounded-xl text-sm font-medium hover:opacity-90 transition-opacity"
+          >
+            Torna alla home
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 function AuthTokenSync() {
   const { getToken } = useAuth();
@@ -223,6 +264,7 @@ function AuthProviderWithRoutes() {
         <ProfileAutoSync />
         <TooltipProvider>
           <MobileBackButton />
+          <ErrorBoundary>
           <Suspense fallback={<div className="fixed inset-0 flex items-center justify-center bg-background"><div className="w-8 h-8 rounded-full border-2 border-primary/20 border-t-primary animate-spin" /></div>}>
             <Switch>
               <Route path="/" component={HomeRedirect} />
@@ -258,6 +300,7 @@ function AuthProviderWithRoutes() {
               <Route component={NotFound} />
             </Switch>
           </Suspense>
+          </ErrorBoundary>
           <Toaster />
           <InstallPrompt />
         </TooltipProvider>

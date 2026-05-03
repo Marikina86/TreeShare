@@ -764,6 +764,7 @@ router.post("/adopt/initiate", requireAuth, async (req, res) => {
     const paymentIntent = await stripe.paymentIntents.create({
       amount,
       currency: "eur",
+      automatic_payment_methods: { enabled: true },
       application_fee_amount: platformFeeCents,
       transfer_data: {
         destination: orgStripeAccountId,
@@ -790,9 +791,14 @@ router.post("/adopt/initiate", requireAuth, async (req, res) => {
       durationDays: safeDays,
       treeName: tree.title,
     });
-  } catch (err) {
+  } catch (err: unknown) {
     logger.error({ err }, "[adopt] initiate error");
-    res.status(500).json({ error: "Errore interno" });
+    const stripeErr = err as { type?: string; message?: string };
+    if (stripeErr?.type?.startsWith("Stripe")) {
+      res.status(400).json({ error: stripeErr.message ?? "Errore pagamento Stripe" });
+    } else {
+      res.status(500).json({ error: "Errore interno" });
+    }
   }
 });
 
