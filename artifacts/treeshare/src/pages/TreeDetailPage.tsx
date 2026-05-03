@@ -155,8 +155,15 @@ export default function TreeDetailPage() {
   }
 
   async function uploadPhoto(file: File): Promise<string> {
-    const resized = await resizeToBlob(file, 1200);
-    const mime = resized.type || "image/jpeg";
+    let resized: Blob;
+    try {
+      resized = await resizeToBlob(file, 1200);
+    } catch (resizeErr) {
+      console.error("[upload] resize fallito, uso file originale:", resizeErr);
+      if (file.size > 20 * 1024 * 1024) throw new Error("La foto è troppo grande. Usa una foto di dimensioni minori.");
+      resized = file;
+    }
+    const mime = resized.type || file.type || "image/jpeg";
     const ext = mime === "image/webp" ? "webp" : "jpg";
     const baseName = file.name.replace(/\.[^.]+$/, "");
     const finalName = `${baseName}.${ext}`;

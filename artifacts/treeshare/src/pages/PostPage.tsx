@@ -121,10 +121,17 @@ export default function PostPage() {
   }
 
   async function uploadPhoto(file: File): Promise<{ path: string; thumbnailPath: string | null }> {
-    const [full, thumb] = await Promise.all([
-      resizeToBlob(file),
-      resizeToThumbnailBlob(file).catch(() => null),
-    ]);
+    let full: Blob;
+    try {
+      full = await resizeToBlob(file);
+    } catch (resizeErr) {
+      console.error("[upload] resize fallito, uso file originale:", resizeErr);
+      if (file.size > 20 * 1024 * 1024) {
+        throw new Error("La foto è troppo grande. Usa una foto di dimensioni minori.");
+      }
+      full = file;
+    }
+    const thumb = await resizeToThumbnailBlob(file).catch(() => null);
     const path = await uploadBlob(full, file.name);
     const thumbnailPath = thumb ? await uploadBlob(thumb, `thumb_${file.name}`).catch(() => null) : null;
     return { path, thumbnailPath };
@@ -154,9 +161,11 @@ export default function PostPage() {
       setUploadedPath(path);
       setUploadedThumbnailPath(thumbnailPath);
       setUploadState("done");
-    } catch {
+    } catch (err) {
+      console.error("[upload] handlePhotoTaken errore:", err);
       setUploadState("error");
-      toast({ title: "Errore upload", description: "Impossibile caricare la foto. Riprova.", variant: "destructive" });
+      const msg = err instanceof Error ? err.message : "Impossibile caricare la foto. Riprova.";
+      toast({ title: "Errore upload", description: msg, variant: "destructive" });
     }
   }
 
