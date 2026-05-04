@@ -1,6 +1,6 @@
 import { db } from "@workspace/db";
-import { treesTable, weeklyWinnersTable, userNotificationsTable } from "@workspace/db";
-import { eq, desc, asc } from "drizzle-orm";
+import { treesTable, weeklyWinnersTable, userNotificationsTable, treeStatusReportsTable } from "@workspace/db";
+import { eq, desc, asc, and, notInArray } from "drizzle-orm";
 import { logger } from "./logger";
 
 /** Returns Monday 00:00:00 UTC of the current week */
@@ -87,7 +87,20 @@ export async function calculateWeeklyWinners(): Promise<void> {
       return;
     }
 
-    // Find the approved tree with the most total suns (pre-calculated column); tie-break → earliest createdAt
+    // Collect treeIds reported as dead (any quarter) — these are excluded from the ranking
+    const deadRows = await db
+      .select({ treeId: treeStatusReportsTable.treeId })
+      .from(treeStatusReportsTable)
+      .where(eq(treeStatusReportsTable.status, "dead"));
+    const deadIds = deadRows.map((r) => r.treeId);
+    logger.info({ deadCount: deadIds.length }, "[weeklyWinner] Dead trees excluded from ranking");
+
+    // Find the approved, non-dead tree with the most total suns; tie-break → earliest publication
+    const whereClause =
+      deadIds.length > 0
+        ? and(eq(treesTable.photoStatus, "approved"), notInArray(treesTable.id, deadIds))
+        : eq(treesTable.photoStatus, "approved");
+
     const [topTree] = await db
       .select({
         id: treesTable.id,
@@ -98,7 +111,7 @@ export async function calculateWeeklyWinners(): Promise<void> {
         createdAt: treesTable.createdAt,
       })
       .from(treesTable)
-      .where(eq(treesTable.photoStatus, "approved"))
+      .where(whereClause)
       .orderBy(desc(treesTable.sunCount), asc(treesTable.createdAt))
       .limit(1);
 
