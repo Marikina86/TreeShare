@@ -24,6 +24,7 @@ const PatchPolicySchema = z.object({
   checkboxLabel: z.string().max(500).nullable().optional(),
   consentNote: z.string().max(500).nullable().optional(),
   requiresAcceptance: z.boolean().optional(),
+  content: z.string().optional(),
 });
 
 // GET /policies/:type — restituisce la policy attiva
@@ -135,6 +136,9 @@ router.patch("/policies/:id", requireAuth, requireAdmin, async (req, res) => {
     if ("consentNote" in parsed.data) updateData.consentNote = parsed.data.consentNote ?? null;
     if ("requiresAcceptance" in parsed.data && parsed.data.requiresAcceptance !== undefined) {
       updateData.requiresAcceptance = parsed.data.requiresAcceptance;
+    }
+    if ("content" in parsed.data && parsed.data.content !== undefined) {
+      updateData.content = parsed.data.content;
     }
 
     const [updated] = await db

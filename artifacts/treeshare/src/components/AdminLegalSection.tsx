@@ -66,6 +66,7 @@ type InlineEdit = {
   checkboxLabel: string;
   consentNote: string;
   requiresAcceptance: boolean;
+  content: string;
 };
 
 export default function AdminLegalSection({ lang, authFetch, toast }: Props) {
@@ -112,12 +113,17 @@ export default function AdminLegalSection({ lang, authFetch, toast }: Props) {
     }
   }, [formType]);
 
+  function todayVersion() {
+    return new Date().toISOString().slice(0, 10);
+  }
+
   function openInlineEdit(v: Policy) {
     setInlineEdit({
       id: v.id,
       checkboxLabel: v.checkboxLabel ?? DEFAULT_CHECKBOX_LABELS[v.type] ?? "",
       consentNote: v.consentNote ?? DEFAULT_CONSENT_NOTES[v.type] ?? "",
       requiresAcceptance: v.requiresAcceptance,
+      content: v.content,
     });
   }
 
@@ -131,6 +137,7 @@ export default function AdminLegalSection({ lang, authFetch, toast }: Props) {
           checkboxLabel: inlineEdit.checkboxLabel.trim() || null,
           consentNote: inlineEdit.consentNote.trim() || null,
           requiresAcceptance: inlineEdit.requiresAcceptance,
+          content: inlineEdit.content,
         }),
       });
       if (res.ok) {
@@ -272,7 +279,7 @@ export default function AdminLegalSection({ lang, authFetch, toast }: Props) {
               {lang === "it" ? "Carica contenuto iniziale" : "Load initial content"}
             </Button>
           )}
-          <Button size="sm" onClick={() => setShowForm(!showForm)} className="gap-2">
+          <Button size="sm" onClick={() => { setFormVersion(showForm ? "" : todayVersion()); setShowForm(!showForm); }} className="gap-2">
             <Plus className="w-3.5 h-3.5" />
             {lang === "it" ? "Nuova versione" : "New version"}
           </Button>
@@ -597,6 +604,32 @@ export default function AdminLegalSection({ lang, authFetch, toast }: Props) {
                                   : "If on: must accept. If off: yes/no choice (can decline)."}
                               </p>
                             </div>
+                          </div>
+
+                          <div className="flex flex-col gap-1.5">
+                            <div className="flex items-center justify-between">
+                              <label className="text-xs font-medium text-foreground">
+                                {lang === "it" ? "Testo documento (HTML)" : "Document text (HTML)"} <span className="text-muted-foreground font-normal">{lang === "it" ? "(facoltativo)" : "(optional)"}</span>
+                              </label>
+                              <span className="text-xs text-muted-foreground">{inlineEdit.content.length} {lang === "it" ? "caratteri" : "chars"}</span>
+                            </div>
+                            <textarea
+                              value={inlineEdit.content}
+                              onChange={(e) => setInlineEdit({ ...inlineEdit, content: e.target.value })}
+                              rows={10}
+                              placeholder="<p>Testo del documento...</p>"
+                              className="px-3 py-2 rounded-xl border border-border bg-muted/30 text-foreground text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary resize-y"
+                            />
+                            {inlineEdit.content.trim().length > 0 && (
+                              <div className="border border-border rounded-xl overflow-hidden">
+                                <div className="px-3 py-1.5 bg-muted/50 text-[10px] font-medium text-muted-foreground border-b border-border">
+                                  {lang === "it" ? "Anteprima" : "Preview"}
+                                </div>
+                                <div className="p-3 max-h-48 overflow-y-auto">
+                                  <div className="legal-preview" dangerouslySetInnerHTML={{ __html: inlineEdit.content }} />
+                                </div>
+                              </div>
+                            )}
                           </div>
 
                           <div className="flex gap-2">
