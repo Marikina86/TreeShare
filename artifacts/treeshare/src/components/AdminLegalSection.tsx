@@ -192,6 +192,50 @@ export default function AdminLegalSection({ lang, authFetch, toast }: Props) {
     }
   }
 
+  async function handleQuickInit(type: PolicyType) {
+    if (!confirm(
+      lang === "it"
+        ? `Creare e attivare una versione base per "${TYPE_LABELS[type]?.it}"? Potrai modificarla subito dopo.`
+        : `Create and activate a default version for "${TYPE_LABELS[type]?.it}"? You can edit it right after.`
+    )) return;
+    setActionLoading(`init-${type}`);
+    try {
+      const version = todayVersion();
+      const createRes = await authFetch("/api/policies", {
+        method: "POST",
+        body: JSON.stringify({
+          type,
+          version,
+          content: "",
+          checkboxLabel: DEFAULT_CHECKBOX_LABELS[type] ?? null,
+          consentNote: DEFAULT_CONSENT_NOTES[type] ?? null,
+          requiresAcceptance: TYPE_LABELS[type]?.requiresAcceptanceDefault ?? false,
+        }),
+      });
+      if (!createRes.ok) {
+        const d = await createRes.json();
+        toast({ title: d.error ?? "Errore creazione", variant: "destructive" });
+        return;
+      }
+      const created: Policy = await createRes.json();
+      const activateRes = await authFetch(`/api/policies/${created.id}/activate`, { method: "PUT" });
+      if (!activateRes.ok) {
+        const d = await activateRes.json();
+        toast({ title: d.error ?? "Errore attivazione", variant: "destructive" });
+        return;
+      }
+      toast({
+        title: lang === "it" ? "Versione creata e attivata" : "Version created and activated",
+        description: lang === "it" ? "Clicca ✏️ per personalizzare il testo." : "Click ✏️ to customize the text.",
+      });
+      await loadPolicies();
+    } catch {
+      toast({ title: "Errore inizializzazione", variant: "destructive" });
+    } finally {
+      setActionLoading(null);
+    }
+  }
+
   async function handleSeed() {
     if (!confirm("Caricare il contenuto predefinito? Verranno create le versioni iniziali dei 3 documenti (solo se non già presenti) e attivate automaticamente.")) return;
     setSeedLoading(true);
@@ -464,8 +508,21 @@ export default function AdminLegalSection({ lang, authFetch, toast }: Props) {
               </div>
 
               {versions.length === 0 ? (
-                <div className="px-5 py-6 text-sm text-muted-foreground text-center">
-                  {lang === "it" ? "Nessuna versione — crea una nuova versione o usa il seed." : "No versions — create a new version or use seed."}
+                <div className="px-5 py-6 flex flex-col items-center gap-3 text-center">
+                  <p className="text-sm text-muted-foreground">
+                    {lang === "it" ? "Nessuna versione — crea una nuova versione o usa il seed." : "No versions — create a new version or use seed."}
+                  </p>
+                  {(type === "location" || type === "marketing") && (
+                    <Button
+                      size="sm" variant="outline"
+                      className="gap-2"
+                      onClick={() => handleQuickInit(type)}
+                      disabled={actionLoading === `init-${type}`}
+                    >
+                      {actionLoading === `init-${type}` ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
+                      {lang === "it" ? "Inizializza con valori predefiniti" : "Initialize with defaults"}
+                    </Button>
+                  )}
                 </div>
               ) : (
                 <div className="divide-y divide-border">

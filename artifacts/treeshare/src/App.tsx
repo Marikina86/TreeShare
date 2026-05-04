@@ -212,7 +212,6 @@ function ConsentChecker() {
   useEffect(() => {
     if (!isLoaded || !isSignedIn) return;
     if (checkedRef.current) return;
-    if (sessionStorage.getItem("consent-ok") === "1") return;
     checkedRef.current = true;
 
     async function checkConsent() {
@@ -236,8 +235,6 @@ function ConsentChecker() {
         };
         if (!data.upToDate && data.missing?.length > 0) {
           setMissing(data.missing);
-        } else {
-          sessionStorage.setItem("consent-ok", "1");
         }
       } catch {
         // Silently fail — non blocchiamo l'utente per un errore di rete
@@ -253,7 +250,6 @@ function ConsentChecker() {
       missing={missing}
       onAccepted={() => {
         setMissing([]);
-        sessionStorage.setItem("consent-ok", "1");
       }}
     />
   );
