@@ -203,6 +203,7 @@ export const policiesTable = pgTable("policies", {
   requiresAcceptance: boolean("requires_acceptance").notNull().default(true),
   isActive: boolean("is_active").notNull().default(false),
   createdAt: timestamp("created_at").notNull().defaultNow(),
+  lastModifiedAt: timestamp("last_modified_at"), // nullable: set when admin modifies, triggers re-consent
 }, (table) => [
   index("policies_type_active_idx").on(table.type, table.isActive),
 ]);

@@ -49,6 +49,7 @@ type MissingPolicy = {
   requiresAcceptance: boolean;
   checkboxLabel: string | null;
   consentNote: string | null;
+  lastModifiedAt: string | null;
 };
 
 type PolicyContent = {
@@ -182,7 +183,12 @@ export default function ConsentModal({ missing, onAccepted }: Props) {
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-sm font-medium text-foreground">{meta.it}</p>
-                      <p className="text-xs text-muted-foreground">Versione {p.version}</p>
+                      <p className="text-xs text-muted-foreground">
+                        Versione {p.version}
+                        {p.lastModifiedAt && (
+                          <> · Aggiornato il {new Date(p.lastModifiedAt).toLocaleDateString("it-IT", { day: "numeric", month: "short", year: "numeric" })}</>
+                        )}
+                      </p>
                     </div>
                     {content && (
                       <button

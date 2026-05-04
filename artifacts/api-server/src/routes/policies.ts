@@ -131,7 +131,9 @@ router.patch("/policies/:id", requireAuth, requireAdmin, async (req, res) => {
       return;
     }
 
-    const updateData: Partial<typeof policiesTable.$inferInsert> = {};
+    const updateData: Partial<typeof policiesTable.$inferInsert> = {
+      lastModifiedAt: new Date(), // always set on any PATCH → invalidates stale consents
+    };
     if ("checkboxLabel" in parsed.data) updateData.checkboxLabel = parsed.data.checkboxLabel ?? null;
     if ("consentNote" in parsed.data) updateData.consentNote = parsed.data.consentNote ?? null;
     if ("requiresAcceptance" in parsed.data && parsed.data.requiresAcceptance !== undefined) {
@@ -177,7 +179,7 @@ router.put("/policies/:id/activate", requireAuth, requireAdmin, async (req, res)
 
     const [activated] = await db
       .update(policiesTable)
-      .set({ isActive: true })
+      .set({ isActive: true, lastModifiedAt: new Date() }) // triggers re-consent for all users
       .where(eq(policiesTable.id, id))
       .returning();
 

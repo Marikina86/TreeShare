@@ -205,6 +205,7 @@ function ConsentChecker() {
     requiresAcceptance: boolean;
     checkboxLabel: string | null;
     consentNote: string | null;
+    lastModifiedAt: string | null;
   }>>([]);
   const checkedRef = useRef(false);
 
@@ -230,6 +231,7 @@ function ConsentChecker() {
             requiresAcceptance: boolean;
             checkboxLabel: string | null;
             consentNote: string | null;
+            lastModifiedAt: string | null;
           }>;
         };
         if (!data.upToDate && data.missing?.length > 0) {
