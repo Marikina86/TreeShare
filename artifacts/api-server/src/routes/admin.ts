@@ -125,11 +125,14 @@ router.get("/admin/users", requireAuth, requireAdmin, async (req, res) => {
         photoUrl: usersTable.photoUrl,
         country: usersTable.country,
         city: usersTable.city,
+        accountType: usersTable.accountType,
         treesPlanted: usersTable.treesPlanted,
         isBlocked: usersTable.isBlocked,
         createdAt: usersTable.createdAt,
+        formaGiuridica: organizationsTable.formaGiuridica,
       })
       .from(usersTable)
+      .leftJoin(organizationsTable, eq(organizationsTable.username, usersTable.username))
       .where(search ? or(
         ilike(usersTable.username, `%${search}%`),
         ilike(usersTable.country, `%${search}%`),

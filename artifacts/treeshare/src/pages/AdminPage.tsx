@@ -18,6 +18,8 @@ interface AdminUser {
   photoUrl: string | null;
   country: string | null;
   city: string | null;
+  accountType: string;
+  formaGiuridica: string | null;
   treesPlanted: number;
   isBlocked: boolean;
   createdAt: string;
@@ -1470,6 +1472,10 @@ export default function AdminPage() {
                         <div className="min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">
                             <span className="font-semibold text-sm text-foreground">@{user.username}</span>
+                            {user.accountType === "organization"
+                              ? <span className="text-[10px] font-semibold px-1.5 py-0.5 bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400 rounded-full">{user.formaGiuridica ?? (lang === "it" ? "Organizzazione" : "Organization")}</span>
+                              : <span className="text-[10px] font-semibold px-1.5 py-0.5 bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400 rounded-full">{lang === "it" ? "Privato" : "Private"}</span>
+                            }
                             {user.isBlocked && <span className="text-[10px] font-semibold px-1.5 py-0.5 bg-destructive/15 text-destructive rounded-full">{T.blocked}</span>}
                           </div>
                           <div className="text-xs text-muted-foreground mt-0.5">{[user.city, user.country].filter(Boolean).join(", ") || "—"} · {T.joined} {new Date(user.createdAt).toLocaleDateString(lang === "it" ? "it-IT" : "en-GB")}</div>
