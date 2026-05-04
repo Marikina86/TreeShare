@@ -25,17 +25,36 @@ type Policy = {
   type: string;
   version: string;
   content: string;
+  checkboxLabel: string | null;
+  consentNote: string | null;
+  requiresAcceptance: boolean;
   isActive: boolean;
   createdAt: string;
 };
 
-const TYPE_LABELS: Record<string, { it: string; color: string }> = {
-  terms: { it: "Termini e Condizioni", color: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300" },
-  privacy: { it: "Privacy Policy", color: "bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300" },
-  cookie: { it: "Cookie Policy", color: "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300" },
+const TYPE_LABELS: Record<string, { it: string; color: string; requiresAcceptanceDefault: boolean }> = {
+  terms:     { it: "Termini e Condizioni",       color: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300",       requiresAcceptanceDefault: true },
+  privacy:   { it: "Privacy Policy",             color: "bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300", requiresAcceptanceDefault: true },
+  cookie:    { it: "Cookie Policy",              color: "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300",    requiresAcceptanceDefault: true },
+  location:  { it: "Consenso Posizione",         color: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300",   requiresAcceptanceDefault: false },
+  marketing: { it: "Comunicazioni Commerciali",  color: "bg-pink-100 text-pink-800 dark:bg-pink-900/30 dark:text-pink-300",       requiresAcceptanceDefault: false },
 };
 
-const POLICY_TYPES = ["terms", "privacy", "cookie"] as const;
+const POLICY_TYPES = ["terms", "privacy", "cookie", "location", "marketing"] as const;
+type PolicyType = typeof POLICY_TYPES[number];
+
+const DEFAULT_CHECKBOX_LABELS: Record<string, string> = {
+  terms:     "Ho letto e accetto i Termini e Condizioni",
+  privacy:   "Dichiaro di aver letto e compreso la Privacy Policy",
+  cookie:    "Ho letto e accetto la Cookie Policy",
+  location:  "Acconsento all'utilizzo della mia posizione per localizzare gli alberi e migliorare i servizi offerti.",
+  marketing: "Acconsento a ricevere notifiche promozionali e comunicazioni commerciali e all'analisi delle mie preferenze e attività per ricevere suggerimenti personalizzati.",
+};
+
+const DEFAULT_CONSENT_NOTES: Record<string, string> = {
+  location:  "Puoi revocare il consenso in qualsiasi momento dalle impostazioni.",
+  marketing: "Puoi disattivarle in qualsiasi momento dalle impostazioni.",
+};
 
 type Props = {
   lang: "it" | "en";
@@ -51,10 +70,12 @@ export default function AdminLegalSection({ lang, authFetch, toast }: Props) {
   const [previewId, setPreviewId] = useState<string | null>(null);
 
   const [showForm, setShowForm] = useState(false);
-  const [formType, setFormType] = useState<"terms" | "privacy" | "cookie">("terms");
+  const [formType, setFormType] = useState<PolicyType>("terms");
   const [formVersion, setFormVersion] = useState("");
   const [formContent, setFormContent] = useState("");
-  const [formSaving, setFormSaving] = useState(false);
+  const [formCheckboxLabel, setFormCheckboxLabel] = useState("");
+  const [formConsentNote, setFormConsentNote] = useState("");
+  const [formRequiresAcceptance, setFormRequiresAcceptance] = useState(true);
 
   const formatDate = (iso: string) =>
     new Date(iso).toLocaleDateString("it-IT", { day: "2-digit", month: "short", year: "numeric" });
@@ -72,6 +93,16 @@ export default function AdminLegalSection({ lang, authFetch, toast }: Props) {
   }, [authFetch, toast]);
 
   useEffect(() => { loadPolicies(); }, [loadPolicies]);
+
+  // When formType changes, pre-fill defaults for new choice types
+  useEffect(() => {
+    const meta = TYPE_LABELS[formType];
+    if (meta) {
+      setFormRequiresAcceptance(meta.requiresAcceptanceDefault);
+      setFormCheckboxLabel(DEFAULT_CHECKBOX_LABELS[formType] ?? "");
+      setFormConsentNote(DEFAULT_CONSENT_NOTES[formType] ?? "");
+    }
+  }, [formType]);
 
   async function handleActivate(id: string) {
     setActionLoading(id);
@@ -138,13 +169,23 @@ export default function AdminLegalSection({ lang, authFetch, toast }: Props) {
     try {
       const res = await authFetch("/api/policies", {
         method: "POST",
-        body: JSON.stringify({ type: formType, version: formVersion.trim(), content: formContent.trim() }),
+        body: JSON.stringify({
+          type: formType,
+          version: formVersion.trim(),
+          content: formContent.trim(),
+          checkboxLabel: formCheckboxLabel.trim() || undefined,
+          consentNote: formConsentNote.trim() || undefined,
+          requiresAcceptance: formRequiresAcceptance,
+        }),
       });
       const data = await res.json();
       if (res.ok) {
         toast({ title: `Versione "${formVersion}" creata`, description: "Attivala per renderla visibile agli utenti." });
         setFormVersion("");
         setFormContent("");
+        setFormCheckboxLabel("");
+        setFormConsentNote("");
+        setFormRequiresAcceptance(true);
         setShowForm(false);
         await loadPolicies();
       } else {
@@ -156,6 +197,8 @@ export default function AdminLegalSection({ lang, authFetch, toast }: Props) {
       setFormSaving(false);
     }
   }
+
+  const [formSaving, setFormSaving] = useState(false);
 
   const grouped = POLICY_TYPES.map((type) => ({
     type,
@@ -172,12 +215,12 @@ export default function AdminLegalSection({ lang, authFetch, toast }: Props) {
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
           <h2 className="text-base font-semibold text-foreground">
-            {lang === "it" ? "Documenti Legali" : "Legal Documents"}
+            {lang === "it" ? "Documenti Legali e Consensi" : "Legal Documents & Consents"}
           </h2>
           <p className="text-xs text-muted-foreground mt-0.5">
             {lang === "it"
-              ? "Gestisci le versioni di Termini, Privacy Policy e Cookie Policy. Gli utenti vedranno sempre la versione attiva."
-              : "Manage versions of Terms, Privacy Policy and Cookie Policy. Users always see the active version."}
+              ? "Gestisci Termini, Privacy, Cookie, Consenso Posizione e Comunicazioni Commerciali. Gli utenti vedono sempre la versione attiva."
+              : "Manage Terms, Privacy, Cookies, Location Consent and Marketing. Users always see the active version."}
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
@@ -217,12 +260,14 @@ export default function AdminLegalSection({ lang, authFetch, toast }: Props) {
               </label>
               <select
                 value={formType}
-                onChange={(e) => setFormType(e.target.value as typeof formType)}
+                onChange={(e) => setFormType(e.target.value as PolicyType)}
                 className="px-3 py-2 rounded-xl border border-border bg-background text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary"
               >
                 <option value="terms">{lang === "it" ? "Termini e Condizioni" : "Terms & Conditions"}</option>
                 <option value="privacy">Privacy Policy</option>
                 <option value="cookie">Cookie Policy</option>
+                <option value="location">{lang === "it" ? "Consenso Posizione" : "Location Consent"}</option>
+                <option value="marketing">{lang === "it" ? "Comunicazioni Commerciali" : "Marketing Communications"}</option>
               </select>
             </div>
             <div className="flex flex-col gap-1.5">
@@ -238,6 +283,63 @@ export default function AdminLegalSection({ lang, authFetch, toast }: Props) {
               />
             </div>
           </div>
+
+          {/* Requires acceptance toggle */}
+          <div className="flex items-start gap-3 p-3 rounded-xl border border-border bg-background">
+            <input
+              type="checkbox"
+              id="form-requires-acceptance"
+              checked={formRequiresAcceptance}
+              onChange={(e) => setFormRequiresAcceptance(e.target.checked)}
+              className="mt-0.5 accent-primary w-3.5 h-3.5 flex-shrink-0 cursor-pointer"
+            />
+            <div>
+              <label htmlFor="form-requires-acceptance" className="text-xs font-medium text-foreground cursor-pointer">
+                {lang === "it" ? "Accettazione obbligatoria" : "Requires acceptance"}
+              </label>
+              <p className="text-[10px] text-muted-foreground mt-0.5">
+                {lang === "it"
+                  ? "Se attivo: l'utente deve spuntare per proseguire. Se disattivo: l'utente può scegliere sì o no (ma deve scegliere)."
+                  : "If on: user must accept to proceed. If off: user must choose yes or no (choice required, but can decline)."}
+              </p>
+            </div>
+          </div>
+
+          {/* Checkbox label */}
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-medium text-foreground">
+              {lang === "it" ? "Testo checkbox" : "Checkbox label"}
+            </label>
+            <textarea
+              value={formCheckboxLabel}
+              onChange={(e) => setFormCheckboxLabel(e.target.value)}
+              rows={2}
+              placeholder={DEFAULT_CHECKBOX_LABELS[formType]}
+              className="px-3 py-2 rounded-xl border border-border bg-background text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary resize-y"
+            />
+            <p className="text-[10px] text-muted-foreground">
+              {lang === "it" ? "Testo mostrato accanto alla spunta nel modal di consenso. Se vuoto usa il testo predefinito." : "Text shown next to the checkbox in the consent modal. Defaults to the type's standard label if empty."}
+            </p>
+          </div>
+
+          {/* Consent note */}
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-medium text-foreground">
+              {lang === "it" ? "Nota sotto il checkbox" : "Note below checkbox"} <span className="text-muted-foreground font-normal">(facoltativa)</span>
+            </label>
+            <input
+              type="text"
+              value={formConsentNote}
+              onChange={(e) => setFormConsentNote(e.target.value)}
+              placeholder={DEFAULT_CONSENT_NOTES[formType] ?? lang === "it" ? "es. Puoi revocare in qualsiasi momento..." : "e.g. You can revoke at any time..."}
+              className="px-3 py-2 rounded-xl border border-border bg-background text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+            />
+            <p className="text-[10px] text-muted-foreground">
+              {lang === "it" ? "Breve testo informativo mostrato sotto la scelta (es. istruzioni per revocare)." : "Short informational text shown below the choice (e.g. instructions to revoke)."}
+            </p>
+          </div>
+
+          {/* Content */}
           <div className="flex flex-col gap-1.5">
             <div className="flex items-center justify-between">
               <label className="text-xs font-medium text-foreground">
@@ -275,7 +377,7 @@ export default function AdminLegalSection({ lang, authFetch, toast }: Props) {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => { setShowForm(false); setFormVersion(""); setFormContent(""); }}
+              onClick={() => { setShowForm(false); setFormVersion(""); setFormContent(""); setFormCheckboxLabel(""); setFormConsentNote(""); }}
               className="flex-1"
             >
               {lang === "it" ? "Annulla" : "Cancel"}
@@ -306,6 +408,9 @@ export default function AdminLegalSection({ lang, authFetch, toast }: Props) {
                 <div className="flex items-center gap-2.5">
                   <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${label.color}`}>
                     {label.it}
+                  </span>
+                  <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${label.requiresAcceptanceDefault ? "bg-red-100 text-red-700 dark:bg-red-900/20 dark:text-red-400" : "bg-muted text-muted-foreground"}`}>
+                    {label.requiresAcceptanceDefault ? "obbligatorio" : "scelta"}
                   </span>
                   {versions.some((v) => v.isActive) ? (
                     <span className="text-xs text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
@@ -391,6 +496,27 @@ export default function AdminLegalSection({ lang, authFetch, toast }: Props) {
                           )}
                         </div>
                       </div>
+
+                      {/* Checkbox label + note preview */}
+                      {(v.checkboxLabel || v.consentNote || !v.requiresAcceptance) && (
+                        <div className="mt-2 space-y-1">
+                          {v.checkboxLabel && (
+                            <p className="text-[10px] text-muted-foreground bg-muted/40 rounded px-2 py-1">
+                              <span className="font-medium text-foreground">Label:</span> {v.checkboxLabel}
+                            </p>
+                          )}
+                          {v.consentNote && (
+                            <p className="text-[10px] text-muted-foreground bg-muted/40 rounded px-2 py-1">
+                              <span className="font-medium text-foreground">Nota:</span> {v.consentNote}
+                            </p>
+                          )}
+                          {!v.requiresAcceptance && (
+                            <span className="inline-flex text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
+                              scelta libera (sì/no)
+                            </span>
+                          )}
+                        </div>
+                      )}
 
                       {/* Preview panel */}
                       {previewId === v.id && (

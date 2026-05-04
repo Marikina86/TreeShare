@@ -198,7 +198,14 @@ function MobileBackButton() {
 function ConsentChecker() {
   const { isSignedIn, isLoaded } = useUser();
   const { getToken } = useAuth();
-  const [missing, setMissing] = useState<Array<{ policyId: string; type: string; version: string }>>([]);
+  const [missing, setMissing] = useState<Array<{
+    policyId: string;
+    type: string;
+    version: string;
+    requiresAcceptance: boolean;
+    checkboxLabel: string | null;
+    consentNote: string | null;
+  }>>([]);
   const checkedRef = useRef(false);
 
   useEffect(() => {
@@ -216,15 +223,17 @@ function ConsentChecker() {
         if (!res.ok) return;
         const data = await res.json() as {
           upToDate: boolean;
-          missing: Array<{ policyId: string; type: string; version: string }>;
+          missing: Array<{
+            policyId: string;
+            type: string;
+            version: string;
+            requiresAcceptance: boolean;
+            checkboxLabel: string | null;
+            consentNote: string | null;
+          }>;
         };
         if (!data.upToDate && data.missing?.length > 0) {
-          const required = data.missing.filter((p) => p.type === "terms" || p.type === "privacy");
-          if (required.length > 0) {
-            setMissing(required);
-          } else {
-            sessionStorage.setItem("consent-ok", "1");
-          }
+          setMissing(data.missing);
         } else {
           sessionStorage.setItem("consent-ok", "1");
         }

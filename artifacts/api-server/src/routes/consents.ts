@@ -125,24 +125,58 @@ router.get("/consent/status", requireAuth, async (req, res) => {
       return;
     }
 
-    // Per ogni policy attiva, verifica che l'utente abbia un consenso "accepted"
-    const missing: { policyId: string; type: string; version: string }[] = [];
+    // Per ogni policy attiva, verifica che l'utente abbia un consenso appropriato:
+    // - requiresAcceptance=true: deve avere accepted=true
+    // - requiresAcceptance=false: deve aver fatto una scelta qualsiasi (accepted=true o false)
+    const missing: {
+      policyId: string;
+      type: string;
+      version: string;
+      requiresAcceptance: boolean;
+      checkboxLabel: string | null;
+      consentNote: string | null;
+    }[] = [];
 
     for (const policy of activePolicies) {
-      const [consent] = await db
-        .select({ id: userConsentsTable.id, accepted: userConsentsTable.accepted })
-        .from(userConsentsTable)
-        .where(
-          and(
-            eq(userConsentsTable.userId, userId),
-            eq(userConsentsTable.policyId, policy.id),
-            eq(userConsentsTable.accepted, true)
-          )
-        )
-        .limit(1);
+      let hasValidConsent = false;
 
-      if (!consent) {
-        missing.push({ policyId: policy.id, type: policy.type, version: policy.version });
+      if (policy.requiresAcceptance) {
+        const [consent] = await db
+          .select({ id: userConsentsTable.id })
+          .from(userConsentsTable)
+          .where(
+            and(
+              eq(userConsentsTable.userId, userId),
+              eq(userConsentsTable.policyId, policy.id),
+              eq(userConsentsTable.accepted, true)
+            )
+          )
+          .limit(1);
+        hasValidConsent = !!consent;
+      } else {
+        // Basta che l'utente abbia fatto una scelta (qualsiasi)
+        const [consent] = await db
+          .select({ id: userConsentsTable.id })
+          .from(userConsentsTable)
+          .where(
+            and(
+              eq(userConsentsTable.userId, userId),
+              eq(userConsentsTable.policyId, policy.id)
+            )
+          )
+          .limit(1);
+        hasValidConsent = !!consent;
+      }
+
+      if (!hasValidConsent) {
+        missing.push({
+          policyId: policy.id,
+          type: policy.type,
+          version: policy.version,
+          requiresAcceptance: policy.requiresAcceptance,
+          checkboxLabel: policy.checkboxLabel ?? null,
+          consentNote: policy.consentNote ?? null,
+        });
       }
     }
 

@@ -195,9 +195,12 @@ export const weeklyWinnersTable = pgTable("weekly_winners", {
 
 export const policiesTable = pgTable("policies", {
   id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
-  type: text("type").notNull(), // "privacy" | "terms"
+  type: text("type").notNull(), // "privacy" | "terms" | "cookie" | "location" | "marketing"
   version: text("version").notNull(),
   content: text("content").notNull(),
+  checkboxLabel: text("checkbox_label"),
+  consentNote: text("consent_note"),
+  requiresAcceptance: boolean("requires_acceptance").notNull().default(true),
   isActive: boolean("is_active").notNull().default(false),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 }, (table) => [

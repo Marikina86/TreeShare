@@ -21,16 +21,34 @@ const LEGAL_CONTENT_CSS = `
 .consent-content code { font-family: monospace; font-size: 0.75em; }
 `;
 
-const POLICY_LABELS: Record<string, { it: string; link: string }> = {
-  terms: { it: "Termini e Condizioni", link: "/terms" },
-  privacy: { it: "Privacy Policy", link: "/privacy" },
-  cookie: { it: "Cookie Policy", link: "/cookies" },
+const POLICY_LABELS: Record<string, { it: string; link: string; defaultCheckboxLabel: string }> = {
+  terms: { it: "Termini e Condizioni", link: "/terms", defaultCheckboxLabel: "Ho letto e accetto i Termini e Condizioni" },
+  privacy: { it: "Privacy Policy", link: "/privacy", defaultCheckboxLabel: "Dichiaro di aver letto e compreso la Privacy Policy" },
+  cookie: { it: "Cookie Policy", link: "/cookies", defaultCheckboxLabel: "Ho letto e accetto la Cookie Policy" },
+  location: {
+    it: "Consenso Posizione",
+    link: "/privacy#location",
+    defaultCheckboxLabel: "Acconsento all'utilizzo della mia posizione per localizzare gli alberi e migliorare i servizi offerti.",
+  },
+  marketing: {
+    it: "Comunicazioni Commerciali",
+    link: "/privacy#marketing",
+    defaultCheckboxLabel: "Acconsento a ricevere notifiche promozionali e comunicazioni commerciali e all'analisi delle mie preferenze e attività per ricevere suggerimenti personalizzati.",
+  },
+};
+
+const DEFAULT_CONSENT_NOTES: Record<string, string> = {
+  location: "Puoi revocare il consenso in qualsiasi momento dalle impostazioni.",
+  marketing: "Puoi disattivarle in qualsiasi momento dalle impostazioni.",
 };
 
 type MissingPolicy = {
   policyId: string;
   type: string;
   version: string;
+  requiresAcceptance: boolean;
+  checkboxLabel: string | null;
+  consentNote: string | null;
 };
 
 type PolicyContent = {
@@ -38,6 +56,9 @@ type PolicyContent = {
   type: string;
   version: string;
   content: string;
+  checkboxLabel: string | null;
+  consentNote: string | null;
+  requiresAcceptance: boolean;
 };
 
 type Props = {
@@ -51,13 +72,16 @@ export default function ConsentModal({ missing, onAccepted }: Props) {
   const [contents, setContents] = useState<Record<string, PolicyContent>>({});
   const [loadingContents, setLoadingContents] = useState(true);
   const [expanded, setExpanded] = useState<string | null>(null);
-  const [checked, setChecked] = useState<Record<string, boolean>>({});
+  // null = not yet chosen (for choice policies), true/false = decision
+  const [checked, setChecked] = useState<Record<string, boolean | null>>({});
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const initial: Record<string, boolean> = {};
-    missing.forEach((p) => { initial[p.policyId] = false; });
+    const initial: Record<string, boolean | null> = {};
+    missing.forEach((p) => {
+      initial[p.policyId] = p.requiresAcceptance ? false : null;
+    });
     setChecked(initial);
 
     async function fetchContents() {
@@ -82,10 +106,14 @@ export default function ConsentModal({ missing, onAccepted }: Props) {
     fetchContents();
   }, [missing]);
 
-  const allChecked = missing.every((p) => checked[p.policyId]);
+  const allResolved = missing.every((p) => {
+    const val = checked[p.policyId];
+    if (p.requiresAcceptance) return val === true;
+    return val !== null && val !== undefined;
+  });
 
   const handleAccept = useCallback(async () => {
-    if (!allChecked) return;
+    if (!allResolved) return;
     setSaving(true);
     setError(null);
 
@@ -98,7 +126,10 @@ export default function ConsentModal({ missing, onAccepted }: Props) {
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         body: JSON.stringify({
-          consents: missing.map((p) => ({ policyId: p.policyId, accepted: true })),
+          consents: missing.map((p) => ({
+            policyId: p.policyId,
+            accepted: checked[p.policyId] === true,
+          })),
         }),
       });
 
@@ -113,7 +144,7 @@ export default function ConsentModal({ missing, onAccepted }: Props) {
     } finally {
       setSaving(false);
     }
-  }, [allChecked, missing, getToken, onAccepted]);
+  }, [allResolved, missing, checked, getToken, onAccepted]);
 
   return (
     <div className="fixed inset-0 z-[500] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
@@ -128,7 +159,7 @@ export default function ConsentModal({ missing, onAccepted }: Props) {
             <div>
               <h2 className="text-base font-semibold text-foreground">Aggiornamento documenti legali</h2>
               <p className="text-xs text-muted-foreground mt-0.5">
-                Abbiamo aggiornato {missing.length === 1 ? "un documento" : `${missing.length} documenti`}. Per continuare è necessario accettare.
+                Abbiamo aggiornato {missing.length === 1 ? "un documento" : `${missing.length} documenti`}. Per continuare è necessario completare tutti i punti.
               </p>
             </div>
           </div>
@@ -136,27 +167,35 @@ export default function ConsentModal({ missing, onAccepted }: Props) {
 
         <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4 min-h-0">
           {missing.map((p) => {
-            const label = POLICY_LABELS[p.type] ?? { it: p.type, link: "#" };
+            const meta = POLICY_LABELS[p.type] ?? { it: p.type, link: "#", defaultCheckboxLabel: `Ho letto e accetto ${p.type}` };
             const content = contents[p.policyId];
             const isExpanded = expanded === p.policyId;
+            const checkboxLabel = p.checkboxLabel || content?.checkboxLabel || meta.defaultCheckboxLabel;
+            const consentNote = p.consentNote || content?.consentNote || DEFAULT_CONSENT_NOTES[p.type] || null;
+            const isChoice = !p.requiresAcceptance;
+            const currentVal = checked[p.policyId];
 
             return (
               <div key={p.policyId} className="border border-border rounded-xl overflow-hidden">
+                {/* Header */}
                 <div className="px-4 py-3 bg-muted/30">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-sm font-medium text-foreground">{label.it}</p>
+                      <p className="text-sm font-medium text-foreground">{meta.it}</p>
                       <p className="text-xs text-muted-foreground">Versione {p.version}</p>
                     </div>
-                    <button
-                      className="text-xs text-primary underline hover:no-underline ml-4 flex-shrink-0"
-                      onClick={() => setExpanded(isExpanded ? null : p.policyId)}
-                    >
-                      {isExpanded ? "Chiudi" : "Leggi"}
-                    </button>
+                    {content && (
+                      <button
+                        className="text-xs text-primary underline hover:no-underline ml-4 flex-shrink-0"
+                        onClick={() => setExpanded(isExpanded ? null : p.policyId)}
+                      >
+                        {isExpanded ? "Chiudi" : "Leggi"}
+                      </button>
+                    )}
                   </div>
                 </div>
 
+                {/* Expandable content */}
                 {isExpanded && (
                   <div className="border-t border-border">
                     {loadingContents ? (
@@ -173,7 +212,7 @@ export default function ConsentModal({ missing, onAccepted }: Props) {
                     ) : (
                       <p className="text-xs text-muted-foreground px-4 py-3">
                         Documento non disponibile.{" "}
-                        <a href={label.link} target="_blank" rel="noopener noreferrer" className="text-primary underline">
+                        <a href={meta.link} target="_blank" rel="noopener noreferrer" className="text-primary underline">
                           Apri in nuova scheda
                         </a>
                       </p>
@@ -181,21 +220,66 @@ export default function ConsentModal({ missing, onAccepted }: Props) {
                   </div>
                 )}
 
-                <div className="px-4 py-3 border-t border-border flex items-start gap-3">
-                  <Checkbox
-                    id={`consent-${p.policyId}`}
-                    checked={!!checked[p.policyId]}
-                    onCheckedChange={(val) =>
-                      setChecked((prev) => ({ ...prev, [p.policyId]: !!val }))
-                    }
-                    className="mt-0.5 flex-shrink-0"
-                  />
-                  <label
-                    htmlFor={`consent-${p.policyId}`}
-                    className="text-xs text-muted-foreground leading-relaxed cursor-pointer"
-                  >
-                    Ho letto e accetto {label.it} (v{p.version})
-                  </label>
+                {/* Consent area */}
+                <div className="px-4 py-3 border-t border-border">
+                  {isChoice ? (
+                    /* Scelta obbligatoria (location, marketing): YES o NO */
+                    <div className="space-y-2.5">
+                      <label className="flex items-start gap-3 cursor-pointer group">
+                        <input
+                          type="radio"
+                          name={`choice-${p.policyId}`}
+                          checked={currentVal === true}
+                          onChange={() => setChecked((prev) => ({ ...prev, [p.policyId]: true }))}
+                          className="mt-0.5 flex-shrink-0 accent-primary w-3.5 h-3.5 cursor-pointer"
+                        />
+                        <span className="text-xs text-foreground leading-relaxed group-hover:text-foreground transition-colors">
+                          {checkboxLabel}
+                        </span>
+                      </label>
+                      <label className="flex items-start gap-3 cursor-pointer group">
+                        <input
+                          type="radio"
+                          name={`choice-${p.policyId}`}
+                          checked={currentVal === false}
+                          onChange={() => setChecked((prev) => ({ ...prev, [p.policyId]: false }))}
+                          className="mt-0.5 flex-shrink-0 accent-primary w-3.5 h-3.5 cursor-pointer"
+                        />
+                        <span className="text-xs text-muted-foreground leading-relaxed group-hover:text-foreground transition-colors">
+                          Non acconsento
+                        </span>
+                      </label>
+                      {currentVal === null && (
+                        <p className="text-[10px] text-amber-600 dark:text-amber-400 mt-1">
+                          Seleziona un'opzione per continuare.
+                        </p>
+                      )}
+                      {consentNote && (
+                        <p className="text-[10px] text-muted-foreground leading-relaxed border-t border-border pt-2 mt-1">
+                          {consentNote}
+                        </p>
+                      )}
+                    </div>
+                  ) : (
+                    /* Accettazione obbligatoria (terms, privacy, cookie): checkbox */
+                    <div className="flex items-start gap-3">
+                      <Checkbox
+                        id={`consent-${p.policyId}`}
+                        checked={!!currentVal}
+                        onCheckedChange={(val) =>
+                          setChecked((prev) => ({ ...prev, [p.policyId]: !!val }))
+                        }
+                        className="mt-0.5 flex-shrink-0"
+                      />
+                      <label
+                        htmlFor={`consent-${p.policyId}`}
+                        className="text-xs text-muted-foreground leading-relaxed cursor-pointer"
+                      >
+                        {checkboxLabel}{" "}
+                        <span className="text-muted-foreground/70">(v{p.version})</span>
+                      </label>
+                    </div>
+                  )}
                 </div>
               </div>
             );
@@ -208,17 +292,17 @@ export default function ConsentModal({ missing, onAccepted }: Props) {
           )}
           <Button
             className="w-full"
-            disabled={!allChecked || saving}
+            disabled={!allResolved || saving}
             onClick={handleAccept}
           >
             {saving ? (
               <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Salvataggio…</>
             ) : (
-              "Accetto e continuo"
+              "Conferma e continua"
             )}
           </Button>
           <p className="text-[10px] text-muted-foreground text-center leading-relaxed">
-            Non puoi continuare a utilizzare TreeShare senza accettare i documenti legali aggiornati.
+            Non puoi continuare a utilizzare TreeShare senza completare tutte le scelte richieste.
           </p>
         </div>
       </div>

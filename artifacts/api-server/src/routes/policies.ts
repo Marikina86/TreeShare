@@ -9,12 +9,15 @@ import { TERMS_HTML, PRIVACY_HTML, COOKIE_HTML, SEED_VERSION } from "../lib/lega
 
 const router = Router();
 
-const PolicyTypeSchema = z.enum(["privacy", "terms", "cookie"]);
+const PolicyTypeSchema = z.enum(["privacy", "terms", "cookie", "location", "marketing"]);
 
 const CreatePolicySchema = z.object({
   type: PolicyTypeSchema,
   version: z.string().min(1).max(50),
-  content: z.string().min(10),
+  content: z.string().min(1),
+  checkboxLabel: z.string().max(500).optional(),
+  consentNote: z.string().max(500).optional(),
+  requiresAcceptance: z.boolean().optional(),
 });
 
 // GET /policies/:type — restituisce la policy attiva
@@ -82,7 +85,15 @@ router.post("/policies", requireAuth, requireAdmin, async (req, res) => {
 
     const [created] = await db
       .insert(policiesTable)
-      .values({ type, version, content, isActive: false })
+      .values({
+        type,
+        version,
+        content,
+        checkboxLabel: parsed.data.checkboxLabel ?? null,
+        consentNote: parsed.data.consentNote ?? null,
+        requiresAcceptance: parsed.data.requiresAcceptance ?? true,
+        isActive: false,
+      })
       .returning();
 
     res.status(201).json(created);
