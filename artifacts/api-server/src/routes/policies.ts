@@ -14,9 +14,15 @@ const PolicyTypeSchema = z.enum(["privacy", "terms", "cookie", "location", "mark
 const CreatePolicySchema = z.object({
   type: PolicyTypeSchema,
   version: z.string().min(1).max(50),
-  content: z.string().min(1),
+  content: z.string().optional(),
   checkboxLabel: z.string().max(500).optional(),
   consentNote: z.string().max(500).optional(),
+  requiresAcceptance: z.boolean().optional(),
+});
+
+const PatchPolicySchema = z.object({
+  checkboxLabel: z.string().max(500).nullable().optional(),
+  consentNote: z.string().max(500).nullable().optional(),
   requiresAcceptance: z.boolean().optional(),
 });
 
@@ -88,7 +94,7 @@ router.post("/policies", requireAuth, requireAdmin, async (req, res) => {
       .values({
         type,
         version,
-        content,
+        content: content ?? "",
         checkboxLabel: parsed.data.checkboxLabel ?? null,
         consentNote: parsed.data.consentNote ?? null,
         requiresAcceptance: parsed.data.requiresAcceptance ?? true,
@@ -99,6 +105,47 @@ router.post("/policies", requireAuth, requireAdmin, async (req, res) => {
     res.status(201).json(created);
   } catch (err) {
     req.log.error({ err }, "Errore nella creazione della policy");
+    res.status(500).json({ error: "Errore interno del server" });
+  }
+});
+
+// PATCH /policies/:id — aggiorna solo label/nota/requiresAcceptance (admin)
+router.patch("/policies/:id", requireAuth, requireAdmin, async (req, res) => {
+  const id = req.params.id as string;
+  const parsed = PatchPolicySchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Dati non validi", details: parsed.error.flatten() });
+    return;
+  }
+
+  try {
+    const [target] = await db
+      .select({ id: policiesTable.id })
+      .from(policiesTable)
+      .where(eq(policiesTable.id, id))
+      .limit(1);
+
+    if (!target) {
+      res.status(404).json({ error: "Policy non trovata" });
+      return;
+    }
+
+    const updateData: Partial<typeof policiesTable.$inferInsert> = {};
+    if ("checkboxLabel" in parsed.data) updateData.checkboxLabel = parsed.data.checkboxLabel ?? null;
+    if ("consentNote" in parsed.data) updateData.consentNote = parsed.data.consentNote ?? null;
+    if ("requiresAcceptance" in parsed.data && parsed.data.requiresAcceptance !== undefined) {
+      updateData.requiresAcceptance = parsed.data.requiresAcceptance;
+    }
+
+    const [updated] = await db
+      .update(policiesTable)
+      .set(updateData)
+      .where(eq(policiesTable.id, id))
+      .returning();
+
+    res.json(updated);
+  } catch (err) {
+    req.log.error({ err }, "Errore nell'aggiornamento della policy");
     res.status(500).json({ error: "Errore interno del server" });
   }
 });

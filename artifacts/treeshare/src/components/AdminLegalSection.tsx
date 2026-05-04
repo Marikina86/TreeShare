@@ -1,8 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
-import { useAuth } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
-import { Loader2, CheckCircle2, Trash2, Eye, EyeOff, Plus, DatabaseZap } from "lucide-react";
+import { Loader2, CheckCircle2, Trash2, Eye, EyeOff, Plus, DatabaseZap, Pencil, X, Save } from "lucide-react";
 
 const LEGAL_PREVIEW_CSS = `
 .legal-preview section { margin-bottom: 1.5rem; }
@@ -62,12 +61,21 @@ type Props = {
   toast: ReturnType<typeof useToast>["toast"];
 };
 
+type InlineEdit = {
+  id: string;
+  checkboxLabel: string;
+  consentNote: string;
+  requiresAcceptance: boolean;
+};
+
 export default function AdminLegalSection({ lang, authFetch, toast }: Props) {
   const [policies, setPolicies] = useState<Policy[]>([]);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [seedLoading, setSeedLoading] = useState(false);
   const [previewId, setPreviewId] = useState<string | null>(null);
+  const [inlineEdit, setInlineEdit] = useState<InlineEdit | null>(null);
+  const [inlineSaving, setInlineSaving] = useState(false);
 
   const [showForm, setShowForm] = useState(false);
   const [formType, setFormType] = useState<PolicyType>("terms");
@@ -76,6 +84,7 @@ export default function AdminLegalSection({ lang, authFetch, toast }: Props) {
   const [formCheckboxLabel, setFormCheckboxLabel] = useState("");
   const [formConsentNote, setFormConsentNote] = useState("");
   const [formRequiresAcceptance, setFormRequiresAcceptance] = useState(true);
+  const [formSaving, setFormSaving] = useState(false);
 
   const formatDate = (iso: string) =>
     new Date(iso).toLocaleDateString("it-IT", { day: "2-digit", month: "short", year: "numeric" });
@@ -94,7 +103,6 @@ export default function AdminLegalSection({ lang, authFetch, toast }: Props) {
 
   useEffect(() => { loadPolicies(); }, [loadPolicies]);
 
-  // When formType changes, pre-fill defaults for new choice types
   useEffect(() => {
     const meta = TYPE_LABELS[formType];
     if (meta) {
@@ -103,6 +111,42 @@ export default function AdminLegalSection({ lang, authFetch, toast }: Props) {
       setFormConsentNote(DEFAULT_CONSENT_NOTES[formType] ?? "");
     }
   }, [formType]);
+
+  function openInlineEdit(v: Policy) {
+    setInlineEdit({
+      id: v.id,
+      checkboxLabel: v.checkboxLabel ?? DEFAULT_CHECKBOX_LABELS[v.type] ?? "",
+      consentNote: v.consentNote ?? DEFAULT_CONSENT_NOTES[v.type] ?? "",
+      requiresAcceptance: v.requiresAcceptance,
+    });
+  }
+
+  async function saveInlineEdit() {
+    if (!inlineEdit) return;
+    setInlineSaving(true);
+    try {
+      const res = await authFetch(`/api/policies/${inlineEdit.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          checkboxLabel: inlineEdit.checkboxLabel.trim() || null,
+          consentNote: inlineEdit.consentNote.trim() || null,
+          requiresAcceptance: inlineEdit.requiresAcceptance,
+        }),
+      });
+      if (res.ok) {
+        toast({ title: lang === "it" ? "Testo aggiornato" : "Text updated" });
+        setInlineEdit(null);
+        await loadPolicies();
+      } else {
+        const d = await res.json();
+        toast({ title: d.error ?? "Errore aggiornamento", variant: "destructive" });
+      }
+    } catch {
+      toast({ title: "Errore aggiornamento", variant: "destructive" });
+    } finally {
+      setInlineSaving(false);
+    }
+  }
 
   async function handleActivate(id: string) {
     setActionLoading(id);
@@ -161,8 +205,8 @@ export default function AdminLegalSection({ lang, authFetch, toast }: Props) {
   }
 
   async function handleCreateVersion() {
-    if (!formVersion.trim() || !formContent.trim()) {
-      toast({ title: "Versione e contenuto sono obbligatori", variant: "destructive" });
+    if (!formVersion.trim()) {
+      toast({ title: "La versione è obbligatoria", variant: "destructive" });
       return;
     }
     setFormSaving(true);
@@ -172,7 +216,7 @@ export default function AdminLegalSection({ lang, authFetch, toast }: Props) {
         body: JSON.stringify({
           type: formType,
           version: formVersion.trim(),
-          content: formContent.trim(),
+          content: formContent.trim() || undefined,
           checkboxLabel: formCheckboxLabel.trim() || undefined,
           consentNote: formConsentNote.trim() || undefined,
           requiresAcceptance: formRequiresAcceptance,
@@ -198,8 +242,6 @@ export default function AdminLegalSection({ lang, authFetch, toast }: Props) {
     }
   }
 
-  const [formSaving, setFormSaving] = useState(false);
-
   const grouped = POLICY_TYPES.map((type) => ({
     type,
     label: TYPE_LABELS[type],
@@ -219,28 +261,18 @@ export default function AdminLegalSection({ lang, authFetch, toast }: Props) {
           </h2>
           <p className="text-xs text-muted-foreground mt-0.5">
             {lang === "it"
-              ? "Gestisci Termini, Privacy, Cookie, Consenso Posizione e Comunicazioni Commerciali. Gli utenti vedono sempre la versione attiva."
-              : "Manage Terms, Privacy, Cookies, Location Consent and Marketing. Users always see the active version."}
+              ? "Gestisci Termini, Privacy, Cookie, Consenso Posizione e Comunicazioni Commerciali."
+              : "Manage Terms, Privacy, Cookies, Location Consent and Marketing."}
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           {!hasAny && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleSeed}
-              disabled={seedLoading}
-              className="gap-2"
-            >
+            <Button variant="outline" size="sm" onClick={handleSeed} disabled={seedLoading} className="gap-2">
               {seedLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <DatabaseZap className="w-3.5 h-3.5" />}
               {lang === "it" ? "Carica contenuto iniziale" : "Load initial content"}
             </Button>
           )}
-          <Button
-            size="sm"
-            onClick={() => setShowForm(!showForm)}
-            className="gap-2"
-          >
+          <Button size="sm" onClick={() => setShowForm(!showForm)} className="gap-2">
             <Plus className="w-3.5 h-3.5" />
             {lang === "it" ? "Nuova versione" : "New version"}
           </Button>
@@ -272,7 +304,7 @@ export default function AdminLegalSection({ lang, authFetch, toast }: Props) {
             </div>
             <div className="flex flex-col gap-1.5">
               <label className="text-xs font-medium text-foreground">
-                {lang === "it" ? "Versione" : "Version"} <span className="text-muted-foreground font-normal">(es. 2026-06-01)</span>
+                {lang === "it" ? "Versione" : "Version"} <span className="text-destructive">*</span>
               </label>
               <input
                 type="text"
@@ -299,8 +331,8 @@ export default function AdminLegalSection({ lang, authFetch, toast }: Props) {
               </label>
               <p className="text-[10px] text-muted-foreground mt-0.5">
                 {lang === "it"
-                  ? "Se attivo: l'utente deve spuntare per proseguire. Se disattivo: l'utente può scegliere sì o no (ma deve scegliere)."
-                  : "If on: user must accept to proceed. If off: user must choose yes or no (choice required, but can decline)."}
+                  ? "Se attivo: l'utente deve spuntare per proseguire. Se disattivo: l'utente può scegliere sì o no."
+                  : "If on: user must accept to proceed. If off: user must choose yes or no (can decline)."}
               </p>
             </div>
           </div>
@@ -308,7 +340,7 @@ export default function AdminLegalSection({ lang, authFetch, toast }: Props) {
           {/* Checkbox label */}
           <div className="flex flex-col gap-1.5">
             <label className="text-xs font-medium text-foreground">
-              {lang === "it" ? "Testo checkbox" : "Checkbox label"}
+              {lang === "it" ? "Testo checkbox / domanda" : "Checkbox label / question"}
             </label>
             <textarea
               value={formCheckboxLabel}
@@ -318,46 +350,43 @@ export default function AdminLegalSection({ lang, authFetch, toast }: Props) {
               className="px-3 py-2 rounded-xl border border-border bg-background text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary resize-y"
             />
             <p className="text-[10px] text-muted-foreground">
-              {lang === "it" ? "Testo mostrato accanto alla spunta nel modal di consenso. Se vuoto usa il testo predefinito." : "Text shown next to the checkbox in the consent modal. Defaults to the type's standard label if empty."}
+              {lang === "it" ? "Testo mostrato accanto alla spunta nel modal di consenso. Se vuoto usa il testo predefinito." : "Text shown next to the checkbox in the consent modal."}
             </p>
           </div>
 
           {/* Consent note */}
           <div className="flex flex-col gap-1.5">
             <label className="text-xs font-medium text-foreground">
-              {lang === "it" ? "Nota sotto il checkbox" : "Note below checkbox"} <span className="text-muted-foreground font-normal">(facoltativa)</span>
+              {lang === "it" ? "Nota informativa" : "Informational note"} <span className="text-muted-foreground font-normal">{lang === "it" ? "(facoltativa)" : "(optional)"}</span>
             </label>
             <input
               type="text"
               value={formConsentNote}
               onChange={(e) => setFormConsentNote(e.target.value)}
-              placeholder={DEFAULT_CONSENT_NOTES[formType] ?? lang === "it" ? "es. Puoi revocare in qualsiasi momento..." : "e.g. You can revoke at any time..."}
+              placeholder={DEFAULT_CONSENT_NOTES[formType] ?? (lang === "it" ? "es. Puoi revocare in qualsiasi momento..." : "e.g. You can revoke at any time...")}
               className="px-3 py-2 rounded-xl border border-border bg-background text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary"
             />
-            <p className="text-[10px] text-muted-foreground">
-              {lang === "it" ? "Breve testo informativo mostrato sotto la scelta (es. istruzioni per revocare)." : "Short informational text shown below the choice (e.g. instructions to revoke)."}
-            </p>
           </div>
 
-          {/* Content */}
+          {/* Content — optional */}
           <div className="flex flex-col gap-1.5">
             <div className="flex items-center justify-between">
               <label className="text-xs font-medium text-foreground">
-                {lang === "it" ? "Contenuto HTML" : "HTML content"}
+                {lang === "it" ? "Contenuto HTML" : "HTML content"} <span className="text-muted-foreground font-normal">{lang === "it" ? "(facoltativo)" : "(optional)"}</span>
               </label>
-              <span className="text-xs text-muted-foreground">{formContent.length} caratteri</span>
+              <span className="text-xs text-muted-foreground">{formContent.length} {lang === "it" ? "caratteri" : "chars"}</span>
             </div>
             <textarea
               value={formContent}
               onChange={(e) => setFormContent(e.target.value)}
-              rows={14}
-              placeholder="<p>Testo del documento in HTML...</p>&#10;<section>&#10;<h2>1. Titolo sezione</h2>&#10;<p>Contenuto...</p>&#10;</section>"
+              rows={10}
+              placeholder="<p>Testo del documento in HTML...</p>&#10;(Lascia vuoto se non è richiesto un documento esteso — es. per consensi semplici)"
               className="px-3 py-2 rounded-xl border border-border bg-background text-foreground text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary resize-y"
             />
-            <p className="text-xs text-muted-foreground">
+            <p className="text-[10px] text-muted-foreground">
               {lang === "it"
-                ? "Usa HTML semantico: <section>, <h2>, <h3>, <p>, <ul>, <li>, <a>, <strong>, <table>. La versione creata non sarà attiva — attivala esplicitamente dopo la revisione."
-                : "Use semantic HTML: <section>, <h2>, <h3>, <p>, <ul>, <li>, <a>, <strong>, <table>. The version won't be active until you explicitly activate it."}
+                ? "Facoltativo. Usa HTML semantico: <section>, <h2>, <p>, <ul>, <li>, <a>, <strong>. La versione non sarà attiva finché non la attivi esplicitamente."
+                : "Optional. Use semantic HTML. The version won't be active until you explicitly activate it."}
             </p>
           </div>
 
@@ -375,8 +404,7 @@ export default function AdminLegalSection({ lang, authFetch, toast }: Props) {
 
           <div className="flex gap-3">
             <Button
-              variant="outline"
-              size="sm"
+              variant="outline" size="sm"
               onClick={() => { setShowForm(false); setFormVersion(""); setFormContent(""); setFormCheckboxLabel(""); setFormConsentNote(""); }}
               className="flex-1"
             >
@@ -385,7 +413,7 @@ export default function AdminLegalSection({ lang, authFetch, toast }: Props) {
             <Button
               size="sm"
               onClick={handleCreateVersion}
-              disabled={formSaving || !formVersion.trim() || !formContent.trim()}
+              disabled={formSaving || !formVersion.trim()}
               className="flex-1 gap-2"
             >
               {formSaving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
@@ -430,7 +458,7 @@ export default function AdminLegalSection({ lang, authFetch, toast }: Props) {
 
               {versions.length === 0 ? (
                 <div className="px-5 py-6 text-sm text-muted-foreground text-center">
-                  {lang === "it" ? "Nessuna versione — usa il seed o crea una nuova versione." : "No versions — use seed or create a new version."}
+                  {lang === "it" ? "Nessuna versione — crea una nuova versione o usa il seed." : "No versions — create a new version or use seed."}
                 </div>
               ) : (
                 <div className="divide-y divide-border">
@@ -438,50 +466,50 @@ export default function AdminLegalSection({ lang, authFetch, toast }: Props) {
                     <div key={v.id} className="px-5 py-3">
                       <div className="flex items-center gap-3 flex-wrap">
                         <div className="flex items-center gap-2 flex-1 min-w-0">
-                          {v.isActive ? (
-                            <span className="w-2 h-2 rounded-full bg-emerald-500 flex-shrink-0" title="Attiva" />
-                          ) : (
-                            <span className="w-2 h-2 rounded-full bg-muted-foreground/30 flex-shrink-0" />
-                          )}
-                          <span className="text-sm font-medium text-foreground">
-                            v{v.version}
-                          </span>
+                          {v.isActive
+                            ? <span className="w-2 h-2 rounded-full bg-emerald-500 flex-shrink-0" title="Attiva" />
+                            : <span className="w-2 h-2 rounded-full bg-muted-foreground/30 flex-shrink-0" />}
+                          <span className="text-sm font-medium text-foreground">v{v.version}</span>
                           {v.isActive && (
                             <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">
                               ATTIVA
                             </span>
                           )}
-                          <span className="text-xs text-muted-foreground ml-1">
-                            {formatDate(v.createdAt)}
-                          </span>
-                          <span className="text-xs text-muted-foreground">
-                            · {v.content.length} chars
-                          </span>
+                          <span className="text-xs text-muted-foreground ml-1">{formatDate(v.createdAt)}</span>
+                          {v.content.length > 0 && (
+                            <span className="text-xs text-muted-foreground">· {v.content.length} chars</span>
+                          )}
                         </div>
 
                         <div className="flex items-center gap-1.5 flex-shrink-0">
+                          {/* Edit label/note inline */}
                           <button
-                            onClick={() => setPreviewId(previewId === v.id ? null : v.id)}
+                            onClick={() => inlineEdit?.id === v.id ? setInlineEdit(null) : openInlineEdit(v)}
                             className="p-1.5 rounded-lg hover:bg-muted transition-colors text-muted-foreground"
-                            title={lang === "it" ? "Anteprima" : "Preview"}
+                            title={lang === "it" ? "Modifica testo checkbox / nota" : "Edit checkbox label / note"}
                           >
-                            {previewId === v.id ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                            {inlineEdit?.id === v.id ? <X className="w-4 h-4" /> : <Pencil className="w-4 h-4" />}
                           </button>
+
+                          {v.content.length > 0 && (
+                            <button
+                              onClick={() => setPreviewId(previewId === v.id ? null : v.id)}
+                              className="p-1.5 rounded-lg hover:bg-muted transition-colors text-muted-foreground"
+                              title={lang === "it" ? "Anteprima documento" : "Preview document"}
+                            >
+                              {previewId === v.id ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                            </button>
+                          )}
 
                           {!v.isActive && (
                             <>
                               <Button
-                                size="sm"
-                                variant="outline"
+                                size="sm" variant="outline"
                                 className="h-7 text-xs gap-1"
                                 onClick={() => handleActivate(v.id)}
                                 disabled={actionLoading === v.id}
                               >
-                                {actionLoading === v.id ? (
-                                  <Loader2 className="w-3 h-3 animate-spin" />
-                                ) : (
-                                  <CheckCircle2 className="w-3 h-3" />
-                                )}
+                                {actionLoading === v.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCircle2 className="w-3 h-3" />}
                                 {lang === "it" ? "Attiva" : "Activate"}
                               </Button>
                               <button
@@ -497,8 +525,8 @@ export default function AdminLegalSection({ lang, authFetch, toast }: Props) {
                         </div>
                       </div>
 
-                      {/* Checkbox label + note preview */}
-                      {(v.checkboxLabel || v.consentNote || !v.requiresAcceptance) && (
+                      {/* Current label/note summary (when not editing) */}
+                      {inlineEdit?.id !== v.id && (v.checkboxLabel || v.consentNote || !v.requiresAcceptance) && (
                         <div className="mt-2 space-y-1">
                           {v.checkboxLabel && (
                             <p className="text-[10px] text-muted-foreground bg-muted/40 rounded px-2 py-1">
@@ -518,8 +546,73 @@ export default function AdminLegalSection({ lang, authFetch, toast }: Props) {
                         </div>
                       )}
 
+                      {/* Inline edit panel */}
+                      {inlineEdit?.id === v.id && (
+                        <div className="mt-3 border border-border rounded-xl p-4 space-y-3 bg-background">
+                          <p className="text-xs font-semibold text-foreground">
+                            {lang === "it" ? "Modifica testo e impostazioni" : "Edit text & settings"}
+                          </p>
+
+                          <div className="flex flex-col gap-1.5">
+                            <label className="text-xs font-medium text-foreground">
+                              {lang === "it" ? "Testo checkbox / domanda" : "Checkbox label / question"}
+                            </label>
+                            <textarea
+                              value={inlineEdit.checkboxLabel}
+                              onChange={(e) => setInlineEdit({ ...inlineEdit, checkboxLabel: e.target.value })}
+                              rows={2}
+                              placeholder={DEFAULT_CHECKBOX_LABELS[v.type] ?? ""}
+                              className="px-3 py-2 rounded-xl border border-border bg-muted/30 text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary resize-y"
+                            />
+                          </div>
+
+                          <div className="flex flex-col gap-1.5">
+                            <label className="text-xs font-medium text-foreground">
+                              {lang === "it" ? "Nota informativa" : "Informational note"} <span className="text-muted-foreground font-normal">{lang === "it" ? "(facoltativa)" : "(optional)"}</span>
+                            </label>
+                            <input
+                              type="text"
+                              value={inlineEdit.consentNote}
+                              onChange={(e) => setInlineEdit({ ...inlineEdit, consentNote: e.target.value })}
+                              placeholder={DEFAULT_CONSENT_NOTES[v.type] ?? ""}
+                              className="px-3 py-2 rounded-xl border border-border bg-muted/30 text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                            />
+                          </div>
+
+                          <div className="flex items-start gap-3 p-3 rounded-xl border border-border bg-muted/20">
+                            <input
+                              type="checkbox"
+                              id={`inline-req-${v.id}`}
+                              checked={inlineEdit.requiresAcceptance}
+                              onChange={(e) => setInlineEdit({ ...inlineEdit, requiresAcceptance: e.target.checked })}
+                              className="mt-0.5 accent-primary w-3.5 h-3.5 flex-shrink-0 cursor-pointer"
+                            />
+                            <div>
+                              <label htmlFor={`inline-req-${v.id}`} className="text-xs font-medium text-foreground cursor-pointer">
+                                {lang === "it" ? "Accettazione obbligatoria" : "Requires acceptance"}
+                              </label>
+                              <p className="text-[10px] text-muted-foreground mt-0.5">
+                                {lang === "it"
+                                  ? "Se attivo: checkbox obbligatoria. Se disattivo: radio sì/no (può rifiutare)."
+                                  : "If on: must accept. If off: yes/no choice (can decline)."}
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="flex gap-2">
+                            <Button variant="outline" size="sm" onClick={() => setInlineEdit(null)} className="flex-1">
+                              {lang === "it" ? "Annulla" : "Cancel"}
+                            </Button>
+                            <Button size="sm" onClick={saveInlineEdit} disabled={inlineSaving} className="flex-1 gap-1.5">
+                              {inlineSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                              {lang === "it" ? "Salva" : "Save"}
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+
                       {/* Preview panel */}
-                      {previewId === v.id && (
+                      {previewId === v.id && v.content.length > 0 && (
                         <div className="mt-3 border border-border rounded-xl overflow-hidden">
                           <div className="px-4 py-2 bg-muted/50 text-xs font-medium text-muted-foreground border-b border-border">
                             {lang === "it" ? "Anteprima contenuto" : "Content preview"}
@@ -538,7 +631,7 @@ export default function AdminLegalSection({ lang, authFetch, toast }: Props) {
         </div>
       )}
 
-      {/* Seed button (also shown when there are policies, as secondary action) */}
+      {/* Seed button (secondary) */}
       {hasAny && (
         <div className="border border-dashed border-border rounded-2xl p-4 flex items-center justify-between gap-3">
           <div>
@@ -547,19 +640,13 @@ export default function AdminLegalSection({ lang, authFetch, toast }: Props) {
             </p>
             <p className="text-xs text-muted-foreground mt-0.5">
               {lang === "it"
-                ? "Ricarica il testo iniziale per i tipi mancanti di versioni."
+                ? "Ricarica il testo iniziale per i tipi senza versioni."
                 : "Re-load initial text for types without any version."}
             </p>
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleSeed}
-            disabled={seedLoading}
-            className="gap-2 flex-shrink-0"
-          >
+          <Button variant="outline" size="sm" onClick={handleSeed} disabled={seedLoading} className="gap-2 flex-shrink-0">
             {seedLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <DatabaseZap className="w-3.5 h-3.5" />}
-            {lang === "it" ? "Seed" : "Seed"}
+            Seed
           </Button>
         </div>
       )}
