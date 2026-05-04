@@ -260,14 +260,6 @@ export default function PostPage() {
       toast({ title: "Errore", description: "La foto non è stata caricata correttamente. Riprova.", variant: "destructive" });
       return;
     }
-    if (!locationName.trim()) {
-      toast({ title: "Comune obbligatorio", description: "Indica il comune dove si trova la pianta.", variant: "destructive" });
-      return;
-    }
-    if (!province) {
-      toast({ title: "Provincia obbligatoria", description: "Seleziona la provincia della pianta.", variant: "destructive" });
-      return;
-    }
     setShowPrivacyPopup(true);
   }
 
@@ -499,11 +491,11 @@ export default function PostPage() {
             />
           </div>
 
-          {/* Location — obbligatorio */}
+          {/* Location — facoltativo */}
           <div>
             <div className="flex items-center justify-between mb-3">
               <label className="block text-sm font-medium text-foreground">
-                Posizione <span className="text-red-500">*</span>
+                Posizione <span className="text-muted-foreground font-normal">(facoltativa)</span>
               </label>
               <button
                 type="button"
@@ -580,7 +572,7 @@ export default function PostPage() {
             <div className="space-y-3">
               <div>
                 <label className="block text-xs text-muted-foreground mb-1">
-                  Comune <span className="text-red-500">*</span>
+                  Comune
                 </label>
                 <div className="flex gap-2">
                   <CityAutocomplete
@@ -597,7 +589,7 @@ export default function PostPage() {
                     onChange={(e) => setProvince(e.target.value)}
                     className="w-28 border border-border rounded-lg px-2 py-2 text-sm bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
                   >
-                    <option value="">Prov. *</option>
+                    <option value="">Provincia</option>
                     {ITALIAN_PROVINCES.map((p) => (
                       <option key={p.code} value={p.code}>{p.code} — {p.name}</option>
                     ))}

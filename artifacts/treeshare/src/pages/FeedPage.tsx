@@ -7,6 +7,7 @@ import WeeklyWinnerShareButton from "@/components/WeeklyWinnerShareButton";
 import { Link } from "wouter";
 import { useAdaptiveQuality } from "@/hooks/useAdaptiveQuality";
 import { useFeed } from "@/hooks/useFeed";
+import { ITALIAN_PROVINCES } from "@/lib/italianProvinces";
 
 interface WeeklyWinnerTree {
   treeId: number;
@@ -70,9 +71,9 @@ export default function FeedPage() {
     upgrade_on_pause: adaptiveQuality.upgrade_on_pause,
   };
 
-  const [provinceFilter, setProvinceFilter] = useState<string | null>(null);
+  const [provinceFilter, setProvinceFilter] = useState<string>("");
+  const [comuneFilter, setComuneFilter] = useState<string>("");
   const [detectingProvince, setDetectingProvince] = useState(false);
-  const provinceDetectedRef = useRef(false);
 
   const { data: weeklyWinnersData, isLoading: loadingWinners } =
     useGetCurrentWeeklyWinners();
@@ -81,23 +82,27 @@ export default function FeedPage() {
     WeeklyWinnerTree
   >;
 
-  async function handleProvinceToggle() {
-    if (provinceFilter) {
-      setProvinceFilter(null);
-      return;
-    }
-    if (provinceDetectedRef.current) return;
+  async function handleGpsProvince() {
     setDetectingProvince(true);
     try {
       const prov = await detectProvince();
       if (prov) {
-        setProvinceFilter(prov);
-        provinceDetectedRef.current = true;
+        const matched = ITALIAN_PROVINCES.find(
+          (p) => p.name.toLowerCase() === prov.toLowerCase()
+        );
+        if (matched) setProvinceFilter(matched.code);
       }
     } finally {
       setDetectingProvince(false);
     }
   }
+
+  function clearFilters() {
+    setProvinceFilter("");
+    setComuneFilter("");
+  }
+
+  const hasActiveFilter = provinceFilter !== "" || comuneFilter.trim() !== "";
 
   // Best winner across all provinces (highest week sun count)
   const topWinner: WeeklyWinnerTree | null = Object.values(weeklyWinners).length > 0
@@ -106,7 +111,7 @@ export default function FeedPage() {
       )
     : null;
 
-  // With province filter: show that province's winner; without: show the top winner globally
+  // Province winner keyed by province code (e.g. "RM")
   const provinceWinner: WeeklyWinnerTree | null = provinceFilter
     ? (weeklyWinners[provinceFilter] ?? null)
     : topWinner;
@@ -120,7 +125,11 @@ export default function FeedPage() {
     if (provinceWinner && t.id === provinceWinner.treeId) return false;
     if (provinceFilter) {
       const tp = (t as any).province as string | null | undefined;
-      return tp && tp.toLowerCase() === provinceFilter.toLowerCase();
+      if (!tp || tp.toUpperCase() !== provinceFilter.toUpperCase()) return false;
+    }
+    if (comuneFilter.trim()) {
+      const loc = ((t as any).locationName as string | null | undefined) ?? "";
+      if (!loc.toLowerCase().includes(comuneFilter.trim().toLowerCase())) return false;
     }
     return true;
   });
@@ -226,6 +235,55 @@ export default function FeedPage() {
           </div>
         )}
 
+        {/* Filter bar */}
+        <div className="flex flex-wrap items-center gap-2 mb-4">
+          <input
+            type="text"
+            value={comuneFilter}
+            onChange={(e) => setComuneFilter(e.target.value)}
+            placeholder="Cerca comune..."
+            className="flex-1 min-w-[140px] px-3 py-2 text-sm border border-border rounded-lg bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+          />
+          <select
+            value={provinceFilter}
+            onChange={(e) => setProvinceFilter(e.target.value)}
+            className="w-40 px-3 py-2 text-sm border border-border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+          >
+            <option value="">Tutte le province</option>
+            {ITALIAN_PROVINCES.map((p) => (
+              <option key={p.code} value={p.code}>{p.code} — {p.name}</option>
+            ))}
+          </select>
+          <button
+            type="button"
+            onClick={handleGpsProvince}
+            disabled={detectingProvince}
+            title="Rileva provincia dalla posizione GPS"
+            className="flex items-center gap-1.5 px-3 py-2 text-sm border border-border rounded-lg bg-background text-muted-foreground hover:text-foreground hover:bg-muted transition-colors disabled:opacity-50"
+          >
+            {detectingProvince ? (
+              <span className="w-3.5 h-3.5 border-2 border-muted-foreground/30 border-t-muted-foreground rounded-full animate-spin" />
+            ) : (
+              <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                <circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/>
+              </svg>
+            )}
+            GPS
+          </button>
+          {hasActiveFilter && (
+            <button
+              type="button"
+              onClick={clearFilters}
+              className="flex items-center gap-1 px-3 py-2 text-sm text-destructive border border-destructive/30 rounded-lg hover:bg-destructive/10 transition-colors"
+            >
+              <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+                <path d="M6 18L18 6M6 6l12 12" strokeLinecap="round"/>
+              </svg>
+              Rimuovi filtri
+            </button>
+          )}
+        </div>
+
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
             <h1 className="text-2xl font-bold text-foreground">Feed</h1>
@@ -273,7 +331,10 @@ export default function FeedPage() {
             <div className="flex items-center gap-2 mb-3">
               <span className="text-lg">🌞</span>
               <h2 className="font-bold text-foreground text-base">
-                Pianta della Settimana{provinceWinner!.province ? ` — ${provinceWinner!.province}` : provinceFilter ? ` — ${provinceFilter}` : ""}
+                {(() => {
+                  const prov = provinceWinner!.province ?? (provinceFilter ? ITALIAN_PROVINCES.find((p) => p.code === provinceFilter)?.name : null);
+                  return `Pianta della Settimana${prov ? ` — ${prov}` : ""}`;
+                })()}
               </h2>
               {provinceWinner!.weekSunCount !== undefined && (
                 <span className="text-xs text-muted-foreground ml-1">
@@ -286,7 +347,7 @@ export default function FeedPage() {
                   photoUrl={provinceWinner!.photoUrl}
                   plantName={provinceWinner!.plantName}
                   username={provinceWinner!.username}
-                  province={provinceWinner!.province ?? provinceFilter}
+                  province={provinceWinner!.province ?? (provinceFilter ? ITALIAN_PROVINCES.find((p) => p.code === provinceFilter)?.name : null)}
                   weekSunCount={provinceWinner!.weekSunCount}
                 />
               </div>
@@ -321,7 +382,7 @@ export default function FeedPage() {
 
         {provinceFilter && !loadingWinners && !provinceWinner && (
           <div className="mb-4 text-sm text-muted-foreground text-center py-2">
-            Nessuna Pianta della Settimana per {provinceFilter} questa settimana.
+            Nessuna Pianta della Settimana per {ITALIAN_PROVINCES.find((p) => p.code === provinceFilter)?.name ?? provinceFilter} questa settimana.
           </div>
         )}
 
@@ -353,17 +414,21 @@ export default function FeedPage() {
                 <path d="M12 22V14" strokeLinecap="round"/>
               </svg>
             </div>
-            {provinceFilter ? (
+            {hasActiveFilter ? (
               <>
                 <h2 className="text-lg font-semibold text-foreground mb-2">
-                  Nessuna pianta in {provinceFilter}
+                  Nessuna pianta trovata
                 </h2>
                 <p className="text-muted-foreground text-sm mb-4">
-                  Non ci sono ancora piante in questa provincia.
+                  {comuneFilter.trim() && provinceFilter
+                    ? `Nessuna pianta a "${comuneFilter}" in ${ITALIAN_PROVINCES.find((p) => p.code === provinceFilter)?.name ?? provinceFilter}.`
+                    : comuneFilter.trim()
+                    ? `Nessuna pianta corrisponde a "${comuneFilter}".`
+                    : `Nessuna pianta in ${ITALIAN_PROVINCES.find((p) => p.code === provinceFilter)?.name ?? provinceFilter}.`}
                 </p>
                 <button
                   type="button"
-                  onClick={() => setProvinceFilter(null)}
+                  onClick={clearFilters}
                   className="text-primary text-sm underline"
                 >
                   Vedi tutte le piante
@@ -394,7 +459,7 @@ export default function FeedPage() {
               ))}
             </div>
 
-            {!provinceFilter && data.total > limit && (
+            {!hasActiveFilter && data.total > limit && (
               <div className="flex items-center justify-center gap-3 mt-8">
                 <button
                   onClick={() => setPage((p) => Math.max(1, p - 1))}
