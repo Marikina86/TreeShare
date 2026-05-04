@@ -200,7 +200,27 @@ function scheduleNext(): void {
 }
 
 export function startWeeklyWinnerScheduler(): void {
-  calculateWeeklyWinners();
+  // Catch-up on startup ONLY if Sunday 23:59 Rome has already passed (or it's any other day).
+  // If the server restarts on Sunday before 23:59, skip the immediate call — the week is not
+  // finished yet and running early would produce wrong results (as happened at 08:45).
+  const now = new Date();
+  const romeNow = new Date(now.toLocaleString("en-US", { timeZone: "Europe/Rome" }));
+  const romeDay = romeNow.getDay(); // 0 = Sunday
+  const romeHour = romeNow.getHours();
+  const romeMin = romeNow.getMinutes();
+  const isSundayBeforeDeadline =
+    romeDay === 0 && (romeHour < 23 || (romeHour === 23 && romeMin < 59));
+
+  if (!isSundayBeforeDeadline) {
+    // Either past the deadline on Sunday, or it's Mon–Sat: safe to catch up
+    calculateWeeklyWinners();
+  } else {
+    logger.info(
+      { romeTime: romeNow.toISOString() },
+      "[weeklyWinner] Sunday before 23:59 Rome — skipping startup catch-up, waiting for scheduler"
+    );
+  }
+
   scheduleNext();
   logger.info("[weeklyWinner] Scheduler started (runs every Sunday at 23:59 Europe/Rome)");
 }
