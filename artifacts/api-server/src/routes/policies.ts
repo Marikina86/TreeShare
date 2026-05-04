@@ -2,25 +2,26 @@ import { Router } from "express";
 import { z } from "zod";
 import { db } from "@workspace/db";
 import { policiesTable } from "@workspace/db";
-import { eq, and } from "drizzle-orm";
+import { eq, and, desc } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
 import { requireAdmin } from "../middlewares/requireAdmin";
+import { TERMS_HTML, PRIVACY_HTML, COOKIE_HTML, SEED_VERSION } from "../lib/legalSeedContent";
 
 const router = Router();
 
-const PolicyTypeSchema = z.enum(["privacy", "terms"]);
+const PolicyTypeSchema = z.enum(["privacy", "terms", "cookie"]);
 
 const CreatePolicySchema = z.object({
   type: PolicyTypeSchema,
-  version: z.string().min(1).max(20),
+  version: z.string().min(1).max(50),
   content: z.string().min(10),
 });
 
-// GET /policies/:type — restituisce la policy attiva (privacy o terms)
+// GET /policies/:type — restituisce la policy attiva
 router.get("/policies/:type", async (req, res) => {
   const parsed = PolicyTypeSchema.safeParse(req.params.type);
   if (!parsed.success) {
-    res.status(400).json({ error: "Tipo policy non valido. Usa: privacy | terms" });
+    res.status(400).json({ error: "Tipo policy non valido. Usa: privacy | terms | cookie" });
     return;
   }
 
@@ -49,7 +50,7 @@ router.get("/policies", requireAuth, requireAdmin, async (req, res) => {
     const policies = await db
       .select()
       .from(policiesTable)
-      .orderBy(policiesTable.createdAt);
+      .orderBy(desc(policiesTable.createdAt));
     res.json(policies);
   } catch (err) {
     req.log.error({ err }, "Errore nel recupero delle policy");
@@ -68,7 +69,6 @@ router.post("/policies", requireAuth, requireAdmin, async (req, res) => {
   const { type, version, content } = parsed.data;
 
   try {
-    // Verifica che la versione non esista già
     const existing = await db
       .select({ id: policiesTable.id })
       .from(policiesTable)
@@ -108,13 +108,11 @@ router.put("/policies/:id/activate", requireAuth, requireAdmin, async (req, res)
       return;
     }
 
-    // Disattiva tutte le policy dello stesso tipo
     await db
       .update(policiesTable)
       .set({ isActive: false })
       .where(eq(policiesTable.type, target.type));
 
-    // Attiva quella selezionata
     const [activated] = await db
       .update(policiesTable)
       .set({ isActive: true })
@@ -124,6 +122,90 @@ router.put("/policies/:id/activate", requireAuth, requireAdmin, async (req, res)
     res.json(activated);
   } catch (err) {
     req.log.error({ err }, "Errore nell'attivazione della policy");
+    res.status(500).json({ error: "Errore interno del server" });
+  }
+});
+
+// DELETE /policies/:id — elimina una versione non attiva (admin)
+router.delete("/policies/:id", requireAuth, requireAdmin, async (req, res) => {
+  const id = req.params.id as string;
+
+  try {
+    const [target] = await db
+      .select({ isActive: policiesTable.isActive })
+      .from(policiesTable)
+      .where(eq(policiesTable.id, id))
+      .limit(1);
+
+    if (!target) {
+      res.status(404).json({ error: "Policy non trovata" });
+      return;
+    }
+
+    if (target.isActive) {
+      res.status(400).json({ error: "Non è possibile eliminare la versione attiva. Attiva prima un'altra versione." });
+      return;
+    }
+
+    await db.delete(policiesTable).where(eq(policiesTable.id, id));
+    res.json({ ok: true });
+  } catch (err) {
+    req.log.error({ err }, "Errore nell'eliminazione della policy");
+    res.status(500).json({ error: "Errore interno del server" });
+  }
+});
+
+// POST /admin/policies/seed — popola le policy iniziali dal contenuto predefinito (admin)
+// Inserisce solo i tipi mancanti; non sovrascrive versioni esistenti.
+router.post("/admin/policies/seed", requireAuth, requireAdmin, async (req, res) => {
+  const seeds = [
+    { type: "terms" as const, version: SEED_VERSION, content: TERMS_HTML },
+    { type: "privacy" as const, version: SEED_VERSION, content: PRIVACY_HTML },
+    { type: "cookie" as const, version: SEED_VERSION, content: COOKIE_HTML },
+  ];
+
+  const results: string[] = [];
+
+  try {
+    for (const seed of seeds) {
+      const existing = await db
+        .select({ id: policiesTable.id })
+        .from(policiesTable)
+        .where(and(eq(policiesTable.type, seed.type), eq(policiesTable.version, seed.version)))
+        .limit(1);
+
+      if (existing.length > 0) {
+        results.push(`${seed.type} v${seed.version}: già presente, saltato`);
+        continue;
+      }
+
+      const [inserted] = await db
+        .insert(policiesTable)
+        .values({ type: seed.type, version: seed.version, content: seed.content, isActive: false })
+        .returning({ id: policiesTable.id });
+
+      // Attiva se non esiste ancora una versione attiva per questo tipo
+      const [activeExisting] = await db
+        .select({ id: policiesTable.id })
+        .from(policiesTable)
+        .where(and(eq(policiesTable.type, seed.type), eq(policiesTable.isActive, true)))
+        .limit(1);
+
+      if (!activeExisting) {
+        await db
+          .update(policiesTable)
+          .set({ isActive: true })
+          .where(eq(policiesTable.id, inserted.id));
+        results.push(`${seed.type} v${seed.version}: inserito e attivato`);
+      } else {
+        results.push(`${seed.type} v${seed.version}: inserito (non attivato, esiste già una versione attiva)`);
+      }
+    }
+
+    req.log.info({ results }, "[policies/seed] Seed completato");
+    res.json({ ok: true, results });
+  } catch (err) {
+    req.log.error({ err }, "Errore nel seed delle policy");
     res.status(500).json({ error: "Errore interno del server" });
   }
 });

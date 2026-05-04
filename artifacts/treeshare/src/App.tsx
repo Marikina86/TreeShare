@@ -9,6 +9,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { queryClient } from "@/lib/queryClient";
 import { LanguageProvider } from "@/lib/i18n";
 import InstallPrompt from "@/components/InstallPrompt";
+import ConsentModal from "@/components/ConsentModal";
 
 const LandingPage = lazy(() => import("@/pages/LandingPage"));
 const FeedPage = lazy(() => import("@/pages/FeedPage"));
@@ -194,6 +195,59 @@ function MobileBackButton() {
   );
 }
 
+function ConsentChecker() {
+  const { isSignedIn, isLoaded } = useUser();
+  const { getToken } = useAuth();
+  const [missing, setMissing] = useState<Array<{ policyId: string; type: string; version: string }>>([]);
+  const checkedRef = useRef(false);
+
+  useEffect(() => {
+    if (!isLoaded || !isSignedIn) return;
+    if (checkedRef.current) return;
+    if (sessionStorage.getItem("consent-ok") === "1") return;
+    checkedRef.current = true;
+
+    async function checkConsent() {
+      try {
+        const token = await getToken();
+        const res = await fetch("/api/consent/status", {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
+        if (!res.ok) return;
+        const data = await res.json() as {
+          upToDate: boolean;
+          missing: Array<{ policyId: string; type: string; version: string }>;
+        };
+        if (!data.upToDate && data.missing?.length > 0) {
+          const required = data.missing.filter((p) => p.type === "terms" || p.type === "privacy");
+          if (required.length > 0) {
+            setMissing(required);
+          } else {
+            sessionStorage.setItem("consent-ok", "1");
+          }
+        } else {
+          sessionStorage.setItem("consent-ok", "1");
+        }
+      } catch {
+        // Silently fail — non blocchiamo l'utente per un errore di rete
+      }
+    }
+
+    checkConsent();
+  }, [isLoaded, isSignedIn, getToken]);
+
+  if (missing.length === 0) return null;
+  return (
+    <ConsentModal
+      missing={missing}
+      onAccepted={() => {
+        setMissing([]);
+        sessionStorage.setItem("consent-ok", "1");
+      }}
+    />
+  );
+}
+
 function HomeRedirect() {
   return (
     <>
@@ -262,6 +316,7 @@ function AuthProviderWithRoutes() {
         <QueryClientCacheInvalidator />
         <AuthTokenSync />
         <ProfileAutoSync />
+        <ConsentChecker />
         <TooltipProvider>
           <MobileBackButton />
           <ErrorBoundary>

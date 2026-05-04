@@ -5,6 +5,7 @@ import { useLocation } from "wouter";
 import { useLang } from "@/lib/i18n";
 import { useToast } from "@/hooks/use-toast";
 import AdminDiscountSection from "@/components/AdminDiscountSection";
+import AdminLegalSection from "@/components/AdminLegalSection";
 import { resolveImg } from "@/lib/imageUtils";
 
 // Flag sessione: i contatori pending vengono caricati solo alla prima apertura
@@ -130,7 +131,7 @@ interface AdminAlertItem {
   updatedAt: string;
 }
 
-type Tab = "users" | "reports" | "trees" | "problems" | "pending_events" | "pending_photos" | "pending_updates" | "pending_adopt_trees" | "alerts" | "tips" | "finance" | "discounts" | "ledger" | "settings";
+type Tab = "users" | "reports" | "trees" | "problems" | "pending_events" | "pending_photos" | "pending_updates" | "pending_adopt_trees" | "alerts" | "tips" | "finance" | "discounts" | "ledger" | "settings" | "legal";
 type UserFilter = "all" | "active" | "blocked";
 type ReportFilter = "all" | "pending" | "reviewed" | "dismissed";
 
@@ -457,7 +458,7 @@ export default function AdminPage() {
   const T = {
     it: {
       title: "Pannello di controllo", subtitle: "Gestione utenti e contenuti",
-      tabs: { users: "Utenti", reports: "Segnalazioni", trees: "Contenuti", problems: "Problemi", alerts: "Avvisi", tips: "Consigli", finance: "Finanza", discounts: "Sconti", ledger: "Ledger", settings: "Impostazioni" },
+      tabs: { users: "Utenti", reports: "Segnalazioni", trees: "Contenuti", problems: "Problemi", alerts: "Avvisi", tips: "Consigli", finance: "Finanza", discounts: "Sconti", ledger: "Ledger", settings: "Impostazioni", legal: "Documenti" },
       stats: { users: "Utenti totali", trees: "Alberi piantati", blocked: "Utenti bloccati" },
       search: "Cerca utente...", searchTrees: "Cerca contenuto...",
       filters: { all: "Tutti", active: "Attivi", blocked: "Bloccati", pending: "In attesa", reviewed: "Esaminati", dismissed: "Archiviati" },
@@ -480,7 +481,7 @@ export default function AdminPage() {
     },
     en: {
       title: "Admin Panel", subtitle: "User and content management",
-      tabs: { users: "Users", reports: "Reports", trees: "Content", problems: "Problems", alerts: "Alerts", tips: "Tips", finance: "Finance", discounts: "Discounts", ledger: "Ledger", settings: "Settings" },
+      tabs: { users: "Users", reports: "Reports", trees: "Content", problems: "Problems", alerts: "Alerts", tips: "Tips", finance: "Finance", discounts: "Discounts", ledger: "Ledger", settings: "Settings", legal: "Legal Docs" },
       stats: { users: "Total users", trees: "Trees planted", blocked: "Blocked users" },
       search: "Search user...", searchTrees: "Search content...",
       filters: { all: "All", active: "Active", blocked: "Blocked", pending: "Pending", reviewed: "Reviewed", dismissed: "Dismissed" },
@@ -1404,6 +1405,13 @@ export default function AdminPage() {
           >
             <svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 11-4 0v-.09a1.65 1.65 0 00-1-1.51 1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 110-4h.09a1.65 1.65 0 001.51-1 1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06a1.65 1.65 0 001.82.33h.01a1.65 1.65 0 001-1.51V3a2 2 0 114 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82v.01a1.65 1.65 0 001.51 1H21a2 2 0 110 4h-.09a1.65 1.65 0 00-1.51 1z" strokeLinecap="round" strokeLinejoin="round"/></svg>
             {T.tabs.settings}
+          </button>
+          <button
+            onClick={() => setActiveTab("legal")}
+            className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors ${activeTab === "legal" ? "bg-emerald-700 text-white" : "text-muted-foreground hover:bg-muted"}`}
+          >
+            <svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" strokeLinecap="round" strokeLinejoin="round"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+            {T.tabs.legal}
           </button>
         </div>
       </header>
@@ -3396,6 +3404,11 @@ export default function AdminPage() {
         {/* ── SETTINGS TAB ── */}
         {activeTab === "settings" && (
           <AdminSettingsSection lang={lang as "it" | "en"} authFetch={authFetch} toast={toast} />
+        )}
+
+        {/* ── LEGAL DOCS TAB ── */}
+        {activeTab === "legal" && (
+          <AdminLegalSection lang={lang as "it" | "en"} authFetch={authFetch} toast={toast} />
         )}
 
       </div>
