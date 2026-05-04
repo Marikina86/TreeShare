@@ -176,7 +176,9 @@ export default function OrganizationSignupPage() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [acceptPrivacy, setAcceptPrivacy] = useState(false);
   const [acceptTerms, setAcceptTerms] = useState(false);
-  const [consentErrors, setConsentErrors] = useState<{ privacy?: string; terms?: string }>({});
+  const [locationConsent, setLocationConsent] = useState<boolean | null>(null);
+  const [marketingConsent, setMarketingConsent] = useState<boolean | null>(null);
+  const [consentErrors, setConsentErrors] = useState<{ privacy?: string; terms?: string; location?: string; marketing?: string }>({});
   const [verifiedEmail, setVerifiedEmail] = useState("");
   const [verifiedPec, setVerifiedPec] = useState("");
   const [resending, setResending] = useState(false);
@@ -199,9 +201,11 @@ export default function OrganizationSignupPage() {
   const strength = useMemo(() => getPasswordStrength(passwordValue), [passwordValue]);
 
   const onSubmit = async (data: FormValues) => {
-    const ce: { privacy?: string; terms?: string } = {};
+    const ce: { privacy?: string; terms?: string; location?: string; marketing?: string } = {};
     if (!acceptPrivacy) ce.privacy = "Devi accettare l'informativa sulla privacy";
     if (!acceptTerms) ce.terms = "Devi accettare i termini e condizioni";
+    if (locationConsent === null) ce.location = "Devi effettuare una scelta";
+    if (marketingConsent === null) ce.marketing = "Devi effettuare una scelta";
     if (Object.keys(ce).length > 0) {
       setConsentErrors(ce);
       return;
@@ -765,8 +769,10 @@ export default function OrganizationSignupPage() {
           </Card>
 
           <Card>
-            <CardContent className="pt-5 pb-5 space-y-3">
+            <CardContent className="pt-5 pb-5 space-y-4">
               <p className="text-sm font-semibold text-foreground">Consensi obbligatori <span className="text-destructive">*</span></p>
+
+              {/* Privacy */}
               <label className={`flex items-start gap-3 cursor-pointer group ${consentErrors.privacy ? "text-destructive" : ""}`}>
                 <input
                   type="checkbox"
@@ -778,7 +784,7 @@ export default function OrganizationSignupPage() {
                   className="mt-1 h-4 w-4 rounded border-border accent-primary flex-shrink-0"
                 />
                 <span className="text-sm leading-snug">
-                  Ho letto e accetto l&rsquo;<Link to="/privacy" className="underline text-primary font-medium">informativa sulla privacy</Link> <span className="text-destructive">*</span>
+                  Dichiaro di aver letto e compreso la <Link to="/privacy" className="underline text-primary font-medium">privacy policy</Link> <span className="text-destructive">*</span>
                 </span>
               </label>
               {consentErrors.privacy && (
@@ -787,6 +793,8 @@ export default function OrganizationSignupPage() {
                   {consentErrors.privacy}
                 </p>
               )}
+
+              {/* Termini */}
               <label className={`flex items-start gap-3 cursor-pointer group ${consentErrors.terms ? "text-destructive" : ""}`}>
                 <input
                   type="checkbox"
@@ -807,7 +815,80 @@ export default function OrganizationSignupPage() {
                   {consentErrors.terms}
                 </p>
               )}
-              <p className="text-xs text-muted-foreground ml-0 mt-1">
+
+              {/* Consenso posizione */}
+              <div className={`space-y-2 ${consentErrors.location ? "text-destructive" : ""}`}>
+                <p className="text-sm leading-snug text-foreground">
+                  Acconsento all&rsquo;utilizzo della mia posizione per localizzare gli alberi e migliorare i servizi offerti. <span className="text-destructive">*</span>
+                </p>
+                <div className="flex items-center gap-6">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="locationConsentOrg"
+                      checked={locationConsent === true}
+                      onChange={() => { setLocationConsent(true); setConsentErrors((p) => ({ ...p, location: undefined })); }}
+                      className="h-4 w-4 accent-primary cursor-pointer"
+                    />
+                    <span className="text-sm font-medium">Sì</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="locationConsentOrg"
+                      checked={locationConsent === false}
+                      onChange={() => { setLocationConsent(false); setConsentErrors((p) => ({ ...p, location: undefined })); }}
+                      className="h-4 w-4 accent-primary cursor-pointer"
+                    />
+                    <span className="text-sm font-medium">No</span>
+                  </label>
+                </div>
+                <p className="text-xs text-muted-foreground">Puoi revocare il consenso in qualsiasi momento dalle impostazioni.</p>
+                {consentErrors.location && (
+                  <p className="flex items-center gap-1 text-xs text-destructive">
+                    <AlertCircle className="h-3 w-3 flex-shrink-0" />
+                    {consentErrors.location}
+                  </p>
+                )}
+              </div>
+
+              {/* Consenso marketing */}
+              <div className={`space-y-2 ${consentErrors.marketing ? "text-destructive" : ""}`}>
+                <p className="text-sm leading-snug text-foreground">
+                  Acconsento a ricevere notifiche promozionali e comunicazioni commerciali e all&rsquo;analisi delle mie preferenze e attività per ricevere suggerimenti personalizzati. <span className="text-destructive">*</span>
+                </p>
+                <div className="flex items-center gap-6">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="marketingConsentOrg"
+                      checked={marketingConsent === true}
+                      onChange={() => { setMarketingConsent(true); setConsentErrors((p) => ({ ...p, marketing: undefined })); }}
+                      className="h-4 w-4 accent-primary cursor-pointer"
+                    />
+                    <span className="text-sm font-medium">Sì</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="marketingConsentOrg"
+                      checked={marketingConsent === false}
+                      onChange={() => { setMarketingConsent(false); setConsentErrors((p) => ({ ...p, marketing: undefined })); }}
+                      className="h-4 w-4 accent-primary cursor-pointer"
+                    />
+                    <span className="text-sm font-medium">No</span>
+                  </label>
+                </div>
+                <p className="text-xs text-muted-foreground">Puoi disattivarle in qualsiasi momento dalle impostazioni.</p>
+                {consentErrors.marketing && (
+                  <p className="flex items-center gap-1 text-xs text-destructive">
+                    <AlertCircle className="h-3 w-3 flex-shrink-0" />
+                    {consentErrors.marketing}
+                  </p>
+                )}
+              </div>
+
+              <p className="text-xs text-muted-foreground mt-1">
                 Registrandoti, prendi atto della nostra{" "}
                 <Link to="/cookies" className="underline text-primary font-medium">Cookie Policy</Link>.
               </p>
