@@ -21,7 +21,7 @@
     "cors": "^2",
     "drizzle-orm": "catalog:",
     "express": "^5",
-    "express-rate-limit": "^8.4.1",
+    "express-rate-limit": "^8.5.0",
     "helmet": "^8.1.0",
     "http-proxy-middleware": "^3.0.5",
     "nodemailer": "^8.0.5",
