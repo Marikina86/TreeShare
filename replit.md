@@ -80,6 +80,7 @@ A plant/tree sharing social app. Community members document trees/plants they pl
 - **Badge counts**: Shown in nav, only update on app open or manual refresh
 
 ### Campaign System (Paid Publication Model)
+- **Admin toggle**: `PUT /api/admin/app-settings/campaigns` enables/disables campaign publication globally. Guard enforced at both `initiate-payment` and `initiate-payment-paypal` (503). Frontend shows amber banner on CampaignsPage and DonationCampaignManager; "Pubblica campagna" button disabled. Admin card in `AdminSettingsSection` (alongside adoptions toggle). Public flag exposed via `GET /api/app-settings/public` → `{ adoptionsEnabled, campaignsEnabled }`.
 - **Model**: Organizations pay the platform to publish campaigns for a selectable duration. No donations, no Stripe Connect destination charges.
 - **Campaign photos**: Max 3 photos per campaign; stored as JSON array in `donation_campaigns.photos`; upload via `/api/storage/uploads/request-url`
 - **Account types**: Users `"user"` (default) or `"organization"` — only orgs can create campaigns

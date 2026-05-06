@@ -330,6 +330,21 @@ export default function DonationCampaignManager({ accountType }: {
 
   const isOrg = accountType === "organization";
 
+  const { data: appSettings } = useQuery<{ adoptionsEnabled: boolean; campaignsEnabled: boolean }>({
+    queryKey: ["app-settings-public"],
+    queryFn: async () => {
+      const res = await fetch("/api/app-settings/public");
+      if (!res.ok) return { adoptionsEnabled: true, campaignsEnabled: true };
+      return res.json();
+    },
+    staleTime: Infinity,
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
+    refetchOnReconnect: false,
+    refetchInterval: false,
+  });
+  const campaignsEnabled = appSettings?.campaignsEnabled ?? true;
+
   const { data: campaigns = [] } = useQuery<Campaign[]>({
     queryKey: ["my-campaigns"],
     queryFn: async () => {
@@ -1117,6 +1132,15 @@ export default function DonationCampaignManager({ accountType }: {
           <div className="px-5 py-8 text-center text-sm text-muted-foreground">{l.noData}</div>
         )}
 
+        {!campaignsEnabled && !showForm && (
+          <div className="mx-5 mb-4 flex items-center gap-3 px-4 py-3 rounded-xl border border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-800">
+            <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" className="text-amber-600 dark:text-amber-400 flex-shrink-0"><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
+            <p className="text-sm text-amber-800 dark:text-amber-300">
+              {lang === "it" ? "La pubblicazione di campagne è temporaneamente disabilitata dall'amministratore." : "Campaign publishing is temporarily disabled by the administrator."}
+            </p>
+          </div>
+        )}
+
         {showForm ? (
           <div className="px-5 py-4">
             <div className="flex items-center gap-2 mb-4">
@@ -1422,8 +1446,9 @@ export default function DonationCampaignManager({ accountType }: {
           </div>
         ) : (
           <button
-            onClick={() => setShowForm(true)}
-            className="w-full py-3 text-sm font-medium text-primary hover:bg-muted/50 transition-colors"
+            onClick={() => campaignsEnabled && setShowForm(true)}
+            disabled={!campaignsEnabled}
+            className="w-full py-3 text-sm font-medium text-primary hover:bg-muted/50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
           >
             + {l.create}
           </button>

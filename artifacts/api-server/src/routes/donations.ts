@@ -13,6 +13,7 @@ import {
 import { eq, and, desc, sql, gt, gte, lte, count, ilike } from "drizzle-orm";
 import { fetchFiscalSnapshot } from "../lib/fiscalSnapshot";
 import { computeDiscountedCents } from "./discountCodes";
+import { isCampaignsEnabled } from "../lib/appSettings";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth";
 import { requireAdmin } from "../middlewares/requireAdmin";
 import { getUncachableStripeClient, getStripePublishableKey } from "../lib/stripe";
@@ -550,6 +551,11 @@ async function resolveDiscountCode(
 router.post("/campaigns/initiate-payment", requireAuth, async (req, res) => {
   const userId = (req as AuthenticatedRequest).userId;
   try {
+    if (!(await isCampaignsEnabled())) {
+      res.status(503).json({ error: "La pubblicazione di campagne è temporaneamente disabilitata dall'amministratore." });
+      return;
+    }
+
     const [user] = await db
       .select({ accountType: usersTable.accountType })
       .from(usersTable)
@@ -870,6 +876,11 @@ router.post("/campaigns/confirm-payment", requireAuth, async (req, res) => {
 router.post("/campaigns/initiate-payment-paypal", requireAuth, async (req, res) => {
   const userId = (req as AuthenticatedRequest).userId;
   try {
+    if (!(await isCampaignsEnabled())) {
+      res.status(503).json({ error: "La pubblicazione di campagne è temporaneamente disabilitata dall'amministratore." });
+      return;
+    }
+
     if (!isPayPalConfigured()) {
       res.status(503).json({ error: "PayPal not configured" });
       return;

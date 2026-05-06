@@ -127,6 +127,21 @@ export default function CampaignsPage() {
 
   const hasActiveFilter = appliedComune || appliedProvincia;
 
+  const { data: appSettings } = useQuery<{ adoptionsEnabled: boolean; campaignsEnabled: boolean }>({
+    queryKey: ["app-settings-public"],
+    queryFn: async () => {
+      const res = await fetch("/api/app-settings/public");
+      if (!res.ok) return { adoptionsEnabled: true, campaignsEnabled: true };
+      return res.json();
+    },
+    staleTime: Infinity,
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
+    refetchOnReconnect: false,
+    refetchInterval: false,
+  });
+  const campaignsEnabled = appSettings?.campaignsEnabled ?? true;
+
   const { data: campaigns = [], isLoading: loading } = useQuery<Campaign[]>({
     queryKey: ["campaigns-active", appliedComune, appliedProvincia],
     queryFn: async () => {
@@ -150,6 +165,17 @@ export default function CampaignsPage() {
         <div className="flex items-center justify-between mb-4">
           <h1 className="text-xl font-bold text-foreground">{l.title}</h1>
         </div>
+
+        {!campaignsEnabled && (
+          <div className="mb-4 flex items-center gap-3 px-4 py-3 rounded-xl border border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-800">
+            <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" className="text-amber-600 dark:text-amber-400 flex-shrink-0"><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
+            <p className="text-sm text-amber-800 dark:text-amber-300">
+              {lang === "it" || !lang
+                ? "Le campagne sono temporaneamente disabilitate dall'amministratore."
+                : "Campaigns are temporarily disabled by the administrator."}
+            </p>
+          </div>
+        )}
 
         <div className="space-y-2 mb-5">
           <div className="flex gap-2">

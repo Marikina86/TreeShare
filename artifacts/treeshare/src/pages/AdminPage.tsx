@@ -191,12 +191,16 @@ function AdminSettingsSection({
         subtitle: "Abilita o disabilita funzionalità per tutti gli utenti.",
         adoptionsTitle: "Adozioni alberi",
         adoptionsDesc: "Quando disabilitate, le organizzazioni non possono creare nuovi alberi in adozione e il pulsante \"Aggiungi albero\" appare sfocato.",
+        campaignsTitle: "Campagne sponsorizzate",
+        campaignsDesc: "Quando disabilitate, le organizzazioni non possono pubblicare nuove campagne e il pulsante di pagamento viene bloccato anche lato server.",
         enabled: "Abilitate",
         disabled: "Disabilitate",
         loading: "Caricamento...",
         loadError: "Errore caricamento impostazioni",
-        savedEnabled: "Adozioni abilitate",
-        savedDisabled: "Adozioni disabilitate",
+        adoptionsSavedEnabled: "Adozioni abilitate",
+        adoptionsSavedDisabled: "Adozioni disabilitate",
+        campaignsSavedEnabled: "Campagne abilitate",
+        campaignsSavedDisabled: "Campagne disabilitate",
         saveError: "Errore aggiornamento impostazione",
       }
     : {
@@ -204,16 +208,20 @@ function AdminSettingsSection({
         subtitle: "Enable or disable features for all users.",
         adoptionsTitle: "Tree adoptions",
         adoptionsDesc: "When disabled, organizations cannot create new adoptable trees and the \"Add tree\" button is blurred.",
+        campaignsTitle: "Sponsored campaigns",
+        campaignsDesc: "When disabled, organizations cannot publish new campaigns and the payment button is blocked server-side too.",
         enabled: "Enabled",
         disabled: "Disabled",
         loading: "Loading...",
         loadError: "Failed to load settings",
-        savedEnabled: "Adoptions enabled",
-        savedDisabled: "Adoptions disabled",
+        adoptionsSavedEnabled: "Adoptions enabled",
+        adoptionsSavedDisabled: "Adoptions disabled",
+        campaignsSavedEnabled: "Campaigns enabled",
+        campaignsSavedDisabled: "Campaigns disabled",
         saveError: "Failed to update setting",
       };
 
-  const settingsQuery = useQuery<{ adoptionsEnabled: boolean }>({
+  const settingsQuery = useQuery<{ adoptionsEnabled: boolean; campaignsEnabled: boolean }>({
     queryKey: ["admin-app-settings"],
     queryFn: async () => {
       const res = await authFetch("/api/admin/app-settings");
@@ -223,6 +231,7 @@ function AdminSettingsSection({
   });
 
   const adoptionsEnabled = settingsQuery.data?.adoptionsEnabled ?? true;
+  const campaignsEnabled = settingsQuery.data?.campaignsEnabled ?? true;
 
   async function toggleAdoptions(next: boolean) {
     setSaving(true);
@@ -234,12 +243,60 @@ function AdminSettingsSection({
       if (!res.ok) throw new Error("save failed");
       await queryClient.invalidateQueries({ queryKey: ["admin-app-settings"] });
       await queryClient.invalidateQueries({ queryKey: ["app-settings-public"] });
-      toast({ title: next ? T.savedEnabled : T.savedDisabled });
+      toast({ title: next ? T.adoptionsSavedEnabled : T.adoptionsSavedDisabled });
     } catch {
       toast({ title: T.saveError, variant: "destructive" });
     } finally {
       setSaving(false);
     }
+  }
+
+  async function toggleCampaigns(next: boolean) {
+    setSaving(true);
+    try {
+      const res = await authFetch("/api/admin/app-settings/campaigns", {
+        method: "PUT",
+        body: JSON.stringify({ enabled: next }),
+      });
+      if (!res.ok) throw new Error("save failed");
+      await queryClient.invalidateQueries({ queryKey: ["admin-app-settings"] });
+      await queryClient.invalidateQueries({ queryKey: ["app-settings-public"] });
+      toast({ title: next ? T.campaignsSavedEnabled : T.campaignsSavedDisabled });
+    } catch {
+      toast({ title: T.saveError, variant: "destructive" });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function ToggleCard({
+    emoji, title, desc, enabled, onToggle,
+  }: { emoji: string; title: string; desc: string; enabled: boolean; onToggle: (v: boolean) => void }) {
+    return (
+      <div className="bg-card border border-border rounded-2xl p-5 flex items-start justify-between gap-4">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <span className="text-2xl">{emoji}</span>
+            <h3 className="font-semibold text-foreground">{title}</h3>
+            <span className={`text-[11px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full ${enabled ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300" : "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300"}`}>
+              {enabled ? T.enabled : T.disabled}
+            </span>
+          </div>
+          <p className="text-sm text-muted-foreground mt-2">{desc}</p>
+        </div>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={enabled}
+          disabled={saving}
+          onClick={() => onToggle(!enabled)}
+          className={`relative inline-flex h-7 w-12 shrink-0 items-center rounded-full transition-colors disabled:opacity-50 ${enabled ? "bg-emerald-500" : "bg-muted"}`}
+          title={enabled ? T.enabled : T.disabled}
+        >
+          <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${enabled ? "translate-x-6" : "translate-x-1"}`} />
+        </button>
+      </div>
+    );
   }
 
   return (
@@ -254,41 +311,21 @@ function AdminSettingsSection({
       ) : settingsQuery.isError ? (
         <div className="text-center py-10 text-destructive text-sm">{T.loadError}</div>
       ) : (
-        <div className="bg-card border border-border rounded-2xl p-5 flex items-start justify-between gap-4">
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2">
-              <span className="text-2xl">🌳</span>
-              <h3 className="font-semibold text-foreground">{T.adoptionsTitle}</h3>
-              <span
-                className={`text-[11px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full ${
-                  adoptionsEnabled
-                    ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300"
-                    : "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300"
-                }`}
-              >
-                {adoptionsEnabled ? T.enabled : T.disabled}
-              </span>
-            </div>
-            <p className="text-sm text-muted-foreground mt-2">{T.adoptionsDesc}</p>
-          </div>
-
-          <button
-            type="button"
-            role="switch"
-            aria-checked={adoptionsEnabled}
-            disabled={saving}
-            onClick={() => toggleAdoptions(!adoptionsEnabled)}
-            className={`relative inline-flex h-7 w-12 shrink-0 items-center rounded-full transition-colors disabled:opacity-50 ${
-              adoptionsEnabled ? "bg-emerald-500" : "bg-muted"
-            }`}
-            title={adoptionsEnabled ? T.enabled : T.disabled}
-          >
-            <span
-              className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${
-                adoptionsEnabled ? "translate-x-6" : "translate-x-1"
-              }`}
-            />
-          </button>
+        <div className="space-y-3">
+          <ToggleCard
+            emoji="🌳"
+            title={T.adoptionsTitle}
+            desc={T.adoptionsDesc}
+            enabled={adoptionsEnabled}
+            onToggle={toggleAdoptions}
+          />
+          <ToggleCard
+            emoji="📢"
+            title={T.campaignsTitle}
+            desc={T.campaignsDesc}
+            enabled={campaignsEnabled}
+            onToggle={toggleCampaigns}
+          />
         </div>
       )}
     </div>

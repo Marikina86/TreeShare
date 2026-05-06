@@ -5,10 +5,12 @@ import { logger } from "./logger";
 
 export const SETTING_KEYS = {
   ADOPTIONS_ENABLED: "adoptions_enabled",
+  CAMPAIGNS_ENABLED: "campaigns_enabled",
 } as const;
 
 export const SETTING_DEFAULTS: Record<string, string> = {
   [SETTING_KEYS.ADOPTIONS_ENABLED]: "true",
+  [SETTING_KEYS.CAMPAIGNS_ENABLED]: "true",
 };
 
 export async function getSetting(key: string): Promise<string> {
@@ -45,4 +47,8 @@ export async function setSetting(
 
 export async function isAdoptionsEnabled(): Promise<boolean> {
   return getBoolSetting(SETTING_KEYS.ADOPTIONS_ENABLED);
+}
+
+export async function isCampaignsEnabled(): Promise<boolean> {
+  return getBoolSetting(SETTING_KEYS.CAMPAIGNS_ENABLED);
 }
