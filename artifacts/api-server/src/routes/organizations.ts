@@ -5,7 +5,7 @@ import { db } from "@workspace/db";
 import { organizationsTable, registerEnteSchema, userConsentsTable, policiesTable, usersTable, bannedEmailsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth";
-import { sendEmail } from "../lib/email";
+
 
 const router = Router();
 
@@ -189,54 +189,24 @@ router.post("/register-ente", async (req, res) => {
       return;
     }
 
-    // Genera link di conferma e invia alla PEC
+    // Invia email di conferma tramite Supabase SMTP (configurato nel dashboard Supabase)
     const allowedOrigin = getAppOrigin();
     const redirectTo = allowedOrigin ? `${allowedOrigin}/register-ente/activate` : undefined;
 
-    const { data: linkData, error: linkErr } = await supabaseAdmin.auth.admin.generateLink({
-      type: "signup",
-      email: data.emailUfficiale,
-      password: "",
-      options: redirectTo ? { redirectTo } : {},
+    const supabaseUrl = process.env.SUPABASE_URL!;
+    const anonKey = (process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY)!;
+    const resendUrl = redirectTo
+      ? `${supabaseUrl}/auth/v1/resend?redirect_to=${encodeURIComponent(redirectTo)}`
+      : `${supabaseUrl}/auth/v1/resend`;
+    const resendRes = await fetch(resendUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", apikey: anonKey, Authorization: `Bearer ${anonKey}` },
+      body: JSON.stringify({ type: "signup", email: data.emailUfficiale }),
     });
-
-    if (linkErr || !linkData?.properties?.action_link) {
-      req.log?.warn?.({ err: linkErr }, "generateLink fallito per ente — fallback resend Supabase");
-      // Fallback: resend Supabase standard (invia all'emailUfficiale)
-      const supabaseUrl = process.env.SUPABASE_URL!;
-      const anonKey = (process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY)!;
-      const resendUrl = redirectTo
-        ? `${supabaseUrl}/auth/v1/resend?redirect_to=${encodeURIComponent(redirectTo)}`
-        : `${supabaseUrl}/auth/v1/resend`;
-      await fetch(resendUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", apikey: anonKey, Authorization: `Bearer ${anonKey}` },
-        body: JSON.stringify({ type: "signup", email: data.emailUfficiale }),
-      });
+    if (resendRes.ok) {
+      req.log?.info?.({ email: data.emailUfficiale }, "Email di conferma ente inviata via Supabase SMTP");
     } else {
-      const verificationUrl = linkData.properties.action_link;
-      const emailTo = data.emailUfficiale;
-      const { sent, error: mailErr } = await sendEmail(
-        emailTo,
-        "TreeShare — Conferma la registrazione del tuo ente",
-        `<div style="font-family:sans-serif;max-width:520px;margin:0 auto">
-          <h2 style="color:#166534">Benvenuto su TreeShare</h2>
-          <p>Clicca sul pulsante qui sotto per confermare la registrazione del tuo ente e attivare il profilo.</p>
-          <p style="margin:24px 0">
-            <a href="${verificationUrl}" style="background:#16a34a;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600">
-              Conferma registrazione
-            </a>
-          </p>
-          <p style="color:#6b7280;font-size:13px">Il link è valido per 24 ore. Se non hai richiesto questa registrazione, ignora questa email.</p>
-          <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0"/>
-          <p style="color:#9ca3af;font-size:12px">TreeShare — Piattaforma per la gestione e monitoraggio delle piantumazioni</p>
-        </div>`,
-      );
-      if (sent) {
-        req.log?.info?.({ emailTo }, "Email di conferma ente inviata all'email ufficiale");
-      } else {
-        req.log?.warn?.({ mailErr }, "Invio email di conferma fallito — il link è stato generato ma non spedito");
-      }
+      req.log?.warn?.({ status: resendRes.status }, "Invio email di conferma ente fallito");
     }
 
     // Risposta: nessun DB record creato. Il profilo viene creato su /activate.
@@ -392,50 +362,10 @@ router.post("/register-ente/resend-verification", async (req, res) => {
 
   const trimmedEmail = email.trim();
 
-  const supabaseAdmin = getSupabaseAdmin();
-  if (!supabaseAdmin) {
-    res.status(500).json({ error: "Servizio non disponibile" });
-    return;
-  }
-
   try {
     const allowedOrigin = getAppOrigin();
     const redirectTo = allowedOrigin ? `${allowedOrigin}/register-ente/activate` : undefined;
 
-    // Genera link e invia all'email ufficiale via SMTP
-    const { data: linkData, error: linkErr } = await supabaseAdmin.auth.admin.generateLink({
-      type: "signup",
-      email: trimmedEmail,
-      password: "",
-      options: redirectTo ? { redirectTo } : {},
-    });
-
-    if (!linkErr && linkData?.properties?.action_link) {
-      const verificationUrl = linkData.properties.action_link;
-      const { sent } = await sendEmail(
-        trimmedEmail,
-        "TreeShare — Conferma la registrazione del tuo ente",
-        `<div style="font-family:sans-serif;max-width:520px;margin:0 auto">
-          <h2 style="color:#166534">Conferma la registrazione</h2>
-          <p>Clicca sul pulsante qui sotto per confermare la registrazione del tuo ente su TreeShare.</p>
-          <p style="margin:24px 0">
-            <a href="${verificationUrl}" style="background:#16a34a;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600">
-              Conferma registrazione
-            </a>
-          </p>
-          <p style="color:#6b7280;font-size:13px">Il link è valido per 24 ore.</p>
-          <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0"/>
-          <p style="color:#9ca3af;font-size:12px">TreeShare — Piattaforma per la gestione e monitoraggio delle piantumazioni</p>
-        </div>`,
-      );
-      if (sent) {
-        res.json({ ok: true });
-        return;
-      }
-      req.log?.warn?.("Resend SMTP fallito — fallback a Supabase resend");
-    }
-
-    // Fallback: resend Supabase standard (invia all'emailUfficiale)
     const supabaseUrl = process.env.SUPABASE_URL!;
     const anonKey = (process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY)!;
     const resendUrl = redirectTo
