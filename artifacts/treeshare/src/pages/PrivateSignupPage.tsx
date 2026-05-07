@@ -32,6 +32,24 @@ function getPasswordStrength(pw: string) {
 export default function PrivateSignupPage() {
   const { lang } = useLang();
 
+  const [policyNotes, setPolicyNotes] = useState<{
+    privacy: string | null;
+    terms: string | null;
+    location: string | null;
+    marketing: string | null;
+  }>({ privacy: null, terms: null, location: null, marketing: null });
+
+  useEffect(() => {
+    (["privacy", "terms", "location", "marketing"] as const).forEach(async (type) => {
+      try {
+        const r = await fetch(`/api/policies/${type}`);
+        if (!r.ok) return;
+        const data = await r.json();
+        if (data?.consentNote) setPolicyNotes((p) => ({ ...p, [type]: data.consentNote }));
+      } catch {}
+    });
+  }, []);
+
   const [step, setStep] = useState<"form" | "verify">("form");
   const [submitting, setSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -454,9 +472,11 @@ export default function PrivateSignupPage() {
                 className="mt-0.5 h-4 w-4 shrink-0 rounded border-border accent-primary cursor-pointer"
               />
               <span className="text-sm leading-snug text-foreground">
-                {lang === "en"
-                  ? <>I declare I have read and understood the <Link href="/privacy" className="underline text-primary font-medium">privacy policy</Link> <span className="text-destructive">*</span></>
-                  : <>Dichiaro di aver letto e compreso la <Link href="/privacy" className="underline text-primary font-medium">privacy policy</Link> <span className="text-destructive">*</span></>}
+                {policyNotes.privacy
+                  ? <>{policyNotes.privacy} <span className="text-destructive">*</span></>
+                  : lang === "en"
+                    ? <>I declare I have read and understood the <Link href="/privacy" className="underline text-primary font-medium">privacy policy</Link> <span className="text-destructive">*</span></>
+                    : <>Dichiaro di aver letto e compreso la <Link href="/privacy" className="underline text-primary font-medium">privacy policy</Link> <span className="text-destructive">*</span></>}
               </span>
             </label>
             <FieldError message={errors.acceptPrivacy} />
@@ -473,9 +493,11 @@ export default function PrivateSignupPage() {
                 className="mt-0.5 h-4 w-4 shrink-0 rounded border-border accent-primary cursor-pointer"
               />
               <span className="text-sm leading-snug text-foreground">
-                {lang === "en"
-                  ? <>I have read and accept the <Link href="/terms" className="underline text-primary font-medium">terms and conditions</Link> <span className="text-destructive">*</span></>
-                  : <>Ho letto e accetto i <Link href="/terms" className="underline text-primary font-medium">termini e condizioni</Link> <span className="text-destructive">*</span></>}
+                {policyNotes.terms
+                  ? <>{policyNotes.terms} <span className="text-destructive">*</span></>
+                  : lang === "en"
+                    ? <>I have read and accept the <Link href="/terms" className="underline text-primary font-medium">terms and conditions</Link> <span className="text-destructive">*</span></>
+                    : <>Ho letto e accetto i <Link href="/terms" className="underline text-primary font-medium">termini e condizioni</Link> <span className="text-destructive">*</span></>}
               </span>
             </label>
             <FieldError message={errors.acceptTerms} />
@@ -483,9 +505,11 @@ export default function PrivateSignupPage() {
             {/* Consenso posizione */}
             <div className={`space-y-2 ${errors.locationConsent ? "text-destructive" : ""}`}>
               <p className="text-sm leading-snug text-foreground">
-                {lang === "en"
-                  ? <>Consent to the use of my location to localise trees and improve the services offered. <span className="text-destructive">*</span></>
-                  : <>Acconsento all'utilizzo della mia posizione per localizzare gli alberi e migliorare i servizi offerti. <span className="text-destructive">*</span></>}
+                {policyNotes.location
+                  ? <>{policyNotes.location} <span className="text-destructive">*</span></>
+                  : lang === "en"
+                    ? <>Consent to the use of my location to localise trees and improve the services offered. <span className="text-destructive">*</span></>
+                    : <>Acconsento all'utilizzo della mia posizione per localizzare gli alberi e migliorare i servizi offerti. <span className="text-destructive">*</span></>}
               </p>
               <div className="flex items-center gap-6">
                 <label className="flex items-center gap-2 cursor-pointer">
@@ -518,9 +542,11 @@ export default function PrivateSignupPage() {
             {/* Consenso marketing */}
             <div className={`space-y-2 ${errors.marketingConsent ? "text-destructive" : ""}`}>
               <p className="text-sm leading-snug text-foreground">
-                {lang === "en"
-                  ? <>Consent to receive promotional notifications and commercial communications and to the analysis of my preferences and activity to receive personalised suggestions. <span className="text-destructive">*</span></>
-                  : <>Acconsento a ricevere notifiche promozionali e comunicazioni commerciali e all'analisi delle mie preferenze e attività per ricevere suggerimenti personalizzati. <span className="text-destructive">*</span></>}
+                {policyNotes.marketing
+                  ? <>{policyNotes.marketing} <span className="text-destructive">*</span></>
+                  : lang === "en"
+                    ? <>Consent to receive promotional notifications and commercial communications and to the analysis of my preferences and activity to receive personalised suggestions. <span className="text-destructive">*</span></>
+                    : <>Acconsento a ricevere notifiche promozionali e comunicazioni commerciali e all'analisi delle mie preferenze e attività per ricevere suggerimenti personalizzati. <span className="text-destructive">*</span></>}
               </p>
               <div className="flex items-center gap-6">
                 <label className="flex items-center gap-2 cursor-pointer">

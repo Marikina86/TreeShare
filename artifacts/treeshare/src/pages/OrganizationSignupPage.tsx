@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import CityAutocomplete from "@/components/CityAutocomplete";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -169,6 +169,25 @@ function SectionHeader({ icon: Icon, title }: { icon: React.ElementType; title: 
 
 export default function OrganizationSignupPage() {
   const [, setLocation] = useLocation();
+
+  const [policyNotes, setPolicyNotes] = useState<{
+    privacy: string | null;
+    terms: string | null;
+    location: string | null;
+    marketing: string | null;
+  }>({ privacy: null, terms: null, location: null, marketing: null });
+
+  useEffect(() => {
+    (["privacy", "terms", "location", "marketing"] as const).forEach(async (type) => {
+      try {
+        const r = await fetch(`/api/policies/${type}`);
+        if (!r.ok) return;
+        const data = await r.json();
+        if (data?.consentNote) setPolicyNotes((p) => ({ ...p, [type]: data.consentNote }));
+      } catch {}
+    });
+  }, []);
+
   const [step, setStep] = useState<"form" | "verify">("form");
   const [submitting, setSubmitting] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
@@ -784,7 +803,9 @@ export default function OrganizationSignupPage() {
                   className="mt-1 h-4 w-4 rounded border-border accent-primary flex-shrink-0"
                 />
                 <span className="text-sm leading-snug">
-                  Dichiaro di aver letto e compreso la <Link to="/privacy" className="underline text-primary font-medium">privacy policy</Link> <span className="text-destructive">*</span>
+                  {policyNotes.privacy
+                    ? <>{policyNotes.privacy} <span className="text-destructive">*</span></>
+                    : <>Dichiaro di aver letto e compreso la <Link to="/privacy" className="underline text-primary font-medium">privacy policy</Link> <span className="text-destructive">*</span></>}
                 </span>
               </label>
               {consentErrors.privacy && (
@@ -806,7 +827,9 @@ export default function OrganizationSignupPage() {
                   className="mt-1 h-4 w-4 rounded border-border accent-primary flex-shrink-0"
                 />
                 <span className="text-sm leading-snug">
-                  Ho letto e accetto i <Link to="/terms" className="underline text-primary font-medium">termini e condizioni</Link> <span className="text-destructive">*</span>
+                  {policyNotes.terms
+                    ? <>{policyNotes.terms} <span className="text-destructive">*</span></>
+                    : <>Ho letto e accetto i <Link to="/terms" className="underline text-primary font-medium">termini e condizioni</Link> <span className="text-destructive">*</span></>}
                 </span>
               </label>
               {consentErrors.terms && (
@@ -819,7 +842,9 @@ export default function OrganizationSignupPage() {
               {/* Consenso posizione */}
               <div className={`space-y-2 ${consentErrors.location ? "text-destructive" : ""}`}>
                 <p className="text-sm leading-snug text-foreground">
-                  Acconsento all&rsquo;utilizzo della mia posizione per localizzare gli alberi e migliorare i servizi offerti. <span className="text-destructive">*</span>
+                  {policyNotes.location
+                    ? <>{policyNotes.location} <span className="text-destructive">*</span></>
+                    : <>Acconsento all&rsquo;utilizzo della mia posizione per localizzare gli alberi e migliorare i servizi offerti. <span className="text-destructive">*</span></>}
                 </p>
                 <div className="flex items-center gap-6">
                   <label className="flex items-center gap-2 cursor-pointer">
@@ -855,7 +880,9 @@ export default function OrganizationSignupPage() {
               {/* Consenso marketing */}
               <div className={`space-y-2 ${consentErrors.marketing ? "text-destructive" : ""}`}>
                 <p className="text-sm leading-snug text-foreground">
-                  Acconsento a ricevere notifiche promozionali e comunicazioni commerciali e all&rsquo;analisi delle mie preferenze e attività per ricevere suggerimenti personalizzati. <span className="text-destructive">*</span>
+                  {policyNotes.marketing
+                    ? <>{policyNotes.marketing} <span className="text-destructive">*</span></>
+                    : <>Acconsento a ricevere notifiche promozionali e comunicazioni commerciali e all&rsquo;analisi delle mie preferenze e attività per ricevere suggerimenti personalizzati. <span className="text-destructive">*</span></>}
                 </p>
                 <div className="flex items-center gap-6">
                   <label className="flex items-center gap-2 cursor-pointer">
