@@ -215,9 +215,9 @@ router.post("/register-ente", async (req, res) => {
       });
     } else {
       const verificationUrl = linkData.properties.action_link;
-      const pecTo = data.pec!;
+      const emailTo = data.emailUfficiale;
       const { sent, error: mailErr } = await sendEmail(
-        pecTo,
+        emailTo,
         "TreeShare — Conferma la registrazione del tuo ente",
         `<div style="font-family:sans-serif;max-width:520px;margin:0 auto">
           <h2 style="color:#166534">Benvenuto su TreeShare</h2>
@@ -233,9 +233,9 @@ router.post("/register-ente", async (req, res) => {
         </div>`,
       );
       if (sent) {
-        req.log?.info?.({ pecTo }, "Email di conferma ente inviata alla PEC");
+        req.log?.info?.({ emailTo }, "Email di conferma ente inviata all'email ufficiale");
       } else {
-        req.log?.warn?.({ mailErr }, "Invio email PEC fallito — il link è stato generato ma non spedito");
+        req.log?.warn?.({ mailErr }, "Invio email di conferma fallito — il link è stato generato ma non spedito");
       }
     }
 
@@ -391,7 +391,6 @@ router.post("/register-ente/resend-verification", async (req, res) => {
   }
 
   const trimmedEmail = email.trim();
-  const trimmedPec = typeof pec === "string" ? pec.trim() : null;
 
   const supabaseAdmin = getSupabaseAdmin();
   if (!supabaseAdmin) {
@@ -403,39 +402,37 @@ router.post("/register-ente/resend-verification", async (req, res) => {
     const allowedOrigin = getAppOrigin();
     const redirectTo = allowedOrigin ? `${allowedOrigin}/register-ente/activate` : undefined;
 
-    // Se abbiamo la PEC, generiamo il link e lo inviamo alla PEC via SMTP
-    if (trimmedPec) {
-      const { data: linkData, error: linkErr } = await supabaseAdmin.auth.admin.generateLink({
-        type: "signup",
-        email: trimmedEmail,
-        password: "",
-        options: redirectTo ? { redirectTo } : {},
-      });
+    // Genera link e invia all'email ufficiale via SMTP
+    const { data: linkData, error: linkErr } = await supabaseAdmin.auth.admin.generateLink({
+      type: "signup",
+      email: trimmedEmail,
+      password: "",
+      options: redirectTo ? { redirectTo } : {},
+    });
 
-      if (!linkErr && linkData?.properties?.action_link) {
-        const verificationUrl = linkData.properties.action_link;
-        const { sent } = await sendEmail(
-          trimmedPec,
-          "TreeShare — Conferma la registrazione del tuo ente",
-          `<div style="font-family:sans-serif;max-width:520px;margin:0 auto">
-            <h2 style="color:#166534">Conferma la registrazione</h2>
-            <p>Clicca sul pulsante qui sotto per confermare la registrazione del tuo ente su TreeShare.</p>
-            <p style="margin:24px 0">
-              <a href="${verificationUrl}" style="background:#16a34a;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600">
-                Conferma registrazione
-              </a>
-            </p>
-            <p style="color:#6b7280;font-size:13px">Il link è valido per 24 ore.</p>
-            <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0"/>
-            <p style="color:#9ca3af;font-size:12px">TreeShare — Piattaforma per la gestione e monitoraggio delle piantumazioni</p>
-          </div>`,
-        );
-        if (sent) {
-          res.json({ ok: true });
-          return;
-        }
-        req.log?.warn?.("Resend PEC SMTP fallito — fallback a Supabase resend");
+    if (!linkErr && linkData?.properties?.action_link) {
+      const verificationUrl = linkData.properties.action_link;
+      const { sent } = await sendEmail(
+        trimmedEmail,
+        "TreeShare — Conferma la registrazione del tuo ente",
+        `<div style="font-family:sans-serif;max-width:520px;margin:0 auto">
+          <h2 style="color:#166534">Conferma la registrazione</h2>
+          <p>Clicca sul pulsante qui sotto per confermare la registrazione del tuo ente su TreeShare.</p>
+          <p style="margin:24px 0">
+            <a href="${verificationUrl}" style="background:#16a34a;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600">
+              Conferma registrazione
+            </a>
+          </p>
+          <p style="color:#6b7280;font-size:13px">Il link è valido per 24 ore.</p>
+          <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0"/>
+          <p style="color:#9ca3af;font-size:12px">TreeShare — Piattaforma per la gestione e monitoraggio delle piantumazioni</p>
+        </div>`,
+      );
+      if (sent) {
+        res.json({ ok: true });
+        return;
       }
+      req.log?.warn?.("Resend SMTP fallito — fallback a Supabase resend");
     }
 
     // Fallback: resend Supabase standard (invia all'emailUfficiale)
