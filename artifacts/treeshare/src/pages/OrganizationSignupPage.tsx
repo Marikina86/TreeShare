@@ -183,7 +183,7 @@ export default function OrganizationSignupPage() {
         const r = await fetch(`/api/policies/${type}`);
         if (!r.ok) return;
         const data = await r.json();
-        if (data?.consentNote) setPolicyNotes((p) => ({ ...p, [type]: data.consentNote }));
+        if (data?.checkboxLabel) setPolicyNotes((p) => ({ ...p, [type]: data.checkboxLabel }));
       } catch {}
     });
   }, []);
