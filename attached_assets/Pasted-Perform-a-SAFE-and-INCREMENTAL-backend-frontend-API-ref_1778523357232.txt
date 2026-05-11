@@ -1,0 +1,145 @@
+Perform a SAFE and INCREMENTAL backend/frontend API refactor focused on reducing API calls, bandwidth usage, and duplicated requests.
+
+IMPORTANT HARD RULES:
+- Do NOT break existing functionality
+- Do NOT remove existing endpoints immediately
+- Do NOT change business logic
+- Do NOT modify database schema
+- Do NOT rewrite the whole backend at once
+- Do NOT modify unrelated pages or features
+- Keep backward compatibility during migration
+- Work domain-by-domain only
+
+GOAL:
+Reduce API calls per page from many small requests to 1–2 aggregated requests.
+
+TARGET DOMAINS:
+1. dashboard
+2. trees
+3. users
+4. notifications
+5. donations
+6. admin
+
+==================================================
+STEP 1 — CREATE NEW AGGREGATED ENDPOINTS
+==================================================
+
+Create NEW aggregated endpoints WITHOUT removing old ones:
+
+- /api/dashboard
+- /api/trees/:id/activity
+- /api/users/profile-full/:id
+- /api/notifications/unified
+
+AGGREGATION RULES:
+
+/api/dashboard should combine:
+- global stats
+- weekly winners
+- tips
+- trees preview
+- alerts preview
+- notifications preview
+
+/api/trees/:id/activity should combine:
+- tree updates
+- status reports
+- activity logs
+
+/api/users/profile-full/:id should combine:
+- user profile
+- user stats
+- related user context
+
+/api/notifications/unified should combine:
+- inbox
+- alerts
+- notifications
+
+PAYLOAD OPTIMIZATION:
+- remove duplicated fields
+- avoid SELECT *
+- return only required data
+- reduce nested duplication
+
+==================================================
+STEP 2 — VALIDATE BACKEND
+==================================================
+
+After creating endpoints:
+- ensure server starts correctly
+- ensure routes are registered correctly
+- ensure endpoints return valid JSON
+- ensure no existing endpoint is broken
+
+Return:
+- modified backend files
+- created routes
+- new endpoint list
+
+==================================================
+STEP 3 — MIGRATE FRONTEND GRADUALLY
+==================================================
+
+Update ONLY frontend pages related to the new aggregated endpoints.
+
+Replace multiple fetch/API calls with a single aggregated fetch.
+
+EXAMPLE:
+Replace:
+- stats fetch
+- tips fetch
+- winners fetch
+- trees preview fetch
+
+With:
+- fetch("/api/dashboard")
+
+REQUIREMENTS:
+- keep existing UI behavior
+- preserve loading states
+- preserve state structure if possible
+- do NOT modify unrelated pages
+
+==================================================
+STEP 4 — VALIDATE FRONTEND OPTIMIZATION
+==================================================
+
+Check for:
+- duplicate API calls
+- repeated fetches caused by re-renders
+- old API calls still active
+- unnecessary polling
+- payload inefficiencies
+
+Optimize:
+- duplicate requests
+- unnecessary polling
+- repeated renders triggering API calls
+
+Return:
+- remaining duplicate calls
+- old endpoints still in use
+- estimated API reduction
+- estimated bandwidth reduction
+
+==================================================
+STEP 5 — SAFE CLEANUP
+==================================================
+
+ONLY after successful migration and validation:
+
+- identify old endpoints no longer used
+- verify frontend references before deletion
+- remove ONLY unused endpoints
+- remove unused imports/controllers/services
+
+IMPORTANT:
+Do NOT remove endpoints still referenced anywhere.
+
+Return:
+- removed endpoints
+- cleaned files
+- updated frontend references
+- final estimated reduction in API calls
