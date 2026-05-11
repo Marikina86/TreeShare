@@ -1,5 +1,6 @@
 import express, { type Express, type Request, type Response, type NextFunction } from "express";
 import cors from "cors";
+import compression from "compression";
 import pinoHttp from "pino-http";
 import helmet from "helmet";
 import { rateLimit } from "express-rate-limit";
@@ -60,6 +61,8 @@ app.use(
 );
 
 app.use(cors({ credentials: true, origin: true }));
+
+app.use(compression());
 
 const globalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,

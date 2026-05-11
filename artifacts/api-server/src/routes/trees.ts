@@ -191,7 +191,7 @@ router.get("/trees", async (req, res) => {
 
     const formatted = trees.map((t) => {
       const u = userMap.get(t.userId);
-      return formatTree(
+      const { mapsUrl: _m, verificationBypassed: _v, ...slim } = formatTree(
         t,
         u?.username ?? "Unknown",
         u?.photoUrl ?? null,
@@ -201,6 +201,7 @@ router.get("/trees", async (req, res) => {
         winnerIds.has(t.id),
         deadSet.has(t.id),
       );
+      return slim;
     });
 
     res.json({ trees: formatted, total: Number(total), page, limit });
