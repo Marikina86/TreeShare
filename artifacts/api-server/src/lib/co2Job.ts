@@ -1,11 +1,14 @@
 import { db } from "@workspace/db";
 import { treesTable, co2RankingsTable, treeStatusReportsTable } from "@workspace/db";
-import { sql, and, eq, isNotNull, isNull, gte, lt, desc, or } from "drizzle-orm";
+import { sql, and, eq, isNotNull, isNull, gte, lt, desc } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { logger } from "./logger";
 
 // 22 kg CO₂/anno per pianta ÷ 12 mesi × 3 mesi = CO₂ trimestrale per pianta
 const CO2_KG_PER_TREE_QUARTER = (22 / 12) * 3;
+
+// Soglia minima di piantatori distinti per qualificarsi alla classifica
+const MIN_PLANTERS = 3;
 
 /**
  * Restituisce la stringa del trimestre precedente rispetto al mese corrente Roma.
@@ -73,15 +76,15 @@ function getNextQuarterStartAt0001Rome(): Date {
   return new Date(now.getTime() + romeOffsetMs);
 }
 
-/** Dato "YYYY-Qn" restituisce il trimestre precedente. */
-function getQuarterBefore(quarterStr: string): string {
-  const [year, q] = quarterStr.split("-Q");
-  const y = parseInt(year);
-  const n = parseInt(q);
-  if (n === 1) return `${y - 1}-Q4`;
-  return `${y}-Q${n - 1}`;
-}
-
+/**
+ * Logica classifica CO₂ — pro-capite equa:
+ *
+ * Conta solo gli alberi PIANTATI nel trimestre in calcolo (createdAt nel range).
+ * Score = nuove_piante / piantatori_distinti → premia l'impegno medio per utente,
+ * non la dimensione assoluta del comune.
+ * Soglia minima: almeno MIN_PLANTERS utenti distinti per qualificarsi.
+ * Tie-break: numero assoluto di piante (a parità di score vince chi ha piantato di più).
+ */
 export async function calculateCo2Rankings(): Promise<void> {
   const quarterStr = getPreviousQuarterString();
 
@@ -103,38 +106,23 @@ export async function calculateCo2Rankings(): Promise<void> {
 
     logger.info(
       { quarter: quarterStr, start: start.toISOString(), end: end.toISOString() },
-      "[co2Job] Querying trees for quarter"
+      "[co2Job] Querying trees planted in quarter"
     );
 
-    const aliveReports = alias(treeStatusReportsTable, "alive_reports");
-    const deadReports  = alias(treeStatusReportsTable, "dead_reports");
+    const deadReports = alias(treeStatusReportsTable, "dead_reports");
 
-    // Cutoff "6 mesi": inizio del trimestre precedente a quello in calcolo
-    const prevQuarterStr = getQuarterBefore(quarterStr);
-    const sixMonthCutoff = new Date(start.getFullYear(), start.getMonth() - 3, 1);
-
-    // Conta solo alberi "vivi confermati":
-    // - Piantati negli ultimi 6 mesi (createdAt >= sixMonthCutoff): contano se non morti
-    // - Piantati da più di 6 mesi: devono avere un alive report nel trimestre corrente
-    //   O nel trimestre precedente (altrimenti 6+ mesi senza aggiornamenti → esclusi)
+    // Seleziona i comuni con più media piante/piantatore tra gli alberi piantati in questo trimestre.
+    // Escludi alberi già marcati morti nello stesso trimestre.
+    // HAVING: almeno MIN_PLANTERS piantatori distinti per evitare che un singolo utente vinca.
     const rows = await db
       .select({
-        comune: treesTable.locationName,
-        provincia: treesTable.province,
-        treeCount: sql<number>`cast(count(*) as int)`,
+        comune:           treesTable.locationName,
+        provincia:        treesTable.province,
+        treeCount:        sql<number>`cast(count(*) as int)`,
+        distinctPlanters: sql<number>`cast(count(distinct ${treesTable.userId}) as int)`,
+        score:            sql<number>`cast(count(*) as float) / cast(count(distinct ${treesTable.userId}) as float)`,
       })
       .from(treesTable)
-      .leftJoin(
-        aliveReports,
-        and(
-          eq(aliveReports.treeId, treesTable.id),
-          eq(aliveReports.status, "alive"),
-          or(
-            eq(aliveReports.quarter, quarterStr),
-            eq(aliveReports.quarter, prevQuarterStr),
-          ),
-        )
-      )
       .leftJoin(
         deadReports,
         and(
@@ -147,20 +135,24 @@ export async function calculateCo2Rankings(): Promise<void> {
         and(
           eq(treesTable.photoStatus, "approved"),
           isNotNull(treesTable.locationName),
+          gte(treesTable.createdAt, start),
           lt(treesTable.createdAt, end),
           isNull(deadReports.id),
-          or(
-            gte(treesTable.createdAt, sixMonthCutoff),  // < 6 mesi: conta sempre
-            isNotNull(aliveReports.id),                  // > 6 mesi: serve alive report recente
-          )
         )
       )
       .groupBy(treesTable.locationName, treesTable.province)
-      .orderBy(desc(sql`count(*)`))
+      .having(sql`count(distinct ${treesTable.userId}) >= ${MIN_PLANTERS}`)
+      .orderBy(
+        desc(sql`cast(count(*) as float) / cast(count(distinct ${treesTable.userId}) as float)`),
+        desc(sql`count(*)`),
+      )
       .limit(3);
 
     if (rows.length === 0) {
-      logger.info({ quarter: quarterStr }, "[co2Job] No approved trees found for this quarter, skipping");
+      logger.info(
+        { quarter: quarterStr, minPlanters: MIN_PLANTERS },
+        "[co2Job] No comuni with enough planters found for this quarter, skipping"
+      );
       return;
     }
 
@@ -168,20 +160,23 @@ export async function calculateCo2Rankings(): Promise<void> {
 
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i];
-      // CO₂ trimestrale = piante × (22 kg/anno ÷ 12 mesi × 3 mesi)
       const co2Kg = Math.round(row.treeCount * CO2_KG_PER_TREE_QUARTER * 100) / 100;
       await db.insert(co2RankingsTable).values({
-        month: quarterStr,
-        rank: i + 1,
-        comune: row.comune!,
-        provincia: row.provincia ?? null,
-        treeCount: row.treeCount,
+        month:            quarterStr,
+        rank:             i + 1,
+        comune:           row.comune!,
+        provincia:        row.provincia ?? null,
+        treeCount:        row.treeCount,
         co2Kg,
-        badge: badges[i],
+        badge:            badges[i],
+        distinctPlanters: row.distinctPlanters,
       }).onConflictDoNothing();
     }
 
-    logger.info({ quarter: quarterStr, winners: rows.length }, "[co2Job] CO2 rankings saved");
+    logger.info(
+      { quarter: quarterStr, winners: rows.length, minPlanters: MIN_PLANTERS },
+      "[co2Job] CO2 rankings saved"
+    );
   } catch (err) {
     logger.error({ err }, "[co2Job] Fatal error during CO2 ranking calculation");
   }

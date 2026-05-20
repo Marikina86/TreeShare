@@ -11,6 +11,7 @@ interface Co2Ranking {
   treeCount: number;
   co2Kg: number;
   badge: string;
+  distinctPlanters: number | null;
 }
 
 interface Co2Data {
@@ -109,14 +110,24 @@ function RankingCard({ r }: { r: Co2Ranking }) {
           {r.provincia ? ` (${r.provincia})` : ""}
         </h3>
         <p className="text-sm text-muted-foreground mt-0.5">
-          {r.treeCount} {r.treeCount === 1 ? "pianta piantata" : "piante piantate"}
+          {r.treeCount} {r.treeCount === 1 ? "nuova pianta" : "nuove piante"} nel trimestre
         </p>
+        {r.distinctPlanters != null && (
+          <p className="text-xs text-muted-foreground mt-0.5">
+            {r.distinctPlanters} {r.distinctPlanters === 1 ? "piantatore" : "piantatori"} attivi
+            {" · "}media{" "}
+            <strong className="text-foreground">
+              {(r.treeCount / r.distinctPlanters).toFixed(1)}
+            </strong>{" "}
+            piante/piantatore
+          </p>
+        )}
         <div className={`inline-flex items-center gap-1.5 mt-2.5 px-3 py-1.5 rounded-xl ${cfg.co2Bg}`}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={cfg.co2Text}>
             <path d="M12 22V14"/>
             <path d="M12 14C12 14 7 13 5 9C3 5 6 2 9 3C10.5 3.5 11.5 5 12 7C12.5 5 13.5 3.5 15 3C18 2 21 5 19 9C17 13 12 14 12 14Z"/>
           </svg>
-          <span className={`text-sm font-bold ${cfg.co2Text}`}>{formatCo2(r.co2Kg)} CO₂/trimestre assorbita</span>
+          <span className={`text-sm font-bold ${cfg.co2Text}`}>{formatCo2(r.co2Kg)} CO₂ assorbita nel trimestre</span>
         </div>
       </div>
     </div>
@@ -159,10 +170,11 @@ export default function Co2Page() {
             </svg>
           </div>
           <div className="text-sm text-muted-foreground leading-relaxed">
-            Ogni trimestre calcoliamo quanta <strong className="text-foreground">CO₂ viene assorbita</strong> dalle piante piantate nel trimestre precedente, per ogni comune.
-            Il calcolo si basa su <strong className="text-foreground">22 kg CO₂/anno ÷ 12 × 3 = 5,5 kg/trimestre per pianta</strong>.
-            La classifica viene aggiornata il <strong className="text-foreground">1° di aprile, luglio, ottobre e gennaio alle 00:01</strong> ora di Roma.{" "}
-            <span className="italic">I valori sono stime indicative.</span>
+            Ogni trimestre premiamo i comuni dove i piantatori sono stati <strong className="text-foreground">più attivi in media</strong>.
+            Il punteggio è la <strong className="text-foreground">media di nuove piante per piantatore</strong> nel trimestre — così i grandi comuni non vincono solo per dimensione.
+            {" "}Servono almeno <strong className="text-foreground">3 piantatori distinti</strong> per qualificarsi.
+            {" "}La classifica si aggiorna il <strong className="text-foreground">1° di aprile, luglio, ottobre e gennaio</strong>.{" "}
+            <span className="italic">I valori CO₂ sono stime indicative (22 kg/anno per pianta).</span>
           </div>
         </div>
 

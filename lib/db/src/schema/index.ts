@@ -457,6 +457,7 @@ export const co2RankingsTable = pgTable("co2_rankings", {
   treeCount: integer("tree_count").notNull(),
   co2Kg: real("co2_kg").notNull(),
   badge: text("badge").notNull(),
+  distinctPlanters: integer("distinct_planters"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 }, (table) => [
   index("co2_rankings_month_idx").on(table.month),
