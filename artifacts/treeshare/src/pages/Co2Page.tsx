@@ -293,12 +293,12 @@ export default function Co2Page() {
       {/* Modal spiegazione logica */}
       {infoOpen && (
         <div
-          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
           onClick={() => setInfoOpen(false)}
         >
           <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
           <div
-            className="relative bg-card border border-border rounded-2xl p-5 w-full max-w-sm space-y-4 shadow-xl"
+            className="relative bg-card border border-border rounded-2xl p-5 w-full max-w-sm max-h-[85dvh] overflow-y-auto space-y-4 shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
