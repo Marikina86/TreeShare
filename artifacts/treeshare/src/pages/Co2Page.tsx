@@ -159,7 +159,7 @@ export default function Co2Page() {
       <div className="max-w-xl mx-auto px-4 py-6">
         <div className="mb-6">
           <h1 className="text-2xl font-bold text-foreground leading-tight">Classifica CO₂</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">I comuni che assorbono più CO₂ ogni trimestre</p>
+          <p className="text-sm text-muted-foreground mt-0.5">I luoghi che assorbono più CO₂ ogni trimestre</p>
         </div>
 
         <div className="bg-card border border-border rounded-2xl p-4 mb-6 flex gap-3 items-start">
@@ -170,8 +170,8 @@ export default function Co2Page() {
             </svg>
           </div>
           <div className="text-sm text-muted-foreground leading-relaxed">
-            Ogni trimestre premiamo i comuni dove i piantatori sono stati <strong className="text-foreground">più attivi in media</strong>.
-            Il punteggio è la <strong className="text-foreground">media di nuove piante per piantatore</strong> nel trimestre — così i grandi comuni non vincono solo per dimensione.
+            Ogni trimestre premiamo i luoghi dove i piantatori sono stati <strong className="text-foreground">più attivi in media</strong>.
+            Il punteggio è la <strong className="text-foreground">media di nuove piante per piantatore</strong> nel trimestre — così i grandi luoghi non vincono solo per dimensione.
             {" "}Servono almeno <strong className="text-foreground">3 piantatori distinti</strong> per qualificarsi.
             {" "}La classifica si aggiorna il <strong className="text-foreground">1° di aprile, luglio, ottobre e gennaio</strong>.{" "}
             <span className="italic">I valori CO₂ sono stime indicative (22 kg/anno per pianta).</span>
@@ -265,7 +265,7 @@ export default function Co2Page() {
 
                 <div className="mt-6 bg-muted/40 rounded-2xl p-4 text-center">
                   <p className="text-xs text-muted-foreground">
-                    Contribuisci alla classifica del tuo comune — pianta una nuova pianta!
+                    Contribuisci alla classifica del tuo luogo — pianta una nuova pianta!
                   </p>
                   <Link
                     href="/post"
