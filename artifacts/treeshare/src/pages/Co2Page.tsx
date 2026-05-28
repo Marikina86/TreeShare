@@ -162,20 +162,70 @@ export default function Co2Page() {
           <p className="text-sm text-muted-foreground mt-0.5">I luoghi che assorbono più CO₂ ogni trimestre</p>
         </div>
 
-        <div className="bg-card border border-border rounded-2xl p-4 mb-6 flex gap-3 items-start">
-          <div className="w-8 h-8 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center flex-shrink-0 mt-0.5">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-green-600">
-              <circle cx="12" cy="12" r="10"/>
-              <path d="M12 8v4l3 3"/>
+        {/* Come funziona */}
+        <div className="bg-card border border-border rounded-2xl p-4 mb-4 space-y-4">
+          <h2 className="text-sm font-semibold text-foreground flex items-center gap-2">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className="text-green-600">
+              <circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/>
             </svg>
+            Come funziona la classifica
+          </h2>
+
+          {/* Step 1 */}
+          <div className="flex gap-3">
+            <div className="w-6 h-6 rounded-full bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400 text-xs font-bold flex items-center justify-center flex-shrink-0 mt-0.5">1</div>
+            <div>
+              <p className="text-sm font-medium text-foreground">Solo le piante nuove contano</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Vengono conteggiate le piante con foto approvata piantate <strong className="text-foreground">nel trimestre in corso</strong>, non quelle storiche.
+              </p>
+            </div>
           </div>
-          <div className="text-sm text-muted-foreground leading-relaxed">
-            Ogni trimestre premiamo i luoghi dove i piantatori sono stati <strong className="text-foreground">più attivi in media</strong>.
-            Il punteggio è la <strong className="text-foreground">media di nuove piante per piantatore</strong> nel trimestre — così i grandi luoghi non vincono solo per dimensione.
-            {" "}Servono almeno <strong className="text-foreground">3 piantatori distinti</strong> per qualificarsi.
-            {" "}La classifica si aggiorna il <strong className="text-foreground">1° di aprile, luglio, ottobre e gennaio</strong>.{" "}
-            <span className="italic">I valori CO₂ sono stime indicative (22 kg/anno per pianta).</span>
+
+          {/* Step 2 */}
+          <div className="flex gap-3">
+            <div className="w-6 h-6 rounded-full bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400 text-xs font-bold flex items-center justify-center flex-shrink-0 mt-0.5">2</div>
+            <div>
+              <p className="text-sm font-medium text-foreground">Punteggio = media piante per piantatore</p>
+              <div className="mt-1.5 bg-muted/60 rounded-xl px-3 py-2 font-mono text-xs text-foreground">
+                punteggio = <span className="text-green-600 dark:text-green-400">piante nel trimestre</span> ÷ <span className="text-blue-600 dark:text-blue-400">piantatori distinti</span>
+              </div>
+              <p className="text-xs text-muted-foreground mt-1.5">
+                Un luogo piccolo con piantatori molto attivi batte una grande città con pochi appassionati.
+              </p>
+            </div>
           </div>
+
+          {/* Step 3 */}
+          <div className="flex gap-3">
+            <div className="w-6 h-6 rounded-full bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400 text-xs font-bold flex items-center justify-center flex-shrink-0 mt-0.5">3</div>
+            <div>
+              <p className="text-sm font-medium text-foreground">Soglia minima: 3 piantatori</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Un luogo deve avere almeno <strong className="text-foreground">3 utenti distinti</strong> che hanno piantato nel trimestre per qualificarsi — nessun singolo utente può far vincere un luogo da solo.
+              </p>
+            </div>
+          </div>
+
+          {/* Esempio */}
+          <div className="rounded-xl border border-border bg-muted/30 p-3">
+            <p className="text-xs font-semibold text-foreground mb-2">Esempio</p>
+            <div className="space-y-1.5 text-xs">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-muted-foreground">Milano — 200 piante, 150 piantatori</span>
+                <span className="font-mono font-semibold text-foreground bg-muted rounded px-1.5 py-0.5">= 1.33</span>
+              </div>
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-muted-foreground">Castelfranco V. — 15 piante, 4 piantatori</span>
+                <span className="font-mono font-semibold text-green-700 dark:text-green-400 bg-green-100 dark:bg-green-900/40 rounded px-1.5 py-0.5">= 3.75 🏆</span>
+              </div>
+            </div>
+          </div>
+
+          <p className="text-xs text-muted-foreground">
+            La classifica si aggiorna il <strong className="text-foreground">1° di aprile, luglio, ottobre e gennaio</strong>.
+            {" "}<span className="italic">CO₂ stimata: 22 kg/anno per pianta.</span>
+          </p>
         </div>
 
         <div className="flex items-center gap-2 mb-5 text-xs text-muted-foreground">
