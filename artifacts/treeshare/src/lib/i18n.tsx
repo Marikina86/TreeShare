@@ -1,8 +1,8 @@
 import { createContext, useContext, useState, useEffect, type ReactNode } from "react";
 
-export type Lang = "it" | "en" | "fr" | "pt" | "es" | "ja";
+export type Lang = "it" | "en" | "fr" | "pt" | "es" | "ja" | "zh";
 
-const VALID_LANGS: Lang[] = ["it", "en", "fr", "pt", "es", "ja"];
+const VALID_LANGS: Lang[] = ["it", "en", "fr", "pt", "es", "ja", "zh"];
 
 export const translations = {
   it: {
@@ -262,6 +262,49 @@ export const translations = {
     },
     logout: { title: "ログアウトしますか？", desc: "TreeShareからログアウトします。いつでも再ログインできます。", confirm: "ログアウト", confirming: "ログアウト中..." },
   },
+
+  zh: {
+    nav: { feed: "动态", map: "地图", plant: "种植", events: "活动", profile: "主页", alerts: "通知", tips: "建议", adopt: "领养", co2: "CO₂" },
+    auth: { signIn: "登录", signOut: "退出", signUp: "注册", joinTreeShare: "加入" },
+    common: { cancel: "取消", delete: "删除", confirm: "确认", save: "保存", loading: "加载中...", error: "错误", back: "返回", create: "创建", edit: "编辑", close: "关闭" },
+    landing: {
+      tagline: "种一棵树。与世界分享。",
+      headline1: "每一棵种下的树",
+      headline2: "都有自己的故事。",
+      description: "TreeShare 是一个社区，人们在这里记录他们种下的每一棵树和植物 —— 附带精准GPS位置、历史照片，以及展示我们共同影响的世界地图。",
+      startPlanting: "开始种树",
+      signIn: "登录",
+    },
+    feed: { title: "动态", empty: "暂无植物。快来第一个种树吧！" },
+    map: { title: "世界地图" },
+    post: { title: "发布植物", back: "返回" },
+    profile: {
+      treesPlanted: "已种植物",
+      editProfile: "编辑资料",
+      deleteAccount: "删除账户",
+      noTrees: "暂无发布的植物。",
+      plantFirst: "种下你的第一棵树",
+      dangerZone: "危险区域",
+      dangerDesc: "删除账户是永久且不可逆的操作。您的账户、所有植物、照片及相关数据都将被删除。",
+      deleteModal: { title: "删除账户", desc: "此操作将永久删除您的资料、所有已发布的植物、照片及所有相关数据，无法撤销。", confirm: "删除全部", deleting: "删除中..." },
+    },
+    events: {
+      title: "活动", subtitle: "种树聚会与社区集会",
+      create: "创建活动", new: "新活动", upcoming: "即将举行的活动", past: "过往活动",
+      empty: "暂无活动安排", emptyDesc: "成为第一个组织种树活动的人！",
+      join: "我要参加", joined: "我要参加", cancelJoin: "取消", organizer: "您是组织者",
+      participants: "参与者", participantsPlural: "参与者",
+      form: { title: "标题 *", titlePlaceholder: "例：城市公园种树日", description: "描述", descriptionPlaceholder: "告诉我们活动内容、需要携带什么等。", location: "地点 *", locationPlaceholder: "例：北京朝阳公园", date: "日期 *", time: "时间 *" },
+    },
+    settings: {
+      title: "设置", language: "语言", languageDesc: "选择应用语言",
+      italian: "Italiano", english: "English",
+      profile: "资料", editProfile: "编辑资料", editProfileDesc: "更改用户名、照片和位置",
+      account: "账户", deleteAccount: "删除账户", deleteAccountDesc: "永久删除您的账户及所有数据",
+      signOut: "退出登录", signOutDesc: "从TreeShare退出", appearance: "外观",
+    },
+    logout: { title: "退出登录？", desc: "您将从TreeShare退出。您可以随时重新登录。", confirm: "退出", confirming: "退出中..." },
+  },
 } as const;
 
 export type Translations = typeof translations.it;
@@ -287,6 +330,7 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
     if (browser === "pt") return "pt";
     if (browser === "es") return "es";
     if (browser === "ja") return "ja";
+    if (browser === "zh") return "zh";
     if (browser === "en") return "en";
     return "it";
   });

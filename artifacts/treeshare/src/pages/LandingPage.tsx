@@ -10,6 +10,7 @@ const LANG_OPTIONS: { value: Lang; flag: string; short: string }[] = [
   { value: "pt", flag: "🇧🇷", short: "PT" },
   { value: "es", flag: "🇪🇸", short: "ES" },
   { value: "ja", flag: "🇯🇵", short: "JA" },
+  { value: "zh", flag: "🇨🇳", short: "ZH" },
 ];
 
 interface Planter {
@@ -38,7 +39,7 @@ function PlantersModal({ onClose, lang }: { onClose: () => void; lang: string })
       .catch(() => setLoading(false));
   }, []);
 
-  const title = ({ it: "Chi pianta di più", en: "Top Planters", fr: "Meilleurs planteurs", pt: "Melhores plantadores", es: "Mejores plantadores", ja: "トッププランター" } as Record<string,string>)[lang];
+  const title = ({ it: "Chi pianta di più", en: "Top Planters", fr: "Meilleurs planteurs", pt: "Melhores plantadores", es: "Mejores plantadores", ja: "トッププランター", zh: "最佳种树人" } as Record<string,string>)[lang];
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center" onClick={onClose}>
@@ -122,6 +123,7 @@ export default function LandingPage() {
     pt: { trees: "Árvores plantadas", planters: "Plantadores", countries: "Países", active: "Ativos este mês" },
     es: { trees: "Árboles plantados", planters: "Plantadores", countries: "Países", active: "Activos este mes" },
     ja: { trees: "植えた木", planters: "プランター", countries: "国", active: "今月のアクティブ" },
+    zh: { trees: "已种树木", planters: "种树人", countries: "国家", active: "本月活跃" },
   } as Record<string, { trees: string; planters: string; countries: string; active: string }>)[lang];
 
   const featuresContent = ({
@@ -154,6 +156,11 @@ export default function LandingPage() {
       { title: "すべての植物を記録", desc: "植えた木の写真を種類、位置、メモとともに共有しましょう。成長の様子を時系列で見られます。" },
       { title: "ワールドマップ", desc: "時系列で検証されたGPS座標とともに、インタラクティブな世界地図ですべての木を見ることができます。" },
       { title: "コミュニティ", desc: "世界中のプランターとつながりましょう。成長を追い、発見を共有し、より緑豊かな地球を築きましょう。" },
+    ],
+    zh: [
+      { title: "记录每棵植物", desc: "分享您种下的树木照片，附上树种、位置和备注。见证它们随时间生长。" },
+      { title: "世界地图", desc: "在互动世界地图上查看每一棵树，附有经时间验证的精准GPS坐标。" },
+      { title: "社区", desc: "与全球种树人相连。跟踪生长、分享发现、共建更绿色的地球。为减少CO2做出实际贡献。" },
     ],
   } as Record<string, { title: string; desc: string }[]>)[lang];
 
@@ -291,7 +298,7 @@ export default function LandingPage() {
       {recentTrees.data && Array.isArray(recentTrees.data) && recentTrees.data.length > 0 && (
         <section className="px-6 py-12 max-w-5xl mx-auto">
           <h2 className="text-2xl font-bold text-foreground mb-6">
-            {({ it: "Piantate di recente", en: "Recently planted", fr: "Récemment plantées", pt: "Plantadas recentemente", es: "Plantadas recientemente", ja: "最近植えた植物" } as Record<string,string>)[lang]}
+            {({ it: "Piantate di recente", en: "Recently planted", fr: "Récemment plantées", pt: "Plantadas recentemente", es: "Plantadas recientemente", ja: "最近植えた植物", zh: "最近种植" } as Record<string,string>)[lang]}
           </h2>
           <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
             {recentTrees.data.slice(0, 6).map((tree) => (
@@ -308,7 +315,7 @@ export default function LandingPage() {
                   <div className="p-3">
                     <div className="font-medium text-sm text-foreground truncate">{tree.username}</div>
                     <div className="text-xs text-muted-foreground truncate">
-                      {tree.locationName ?? tree.country ?? (({ it: "Posizione sconosciuta", en: "Unknown location", fr: "Lieu inconnu", pt: "Localização desconhecida", es: "Ubicación desconocida", ja: "不明な場所" } as Record<string,string>)[lang])}
+                      {tree.locationName ?? tree.country ?? (({ it: "Posizione sconosciuta", en: "Unknown location", fr: "Lieu inconnu", pt: "Localização desconhecida", es: "Ubicación desconocida", ja: "不明な場所", zh: "位置未知" } as Record<string,string>)[lang])}
                     </div>
                   </div>
                 </div>
@@ -351,18 +358,18 @@ export default function LandingPage() {
       </section>
 
       <footer className="px-6 py-8 text-center border-t border-border text-sm text-muted-foreground space-y-2">
-        <p>TreeShare — {({ it: "Cresciamo insieme, un albero alla volta.", en: "Growing together, one tree at a time.", fr: "Grandissons ensemble, un arbre à la fois.", pt: "Crescendo juntos, uma árvore de cada vez.", es: "Crecemos juntos, un árbol a la vez.", ja: "一本の木から、一緒に育てよう。" } as Record<string, string>)[lang]}</p>
+        <p>TreeShare — {({ it: "Cresciamo insieme, un albero alla volta.", en: "Growing together, one tree at a time.", fr: "Grandissons ensemble, un arbre à la fois.", pt: "Crescendo juntos, uma árvore de cada vez.", es: "Crecemos juntos, un árbol a la vez.", ja: "一本の木から、一緒に育てよう。", zh: "共同成长，一棵树一棵树地前行。" } as Record<string, string>)[lang]}</p>
         <div className="flex items-center justify-center gap-4 text-xs">
           <Link href="/privacy" className="hover:text-primary transition-colors">
-            {({ it: "Informativa sulla Privacy", en: "Privacy Policy", fr: "Politique de confidentialité", pt: "Política de Privacidade", es: "Política de Privacidad", ja: "プライバシーポリシー" } as Record<string, string>)[lang]}
+            {({ it: "Informativa sulla Privacy", en: "Privacy Policy", fr: "Politique de confidentialité", pt: "Política de Privacidade", es: "Política de Privacidad", ja: "プライバシーポリシー", zh: "隐私政策" } as Record<string, string>)[lang]}
           </Link>
           <span>·</span>
           <Link href="/terms" className="hover:text-primary transition-colors">
-            {({ it: "Condizioni d'uso", en: "Terms of Use", fr: "Conditions d'utilisation", pt: "Termos de Uso", es: "Términos de Uso", ja: "利用規約" } as Record<string, string>)[lang]}
+            {({ it: "Condizioni d'uso", en: "Terms of Use", fr: "Conditions d'utilisation", pt: "Termos de Uso", es: "Términos de Uso", ja: "利用規約", zh: "使用条款" } as Record<string, string>)[lang]}
           </Link>
           <span>·</span>
           <Link href="/cookies" className="hover:text-primary transition-colors">
-            {({ it: "Cookie Policy", en: "Cookie Policy", fr: "Politique de cookies", pt: "Política de Cookies", es: "Política de Cookies", ja: "クッキーポリシー" } as Record<string, string>)[lang]}
+            {({ it: "Cookie Policy", en: "Cookie Policy", fr: "Politique de cookies", pt: "Política de Cookies", es: "Política de Cookies", ja: "クッキーポリシー", zh: "Cookie政策" } as Record<string, string>)[lang]}
           </Link>
         </div>
         <p className="text-xs text-muted-foreground/70">
