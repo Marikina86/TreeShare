@@ -39,6 +39,7 @@ const OrgAdoptionsPage = lazy(() => import("@/pages/OrgAdoptionsPage"));
 const ResetPasswordPage = lazy(() => import("@/pages/ResetPasswordPage"));
 const RegisterEnteActivatePage = lazy(() => import("@/pages/RegisterEnteActivatePage"));
 const RegisterPrivatoActivatePage = lazy(() => import("@/pages/RegisterPrivatoActivatePage"));
+const MissionPage = lazy(() => import("@/pages/MissionPage"));
 const NotFound = lazy(() => import("@/pages/not-found"));
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -351,6 +352,7 @@ function AuthProviderWithRoutes() {
               <Route path="/adopt/manage" component={() => <ProtectedRoute component={OrgAdoptionsPage} />} />
               <Route path="/adopt/:id" component={AdoptableTreeDetailPage} />
               <Route path="/admin" component={() => <AdminRoute component={AdminPage} />} />
+              <Route path="/mission" component={MissionPage} />
               <Route path="/privacy" component={PrivacyPage} />
               <Route path="/terms" component={TermsPage} />
               <Route path="/cookies" component={CookiePage} />

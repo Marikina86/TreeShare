@@ -164,10 +164,10 @@ export default function LandingPage() {
       {/* Header */}
       <header className="border-b border-border bg-card">
         <div className="px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-2 text-primary font-bold text-xl flex-shrink-0">
+          <Link href="/mission" className="flex items-center gap-2 text-primary font-bold text-xl flex-shrink-0 hover:opacity-80 transition-opacity">
             <img src="/icon-192.png" alt="TreeShare" width="28" height="28" style={{ borderRadius: "6px", objectFit: "cover" }} />
             TreeShare
-          </div>
+          </Link>
           <div className="flex items-center gap-3">
             <div className="hidden md:flex items-center rounded-lg border border-border overflow-hidden">
               {LANG_OPTIONS.map((opt) => (
