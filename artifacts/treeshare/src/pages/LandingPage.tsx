@@ -181,7 +181,8 @@ export default function LandingPage() {
                 <button
                   key={opt.value}
                   onClick={() => setLang(opt.value)}
-                  className={`px-2.5 py-1.5 text-xs font-semibold transition-colors flex items-center gap-1 ${
+                  title={opt.short}
+                  className={`w-[52px] py-1.5 text-xs font-semibold transition-colors flex items-center justify-center gap-1 ${
                     lang === opt.value
                       ? "bg-primary text-primary-foreground"
                       : "text-muted-foreground hover:bg-muted"
@@ -210,14 +211,14 @@ export default function LandingPage() {
               <button
                 key={opt.value}
                 onClick={() => setLang(opt.value)}
-                className={`px-2.5 py-1.5 text-xs font-semibold transition-colors flex items-center gap-1 ${
+                title={opt.short}
+                className={`w-10 py-2 text-base transition-colors flex items-center justify-center ${
                   lang === opt.value
-                    ? "bg-primary text-primary-foreground"
+                    ? "bg-primary"
                     : "text-muted-foreground hover:bg-muted"
                 }`}
               >
-                <span>{opt.flag}</span>
-                <span>{opt.short}</span>
+                {opt.flag}
               </button>
             ))}
           </div>
