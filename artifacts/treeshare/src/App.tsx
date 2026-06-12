@@ -40,6 +40,7 @@ const ResetPasswordPage = lazy(() => import("@/pages/ResetPasswordPage"));
 const RegisterEnteActivatePage = lazy(() => import("@/pages/RegisterEnteActivatePage"));
 const RegisterPrivatoActivatePage = lazy(() => import("@/pages/RegisterPrivatoActivatePage"));
 const MissionPage = lazy(() => import("@/pages/MissionPage"));
+const AuthConfirmPage = lazy(() => import("@/pages/AuthConfirmPage"));
 const NotFound = lazy(() => import("@/pages/not-found"));
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -257,6 +258,16 @@ function ConsentChecker() {
 }
 
 function HomeRedirect() {
+  // Safety-net: if Supabase redirected here with auth tokens in the hash
+  // (because the redirect_to URL wasn't whitelisted), forward to /auth/confirm
+  // preserving the hash so supabase-js can process the tokens there.
+  const hash = typeof window !== "undefined" ? window.location.hash : "";
+  if (hash && hash.includes("access_token=")) {
+    const dest = basePath + "/auth/confirm" + hash;
+    window.location.replace(dest);
+    return null;
+  }
+
   return (
     <>
       <Show when="signed-in">
@@ -352,6 +363,7 @@ function AuthProviderWithRoutes() {
               <Route path="/adopt/manage" component={() => <ProtectedRoute component={OrgAdoptionsPage} />} />
               <Route path="/adopt/:id" component={AdoptableTreeDetailPage} />
               <Route path="/admin" component={() => <AdminRoute component={AdminPage} />} />
+              <Route path="/auth/confirm" component={AuthConfirmPage} />
               <Route path="/mission" component={MissionPage} />
               <Route path="/privacy" component={PrivacyPage} />
               <Route path="/terms" component={TermsPage} />

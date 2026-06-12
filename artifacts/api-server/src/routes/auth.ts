@@ -130,7 +130,7 @@ router.post("/auth/signup-user", async (req, res) => {
     // (generateLink genera solo il token senza inviare la mail;
     //  /auth/v1/resend usa l'SMTP configurato in Supabase — Hostinger)
     const allowedOrigin = getAppOrigin();
-    const redirectTo = allowedOrigin ? `${allowedOrigin}/register-privato/activate` : undefined;
+    const redirectTo = allowedOrigin ? `${allowedOrigin}/auth/confirm` : undefined;
 
     const supabaseUrl = process.env.SUPABASE_URL!;
     // VITE_SUPABASE_ANON_KEY è la chiave anon effettiva (usata dal frontend);
@@ -182,7 +182,7 @@ router.post("/auth/resend-verification", async (req, res) => {
 
   try {
     const allowedOrigin = getAppOrigin();
-    const redirectTo = allowedOrigin ? `${allowedOrigin}/register-privato/activate` : undefined;
+    const redirectTo = allowedOrigin ? `${allowedOrigin}/auth/confirm` : undefined;
 
     const supabaseUrl = process.env.SUPABASE_URL!;
     const anonKey = (process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY)!;

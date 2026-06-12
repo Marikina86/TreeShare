@@ -191,7 +191,7 @@ router.post("/register-ente", async (req, res) => {
 
     // Invia email di conferma tramite Supabase SMTP (configurato nel dashboard Supabase)
     const allowedOrigin = getAppOrigin();
-    const redirectTo = allowedOrigin ? `${allowedOrigin}/register-ente/activate` : undefined;
+    const redirectTo = allowedOrigin ? `${allowedOrigin}/auth/confirm` : undefined;
 
     const supabaseUrl = process.env.SUPABASE_URL!;
     const anonKey = (process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY)!;
@@ -364,7 +364,7 @@ router.post("/register-ente/resend-verification", async (req, res) => {
 
   try {
     const allowedOrigin = getAppOrigin();
-    const redirectTo = allowedOrigin ? `${allowedOrigin}/register-ente/activate` : undefined;
+    const redirectTo = allowedOrigin ? `${allowedOrigin}/auth/confirm` : undefined;
 
     const supabaseUrl = process.env.SUPABASE_URL!;
     const anonKey = (process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY)!;
