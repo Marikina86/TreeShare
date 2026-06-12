@@ -42,3 +42,9 @@ id = "-3sCHGBEV7o4QzJk6htfk"
 uri = "file://screenshots/weekly_winner_preview.jpg"
 type = "image"
 title = "Weekly Winner — anteprima Feed e Story"
+
+[[outputs]]
+id = "zKxBxRvJOD1h_QzsWYb9U"
+uri = "file://screenshots/auth-confirm.jpg"
+type = "image"
+title = "Pagina di conferma registrazione — stato loading"
