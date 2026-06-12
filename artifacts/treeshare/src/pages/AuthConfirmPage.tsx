@@ -106,6 +106,36 @@ export default function AuthConfirmPage() {
             setStatus("error");
             return;
           }
+
+          // Auto-save mandatory initial consents (Privacy, Terms) so the
+          // ConsentModal does not re-appear on first app open. We only save
+          // policies where requiresAcceptance=true and lastModifiedAt=null
+          // (first-time baseline, not a subsequent update).
+          try {
+            const statusRes = await fetch("/api/consent/status", {
+              headers: { Authorization: `Bearer ${token}` },
+            });
+            if (statusRes.ok) {
+              const statusData = await statusRes.json() as {
+                upToDate: boolean;
+                missing: Array<{ policyId: string; requiresAcceptance: boolean; lastModifiedAt: string | null }>;
+              };
+              const initialMandatory = (statusData.missing ?? []).filter(
+                (p) => p.requiresAcceptance && p.lastModifiedAt === null
+              );
+              if (initialMandatory.length > 0) {
+                await fetch("/api/consent", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+                  body: JSON.stringify({
+                    consents: initialMandatory.map((p) => ({ policyId: p.policyId, accepted: true })),
+                  }),
+                });
+              }
+            }
+          } catch {
+            // Non-blocking — if consent saving fails, the ConsentModal will handle it
+          }
         }
 
         setStatus("success");

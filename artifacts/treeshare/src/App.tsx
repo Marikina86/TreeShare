@@ -235,8 +235,15 @@ function ConsentChecker() {
             lastModifiedAt: string | null;
           }>;
         };
+        // Show the modal ONLY when there is at least one policy that was
+        // updated after the user's last consent (lastModifiedAt !== null).
+        // Policies with lastModifiedAt === null are the initial baseline —
+        // those are auto-accepted during email confirmation (AuthConfirmPage).
         if (!data.upToDate && data.missing?.length > 0) {
-          setMissing(data.missing);
+          const hasUpdate = data.missing.some((p) => p.lastModifiedAt !== null);
+          if (hasUpdate) {
+            setMissing(data.missing);
+          }
         }
       } catch {
         // Silently fail — non blocchiamo l'utente per un errore di rete

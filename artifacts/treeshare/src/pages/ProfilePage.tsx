@@ -191,6 +191,7 @@ export default function ProfilePage() {
     pt: { shareTitle: "TreeShare", shareText: "Descubra o TreeShare, a comunidade para quem planta árvores 🌱", inviteText: "Estou te convidando para o TreeShare! Documenta cada planta que colocas no solo e partilha com o mundo 🌳", copied: "Link copiado!" },
     es: { shareTitle: "TreeShare", shareText: "Descubre TreeShare, la comunidad para quienes plantan árboles 🌱", inviteText: "¡Te invito a TreeShare! Documenta cada planta que pones en el suelo y compártela con el mundo 🌳", copied: "¡Enlace copiado!" },
     ja: { shareTitle: "TreeShare", shareText: "TreeShareをご紹介！木や植物を植える人のためのコミュニティ 🌱", inviteText: "TreeShareに招待します！植えた植物を記録して世界と共有しましょう 🌳", copied: "リンクをコピーしました！" },
+    zh: { shareTitle: "TreeShare", shareText: "发现TreeShare，种树爱好者社区 🌱", inviteText: "邀请你加入TreeShare！记录每一棵你种下的植物，与世界分享 🌳", copied: "链接已复制！" },
   };
 
   async function handleShare() {
@@ -236,8 +237,8 @@ export default function ProfilePage() {
         body: JSON.stringify({ reportedUserId: params.userId, reason: reportReason, notes: reportNotes }),
       });
       if (res.status === 409) {
-        const alreadyTitle: Record<Lang, string> = { it: "Già segnalato", en: "Already reported", fr: "Déjà signalé", pt: "Já denunciado", es: "Ya reportado", ja: "報告済み" };
-        const alreadyDesc: Record<Lang, string> = { it: "Hai già segnalato questo account.", en: "You already reported this account.", fr: "Vous avez déjà signalé ce compte.", pt: "Você já denunciou esta conta.", es: "Ya has reportado esta cuenta.", ja: "このアカウントはすでに報告済みです。" };
+        const alreadyTitle: Record<Lang, string> = { it: "Già segnalato", en: "Already reported", fr: "Déjà signalé", pt: "Já denunciado", es: "Ya reportado", ja: "報告済み", zh: "已举报" };
+        const alreadyDesc: Record<Lang, string> = { it: "Hai già segnalato questo account.", en: "You already reported this account.", fr: "Vous avez déjà signalé ce compte.", pt: "Você já denunciou esta conta.", es: "Ya has reportado esta cuenta.", ja: "このアカウントはすでに報告済みです。", zh: "您已举报过此账号。" };
         toast({ title: alreadyTitle[lang], description: alreadyDesc[lang] });
         setShowReportModal(false);
         return;
@@ -245,7 +246,7 @@ export default function ProfilePage() {
       if (!res.ok) throw new Error();
       setReportDone(true);
     } catch {
-      const errDesc: Record<Lang, string> = { it: "Impossibile inviare la segnalazione.", en: "Could not submit the report.", fr: "Impossible d'envoyer le signalement.", pt: "Não foi possível enviar a denúncia.", es: "No se pudo enviar el reporte.", ja: "報告を送信できませんでした。" };
+      const errDesc: Record<Lang, string> = { it: "Impossibile inviare la segnalazione.", en: "Could not submit the report.", fr: "Impossible d'envoyer le signalement.", pt: "Não foi possível enviar a denúncia.", es: "No se pudo enviar el reporte.", ja: "報告を送信できませんでした。", zh: "无法提交举报。" };
       toast({ title: t.common.error, description: errDesc[lang], variant: "destructive" });
     } finally {
       setReporting(false);
