@@ -39,6 +39,7 @@ export const treesTable = pgTable("trees", {
 }, (table) => [
   index("trees_user_id_idx").on(table.userId),
   index("trees_photo_status_idx").on(table.photoStatus),
+  index("trees_status_location_idx").on(table.photoStatus, table.latitude, table.longitude),
 ]);
 
 export const treeUpdatesTable = pgTable("tree_updates", {
@@ -559,6 +560,7 @@ export const trailReportsTable = pgTable("trail_reports", {
   index("trail_reports_status_idx").on(table.status),
   index("trail_reports_created_at_idx").on(table.createdAt),
   index("trail_reports_status_created_idx").on(table.status, table.createdAt),
+  index("trail_reports_status_location_idx").on(table.status, table.latitude, table.longitude),
 ]);
 
 export const trailReportConfirmationsTable = pgTable("trail_report_confirmations", {

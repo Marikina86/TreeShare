@@ -5,6 +5,8 @@ import Layout from "@/components/Layout";
 import L from "leaflet";
 
 const INDIVIDUAL_ZOOM_THRESHOLD = 12;
+const DEFAULT_CENTER: [number, number] = [42, 12];
+const DEFAULT_ZOOM = 6;
 
 // ── Trail report types ────────────────────────────────────────────────────────
 
@@ -69,6 +71,7 @@ function trailPopupHtml(r: TrailReport): string {
     <a href="/outdoor" style="display:block;margin-top:6px;font-size:11px;color:#22c55e;font-weight:600;text-decoration:none;">Vedi tutte le segnalazioni →</a>
   </div>`;
 }
+
 const SPIDERFY_RADIUS_DEG = 0.00012;
 
 interface TreeItem {
@@ -106,6 +109,33 @@ interface PlacedTree extends IndividualTree {
   displayLat: number;
   displayLng: number;
 }
+
+// ── Bbox helpers ──────────────────────────────────────────────────────────────
+
+interface Bbox { minLat: number; maxLat: number; minLng: number; maxLng: number; }
+
+function snapBbox(bounds: L.LatLngBounds, zoom: number): Bbox {
+  const snap = zoom <= 5 ? 10 : zoom <= 9 ? 2 : 0.5;
+  return {
+    minLat: Math.max(-90,  Math.floor(bounds.getSouth() / snap) * snap),
+    maxLat: Math.min(90,   Math.ceil(bounds.getNorth()  / snap) * snap),
+    minLng: Math.max(-180, Math.floor(bounds.getWest()  / snap) * snap),
+    maxLng: Math.min(180,  Math.ceil(bounds.getEast()   / snap) * snap),
+  };
+}
+
+function bboxToParams(bbox: Bbox, extra?: Record<string, string>): string {
+  const p = new URLSearchParams({
+    minLat: String(bbox.minLat),
+    maxLat: String(bbox.maxLat),
+    minLng: String(bbox.minLng),
+    maxLng: String(bbox.maxLng),
+    ...extra,
+  });
+  return p.toString();
+}
+
+// ── Misc helpers ──────────────────────────────────────────────────────────────
 
 function pSrc(url: string | null | undefined): string | null {
   if (!url) return null;
@@ -187,53 +217,68 @@ function individualPopupHtml(tree: IndividualTree): string {
   return `<div style="width:160px;">${imgHtml}<div style="font-weight:700;font-size:13px;color:#1a1a1a;cursor:pointer;" data-tree-id="${tree.id}" class="map-popup-title">${name}</div>${loc}${userHtml}</div>`;
 }
 
+// ── MapPage ───────────────────────────────────────────────────────────────────
+
 export default function MapPage() {
   const mapRef = useRef<HTMLDivElement>(null);
   const leafletMapRef = useRef<L.Map | null>(null);
   const markersRef = useRef<L.Layer[]>([]);
   const trailMarkersRef = useRef<L.Layer[]>([]);
   const tileLayerRef = useRef<L.TileLayer | null>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const [tileLayer, setTileLayer] = useState<"street" | "satellite">("street");
-  const [clusterMarkers, setClusterMarkers] = useState<ClusterMarker[]>([]);
-  const [individualTrees, setIndividualTrees] = useState<IndividualTree[]>([]);
+  const [bbox, setBbox] = useState<Bbox | null>(null);
+  const [zoom, setZoom] = useState(DEFAULT_ZOOM);
   const [mapReady, setMapReady] = useState(false);
-  const [mode, setMode] = useState<"cluster" | "individual">("cluster");
-  const [isLoading, setIsLoading] = useState(true);
-  const [precision, setPrecision] = useState(2);
   const [, navigate] = useLocation();
 
-  const fetchClusters = useCallback(async (prec: number) => {
-    setIsLoading(true);
-    try {
-      const res = await fetch(`/api/map/markers?precision=${prec}`);
-      if (res.ok) setClusterMarkers(await res.json());
-    } catch {
-    } finally { setIsLoading(false); }
-  }, []);
+  // Derived — no separate state needed
+  const mode: "cluster" | "individual" = zoom >= INDIVIDUAL_ZOOM_THRESHOLD ? "individual" : "cluster";
+  const precision = zoomToPrecision(zoom);
+  const bboxKey = bbox ? `${bbox.minLat},${bbox.maxLat},${bbox.minLng},${bbox.maxLng}` : null;
 
-  const fetchIndividual = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      const res = await fetch("/api/map/individual");
-      if (res.ok) setIndividualTrees(await res.json());
-    } catch {
-    } finally { setIsLoading(false); }
-  }, []);
+  // ── Viewport-scoped queries ────────────────────────────────────────────────
 
-  const { data: trailReports = [] } = useQuery<TrailReport[]>({
-    queryKey: ["trail-reports"],
+  const { data: clusterMarkers = [], isFetching: clusterFetching } = useQuery<ClusterMarker[]>({
+    queryKey: ["map-clusters", bboxKey, precision],
     queryFn: async () => {
-      const res = await fetch("/api/outdoor/reports");
+      if (!bbox) return [];
+      const qs = bboxToParams(bbox, { precision: String(precision) });
+      const res = await fetch(`/api/map/markers?${qs}`);
       if (!res.ok) throw new Error();
       return res.json();
     },
+    enabled: !!bbox && mode === "cluster",
   });
 
-  useEffect(() => {
-    if (mode === "cluster") fetchClusters(precision);
-    else fetchIndividual();
-  }, [mode, precision, fetchClusters, fetchIndividual]);
+  const { data: individualTrees = [], isFetching: individualFetching } = useQuery<IndividualTree[]>({
+    queryKey: ["map-individual", bboxKey],
+    queryFn: async () => {
+      if (!bbox) return [];
+      const qs = bboxToParams(bbox);
+      const res = await fetch(`/api/map/individual?${qs}`);
+      if (!res.ok) throw new Error();
+      return res.json();
+    },
+    enabled: !!bbox && mode === "individual",
+  });
 
+  const { data: trailReports = [] } = useQuery<TrailReport[]>({
+    queryKey: ["trail-reports-map", bboxKey],
+    queryFn: async () => {
+      if (!bbox) return [];
+      const qs = bboxToParams(bbox);
+      const res = await fetch(`/api/outdoor/reports?${qs}`);
+      if (!res.ok) throw new Error();
+      return res.json();
+    },
+    enabled: !!bbox,
+  });
+
+  const isLoading = mode === "cluster" ? clusterFetching : individualFetching;
+
+  // ── Map initialization ─────────────────────────────────────────────────────
 
   useEffect(() => {
     if (!mapRef.current || leafletMapRef.current) return;
@@ -245,22 +290,49 @@ export default function MapPage() {
       shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
     });
 
-    const map = L.map(mapRef.current, { center: [20, 0], zoom: 2, zoomControl: true });
+    const map = L.map(mapRef.current, { center: DEFAULT_CENTER, zoom: DEFAULT_ZOOM, zoomControl: true });
     const initialTile = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { attribution: "&copy; OpenStreetMap contributors", maxZoom: 19 });
     initialTile.addTo(map);
     tileLayerRef.current = initialTile;
     leafletMapRef.current = map;
 
-    map.on("zoomend", () => {
-      const z = map.getZoom();
-      const newMode: "cluster" | "individual" = z >= INDIVIDUAL_ZOOM_THRESHOLD ? "individual" : "cluster";
-      setMode(newMode);
-      if (newMode === "cluster") setPrecision((prev) => { const p = zoomToPrecision(z); return p !== prev ? p : prev; });
-    });
+    // Set initial bbox from default view
+    setBbox(snapBbox(map.getBounds(), DEFAULT_ZOOM));
+
+    // Try geolocation — override default if user agrees
+    navigator.geolocation?.getCurrentPosition(
+      (pos) => {
+        const z = 10;
+        map.setView([pos.coords.latitude, pos.coords.longitude], z);
+        setZoom(z);
+        setBbox(snapBbox(map.getBounds(), z));
+      },
+      () => {}, // keep Italy default — no action needed
+      { timeout: 5000, maximumAge: 60000 },
+    );
+
+    // Debounced viewport change handler — covers both zoom and pan
+    const updateViewport = () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      debounceRef.current = setTimeout(() => {
+        const z = map.getZoom();
+        setZoom(z);
+        setBbox(snapBbox(map.getBounds(), z));
+      }, 400);
+    };
+
+    map.on("zoomend moveend", updateViewport);
 
     setMapReady(true);
-    return () => { map.remove(); leafletMapRef.current = null; setMapReady(false); };
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      map.remove();
+      leafletMapRef.current = null;
+      setMapReady(false);
+    };
   }, []);
+
+  // ── Tile layer switch ──────────────────────────────────────────────────────
 
   useEffect(() => {
     const map = leafletMapRef.current;
@@ -272,6 +344,8 @@ export default function MapPage() {
       tileLayerRef.current = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { attribution: "&copy; OpenStreetMap contributors", maxZoom: 19 }).addTo(map);
     }
   }, [tileLayer]);
+
+  // ── Popup click handlers ───────────────────────────────────────────────────
 
   const attachPopupHandlers = useCallback((navigateFn: typeof navigate) => {
     document.querySelectorAll<HTMLElement>(".map-popup-photo, .map-popup-title, .map-cluster-tree").forEach((el) => {
@@ -287,6 +361,8 @@ export default function MapPage() {
       });
     });
   }, []);
+
+  // ── Cluster markers rendering ──────────────────────────────────────────────
 
   useEffect(() => {
     const map = leafletMapRef.current;
@@ -313,6 +389,8 @@ export default function MapPage() {
       markersRef.current.push(lm);
     });
   }, [clusterMarkers, mode, navigate, attachPopupHandlers]);
+
+  // ── Individual tree markers rendering ─────────────────────────────────────
 
   useEffect(() => {
     const map = leafletMapRef.current;
@@ -341,7 +419,8 @@ export default function MapPage() {
     });
   }, [individualTrees, mode, navigate, attachPopupHandlers]);
 
-  // ── Trail report markers (always visible, independent of zoom) ───────────────
+  // ── Trail report markers rendering ────────────────────────────────────────
+
   useEffect(() => {
     const map = leafletMapRef.current;
     if (!map || !mapReady) return;

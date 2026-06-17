@@ -2,9 +2,10 @@ import { Router } from "express";
 import { z } from "zod";
 import { db } from "@workspace/db";
 import { trailReportsTable, trailReportConfirmationsTable } from "@workspace/db";
-import { eq, and, sql, desc } from "drizzle-orm";
+import { eq, and, sql, desc, gte, lte } from "drizzle-orm";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth";
 import { isAdmin } from "../middlewares/requireAdmin";
+import { parseBbox } from "../lib/bbox";
 
 const router = Router();
 
@@ -24,9 +25,23 @@ const ConfirmSchema = z.object({
 });
 
 // GET /api/outdoor/reports — public
-// Single LEFT JOIN + conditional COUNT replaces 2N correlated subqueries
+// Optional bbox params (minLat/maxLat/minLng/maxLng) filter by viewport for map use.
+// Without bbox, returns all active reports (used by OutdoorPage list).
+// Single LEFT JOIN + conditional COUNT replaces 2N correlated subqueries.
 router.get("/outdoor/reports", async (req, res) => {
   try {
+    const bbox = parseBbox(req.query as Record<string, unknown>);
+
+    const whereClause = bbox
+      ? and(
+          eq(trailReportsTable.status, "active"),
+          gte(trailReportsTable.latitude, bbox.minLat),
+          lte(trailReportsTable.latitude, bbox.maxLat),
+          gte(trailReportsTable.longitude, bbox.minLng),
+          lte(trailReportsTable.longitude, bbox.maxLng),
+        )
+      : eq(trailReportsTable.status, "active");
+
     const reports = await db
       .select({
         id: trailReportsTable.id,
@@ -43,7 +58,7 @@ router.get("/outdoor/reports", async (req, res) => {
       })
       .from(trailReportsTable)
       .leftJoin(trailReportConfirmationsTable, eq(trailReportConfirmationsTable.reportId, trailReportsTable.id))
-      .where(eq(trailReportsTable.status, "active"))
+      .where(whereClause)
       .groupBy(trailReportsTable.id)
       .orderBy(desc(trailReportsTable.createdAt));
 

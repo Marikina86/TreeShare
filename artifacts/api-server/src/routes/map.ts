@@ -1,9 +1,13 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
 import { treesTable, usersTable } from "@workspace/db";
-import { count, countDistinct, sql, gte, eq } from "drizzle-orm";
+import { count, countDistinct, sql, gte, lte, and, eq } from "drizzle-orm";
+import { parseBbox } from "../lib/bbox";
 
 const router = Router();
+
+const CLUSTER_LIMIT = 500;
+const INDIVIDUAL_LIMIT = 300;
 
 router.get("/stats/global", async (_req, res) => {
   try {
@@ -28,11 +32,23 @@ router.get("/stats/global", async (_req, res) => {
   }
 });
 
+// GET /map/markers — clusters within optional bounding box
 router.get("/map/markers", async (req, res) => {
   try {
     const rawPrecision = parseInt(req.query.precision as string);
     const precision = isNaN(rawPrecision) ? 2 : Math.min(4, Math.max(1, rawPrecision));
     const multiplier = Math.pow(10, precision);
+    const bbox = parseBbox(req.query as Record<string, unknown>);
+
+    const whereClause = bbox
+      ? and(
+          eq(treesTable.photoStatus, "approved"),
+          gte(treesTable.latitude, bbox.minLat),
+          lte(treesTable.latitude, bbox.maxLat),
+          gte(treesTable.longitude, bbox.minLng),
+          lte(treesTable.longitude, bbox.maxLng),
+        )
+      : eq(treesTable.photoStatus, "approved");
 
     const rows = await db
       .select({
@@ -50,7 +66,8 @@ router.get("/map/markers", async (req, res) => {
       })
       .from(treesTable)
       .leftJoin(usersTable, eq(usersTable.clerkUserId, treesTable.userId))
-      .where(eq(treesTable.photoStatus, "approved"));
+      .where(whereClause)
+      .limit(CLUSTER_LIMIT);
 
     type TreeItem = {
       id: number;
@@ -118,9 +135,21 @@ router.get("/map/markers", async (req, res) => {
   }
 });
 
-// GET /map/individual — return every approved tree as an individual marker (no grouping)
+// GET /map/individual — individual markers within optional bounding box
 router.get("/map/individual", async (req, res) => {
   try {
+    const bbox = parseBbox(req.query as Record<string, unknown>);
+
+    const whereClause = bbox
+      ? and(
+          eq(treesTable.photoStatus, "approved"),
+          gte(treesTable.latitude, bbox.minLat),
+          lte(treesTable.latitude, bbox.maxLat),
+          gte(treesTable.longitude, bbox.minLng),
+          lte(treesTable.longitude, bbox.maxLng),
+        )
+      : eq(treesTable.photoStatus, "approved");
+
     const trees = await db
       .select({
         id: treesTable.id,
@@ -136,7 +165,8 @@ router.get("/map/individual", async (req, res) => {
       })
       .from(treesTable)
       .leftJoin(usersTable, eq(usersTable.clerkUserId, treesTable.userId))
-      .where(eq(treesTable.photoStatus, "approved"));
+      .where(whereClause)
+      .limit(INDIVIDUAL_LIMIT);
 
     const result = trees
       .filter((t) => !(t.latitude === 0 && t.longitude === 0))
