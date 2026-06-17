@@ -4,6 +4,7 @@ import { db } from "@workspace/db";
 import { trailReportsTable, trailReportConfirmationsTable } from "@workspace/db";
 import { eq, and, sql, desc } from "drizzle-orm";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth";
+import { isAdmin } from "../middlewares/requireAdmin";
 
 const router = Router();
 
@@ -206,6 +207,33 @@ router.delete("/outdoor/reports/:id", requireAuth, async (req, res) => {
     res.json({ success: true });
   } catch (err) {
     req.log.error({ err }, "Error deleting trail report");
+    res.status(500).json({ error: "Errore interno del server" });
+  }
+});
+
+// DELETE /api/outdoor/reports/:id/admin — admin only (remove fake reports)
+router.delete("/outdoor/reports/:id/admin", requireAuth, async (req, res) => {
+  const userId = (req as AuthenticatedRequest).userId;
+  const reportId = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id);
+  if (isNaN(reportId)) { res.status(400).json({ error: "ID non valido" }); return; }
+
+  try {
+    if (!isAdmin(userId)) { res.status(403).json({ error: "Non autorizzato" }); return; }
+
+    const [report] = await db
+      .select({ id: trailReportsTable.id })
+      .from(trailReportsTable)
+      .where(eq(trailReportsTable.id, reportId))
+      .limit(1);
+
+    if (!report) { res.status(404).json({ error: "Segnalazione non trovata" }); return; }
+
+    await db.delete(trailReportConfirmationsTable).where(eq(trailReportConfirmationsTable.reportId, reportId));
+    await db.delete(trailReportsTable).where(eq(trailReportsTable.id, reportId));
+
+    res.json({ success: true });
+  } catch (err) {
+    req.log.error({ err }, "Error admin-deleting trail report");
     res.status(500).json({ error: "Errore interno del server" });
   }
 });

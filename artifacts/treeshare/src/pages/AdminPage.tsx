@@ -131,7 +131,7 @@ interface AdminAlertItem {
   updatedAt: string;
 }
 
-type Tab = "users" | "reports" | "trees" | "problems" | "pending_events" | "pending_photos" | "pending_updates" | "pending_adopt_trees" | "alerts" | "tips" | "finance" | "discounts" | "ledger" | "settings" | "legal";
+type Tab = "users" | "reports" | "trees" | "problems" | "pending_events" | "pending_photos" | "pending_updates" | "pending_adopt_trees" | "alerts" | "tips" | "finance" | "discounts" | "ledger" | "settings" | "legal" | "outdoor";
 type UserFilter = "all" | "active" | "blocked";
 type ReportFilter = "all" | "pending" | "reviewed" | "dismissed";
 
@@ -373,6 +373,22 @@ export default function AdminPage() {
   const [pendingEventsHasMore, setPendingEventsHasMore] = useState(false);
   const [pendingEventsPage, setPendingEventsPage] = useState(1);
   const [eventReviewMessages, setEventReviewMessages] = useState<Record<number, string>>({});
+
+  interface AdminTrailReport {
+    id: number;
+    userId: string;
+    type: string;
+    description: string | null;
+    photoUrl: string | null;
+    latitude: number;
+    longitude: number;
+    locationName: string | null;
+    createdAt: string;
+    stillPresentCount: number;
+    notPresentCount: number;
+  }
+  const [outdoorReports, setOutdoorReports] = useState<AdminTrailReport[]>([]);
+  const [outdoorLoading, setOutdoorLoading] = useState(false);
   const [pendingCounts, setPendingCounts] = useState<{ pendingTrees: number; pendingUpdates: number; pendingEvents: number; pendingAdoptTrees: number }>({ pendingTrees: 0, pendingUpdates: 0, pendingEvents: 0, pendingAdoptTrees: 0 });
   const [pendingAdoptTrees, setPendingAdoptTrees] = useState<Array<{ id: number; ownerId: string; ownerEmail: string; title: string; description: string; speciesName: string | null; locationName: string | null; imageUrl: string | null; thumbnailUrl: string | null; productDescription: string | null; priceCents: number; durationDays: number; moderationStatus: string; moderationMessage: string | null; createdAt: string; ownerUsername: string | null; ownerPhotoUrl: string | null }>>([]);
   const [pendingAdoptLoading, setPendingAdoptLoading] = useState(false);
@@ -495,7 +511,7 @@ export default function AdminPage() {
   const T = {
     it: {
       title: "Pannello di controllo", subtitle: "Gestione utenti e contenuti",
-      tabs: { users: "Utenti", reports: "Segnalazioni", trees: "Contenuti", problems: "Problemi", alerts: "Avvisi", tips: "Consigli", finance: "Finanza", discounts: "Sconti", ledger: "Ledger", settings: "Impostazioni", legal: "Documenti" },
+      tabs: { users: "Utenti", reports: "Segnalazioni", trees: "Contenuti", problems: "Problemi", alerts: "Avvisi", tips: "Consigli", finance: "Finanza", discounts: "Sconti", ledger: "Ledger", settings: "Impostazioni", legal: "Documenti", outdoor: "Outdoor" },
       stats: { users: "Utenti totali", trees: "Alberi piantati", blocked: "Utenti bloccati" },
       search: "Cerca utente...", searchTrees: "Cerca contenuto...",
       filters: { all: "Tutti", active: "Attivi", blocked: "Bloccati", pending: "In attesa", reviewed: "Esaminati", dismissed: "Archiviati" },
@@ -518,7 +534,7 @@ export default function AdminPage() {
     },
     en: {
       title: "Admin Panel", subtitle: "User and content management",
-      tabs: { users: "Users", reports: "Reports", trees: "Content", problems: "Problems", alerts: "Alerts", tips: "Tips", finance: "Finance", discounts: "Discounts", ledger: "Ledger", settings: "Settings", legal: "Legal Docs" },
+      tabs: { users: "Users", reports: "Reports", trees: "Content", problems: "Problems", alerts: "Alerts", tips: "Tips", finance: "Finance", discounts: "Discounts", ledger: "Ledger", settings: "Settings", legal: "Legal Docs", outdoor: "Outdoor" },
       stats: { users: "Total users", trees: "Trees planted", blocked: "Blocked users" },
       search: "Search user...", searchTrees: "Search content...",
       filters: { all: "All", active: "Active", blocked: "Blocked", pending: "Pending", reviewed: "Reviewed", dismissed: "Dismissed" },
@@ -1072,6 +1088,32 @@ export default function AdminPage() {
     finally { setLedgerLoading(false); }
   }
 
+  async function loadOutdoorReports() {
+    setOutdoorLoading(true);
+    try {
+      const res = await authFetch("/api/outdoor/reports");
+      if (res.ok) {
+        const data = await res.json() as { reports: AdminTrailReport[] };
+        setOutdoorReports(data.reports ?? []);
+      }
+    } catch { toast({ title: T.errors.load, variant: "destructive" }); }
+    finally { setOutdoorLoading(false); }
+  }
+
+  async function handleAdminDeleteOutdoor(id: number) {
+    const token = await getToken();
+    const res = await fetch(`/api/outdoor/reports/${id}/admin`, {
+      method: "DELETE",
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (res.ok) {
+      setOutdoorReports((prev) => prev.filter((r) => r.id !== id));
+      toast({ title: lang === "it" ? "Segnalazione eliminata" : "Report deleted" });
+    } else {
+      toast({ title: T.errors.delete, variant: "destructive" });
+    }
+  }
+
   async function handleDeleteLedgerEntry(id: number) {
     setDeletingLedgerId(id);
     try {
@@ -1157,6 +1199,7 @@ export default function AdminPage() {
   useEffect(() => { if (activeTab === "alerts") loadAdminAlerts(); }, [activeTab]);
   useEffect(() => { if (activeTab === "tips") loadAdminTips(); }, [activeTab]);
   useEffect(() => { if (activeTab === "ledger") loadLedger(); }, [activeTab]);
+  useEffect(() => { if (activeTab === "outdoor") loadOutdoorReports(); }, [activeTab]);
   useEffect(() => { loadProblemReports(); }, []);
 
   // Carica i contatori pending solo se non già caricati in questa sessione (no polling)
@@ -1449,6 +1492,13 @@ export default function AdminPage() {
           >
             <svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" strokeLinecap="round" strokeLinejoin="round"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
             {T.tabs.legal}
+          </button>
+          <button
+            onClick={() => setActiveTab("outdoor")}
+            className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors ${activeTab === "outdoor" ? "bg-teal-600 text-white" : "text-muted-foreground hover:bg-muted"}`}
+          >
+            <svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path d="M3 17l4-8 4 4 3-6 4 10" strokeLinecap="round" strokeLinejoin="round"/><path d="M3 21h18" strokeLinecap="round"/></svg>
+            {T.tabs.outdoor}
           </button>
         </div>
       </header>
@@ -3446,6 +3496,91 @@ export default function AdminPage() {
         {/* ── LEGAL DOCS TAB ── */}
         {activeTab === "legal" && (
           <AdminLegalSection lang={lang as "it" | "en"} authFetch={authFetch} toast={toast} />
+        )}
+
+        {/* ── OUTDOOR TAB ── */}
+        {activeTab === "outdoor" && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-bold text-foreground">
+                {lang === "it" ? "Segnalazioni Outdoor" : "Outdoor Reports"}
+              </h2>
+              <button
+                onClick={loadOutdoorReports}
+                disabled={outdoorLoading}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-muted hover:bg-muted/80 text-sm font-medium text-muted-foreground disabled:opacity-50 transition-colors"
+              >
+                <svg className={outdoorLoading ? "animate-spin" : ""} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-.07-7.05"/></svg>
+                {lang === "it" ? "Aggiorna" : "Refresh"}
+              </button>
+            </div>
+
+            {outdoorLoading ? (
+              <div className="text-center py-12 text-muted-foreground">
+                {lang === "it" ? "Caricamento…" : "Loading…"}
+              </div>
+            ) : outdoorReports.length === 0 ? (
+              <div className="text-center py-12 text-muted-foreground">
+                {lang === "it" ? "Nessuna segnalazione attiva" : "No active reports"}
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {outdoorReports.map((report) => {
+                  const typeLabels: Record<string, string> = {
+                    fallen_tree: "🌲 Albero caduto",
+                    landslide: "⛰️ Frana",
+                    path_interrupted: "🚧 Sentiero interrotto",
+                    bridge_damaged: "🌉 Ponte danneggiato",
+                    garbage: "🗑️ Rifiuti abbandonati",
+                  };
+                  const photoResolved = report.photoUrl
+                    ? report.photoUrl.startsWith("/objects/") ? `/api/storage${report.photoUrl}` : report.photoUrl
+                    : null;
+                  return (
+                    <div key={report.id} className="bg-card rounded-xl border border-border p-4 space-y-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="space-y-1 flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-semibold text-sm text-foreground">
+                              {typeLabels[report.type] ?? report.type}
+                            </span>
+                            <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
+                              #{report.id}
+                            </span>
+                          </div>
+                          <p className="text-xs text-muted-foreground">
+                            📍 {report.latitude.toFixed(4)}, {report.longitude.toFixed(4)}
+                            {report.locationName && ` — ${report.locationName}`}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            🕐 {new Date(report.createdAt).toLocaleDateString(lang === "it" ? "it-IT" : "en-GB", { day: "numeric", month: "short", year: "numeric" })}
+                            &nbsp;·&nbsp;✅ {report.stillPresentCount} &nbsp;·&nbsp; ✗ {report.notPresentCount}
+                          </p>
+                          {report.description && (
+                            <p className="text-sm text-foreground mt-1 line-clamp-2">{report.description}</p>
+                          )}
+                        </div>
+                        <button
+                          onClick={() => handleAdminDeleteOutdoor(report.id)}
+                          className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-destructive/10 hover:bg-destructive/20 text-destructive text-xs font-semibold transition-colors"
+                        >
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+                          {lang === "it" ? "Elimina" : "Delete"}
+                        </button>
+                      </div>
+                      {photoResolved && (
+                        <img
+                          src={photoResolved}
+                          alt="Foto segnalazione"
+                          className="w-full h-40 object-cover rounded-lg"
+                        />
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         )}
 
       </div>
