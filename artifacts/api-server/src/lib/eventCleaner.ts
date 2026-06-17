@@ -1,5 +1,5 @@
 import { db } from "@workspace/db";
-import { eventsTable, donationCampaignsTable, userNotificationsTable } from "@workspace/db";
+import { eventsTable, donationCampaignsTable, userNotificationsTable, trailReportsTable } from "@workspace/db";
 import { expireTreeAdoptions, notifyExpiringAdoptions } from "../routes/adoptions";
 import { sql, and, eq, lt, lte, gte, isNull } from "drizzle-orm";
 import { logger } from "./logger";
@@ -168,13 +168,32 @@ function msUntilNextRome2359(): number {
 
 const DAILY_INTERVAL_MS = 24 * 60 * 60 * 1000;
 
+async function archiveExpiredTrailReports(): Promise<void> {
+  try {
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const result = await db
+      .update(trailReportsTable)
+      .set({ status: "archived", archivedAt: new Date(), archivedReason: "expired" })
+      .where(and(eq(trailReportsTable.status, "active"), lt(trailReportsTable.createdAt, thirtyDaysAgo)))
+      .returning({ id: trailReportsTable.id });
+
+    if (result.length > 0) {
+      logger.info({ count: result.length }, "[trailReports] Archived expired trail reports (>30d)");
+    }
+  } catch (err) {
+    logger.error({ err }, "[trailReports] Error archiving expired trail reports");
+  }
+}
+
 export function startEventCleaner(): void {
   deleteExpiredEvents();
   archiveExpiredCampaigns();
   expireTreeAdoptions();
+  archiveExpiredTrailReports();
   setInterval(deleteExpiredEvents, DAILY_INTERVAL_MS);
   setInterval(archiveExpiredCampaigns, DAILY_INTERVAL_MS);
   setInterval(expireTreeAdoptions, DAILY_INTERVAL_MS);
+  setInterval(archiveExpiredTrailReports, DAILY_INTERVAL_MS);
   setTimeout(() => {
     notifyExpiringCampaigns();
     notifyExpiringAdoptions();

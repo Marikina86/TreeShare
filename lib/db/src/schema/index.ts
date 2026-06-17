@@ -539,3 +539,33 @@ export const registerEnteSchema = z.object({
 });
 
 export type RegisterEnte = z.infer<typeof registerEnteSchema>;
+
+// ── Outdoor: segnalazioni sentieri ────────────────────────────────────────────
+
+export const trailReportsTable = pgTable("trail_reports", {
+  id: serial("id").primaryKey(),
+  userId: text("user_id").notNull(),
+  type: text("type").notNull(), // fallen_tree | landslide | path_interrupted | bridge_damaged | garbage
+  description: text("description"),
+  latitude: real("latitude").notNull(),
+  longitude: real("longitude").notNull(),
+  locationName: text("location_name"),
+  status: text("status").notNull().default("active"), // active | archived
+  archivedAt: timestamp("archived_at"),
+  archivedReason: text("archived_reason"), // expired | resolved
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (table) => [
+  index("trail_reports_status_idx").on(table.status),
+  index("trail_reports_created_at_idx").on(table.createdAt),
+]);
+
+export const trailReportConfirmationsTable = pgTable("trail_report_confirmations", {
+  id: serial("id").primaryKey(),
+  reportId: integer("report_id").notNull(),
+  userId: text("user_id").notNull(),
+  type: text("type").notNull(), // still_present | not_present
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("trail_confirmations_user_report_uidx").on(table.userId, table.reportId),
+  index("trail_confirmations_report_id_idx").on(table.reportId),
+]);

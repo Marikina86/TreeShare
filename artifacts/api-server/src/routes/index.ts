@@ -25,6 +25,7 @@ import adminLedgerRouter from "./adminLedger";
 import appSettingsRouter from "./appSettings";
 import authRouter from "./auth";
 import co2Router from "./co2";
+import outdoorRouter from "./outdoor";
 
 const router: IRouter = Router();
 
@@ -54,5 +55,6 @@ router.use(adminLedgerRouter);
 router.use(appSettingsRouter);
 router.use(authRouter);
 router.use(co2Router);
+router.use(outdoorRouter);
 
 export default router;

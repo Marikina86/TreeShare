@@ -4,6 +4,70 @@ import Layout from "@/components/Layout";
 import L from "leaflet";
 
 const INDIVIDUAL_ZOOM_THRESHOLD = 12;
+
+// ── Trail report types ────────────────────────────────────────────────────────
+
+type TrailReportType = "fallen_tree" | "landslide" | "path_interrupted" | "bridge_damaged" | "garbage";
+
+interface TrailReport {
+  id: number;
+  type: TrailReportType;
+  description: string | null;
+  latitude: number;
+  longitude: number;
+  locationName: string | null;
+  createdAt: string;
+  stillPresentCount: number;
+  notPresentCount: number;
+}
+
+const TRAIL_TYPE_LABELS: Record<TrailReportType, string> = {
+  fallen_tree:      "Albero caduto",
+  landslide:        "Frana",
+  path_interrupted: "Sentiero interrotto",
+  bridge_damaged:   "Ponte danneggiato",
+  garbage:          "Rifiuti / Discarica",
+};
+
+function trailIcon(type: TrailReportType): L.DivIcon {
+  const isGarbage = type === "garbage";
+  const emoji = isGarbage ? "☢️" : "⚠️";
+  const bg = isGarbage ? "#ef4444" : "#f59e0b";
+  const border = isGarbage ? "#dc2626" : "#d97706";
+  return L.divIcon({
+    className: "",
+    html: `<div style="
+      width:34px;height:34px;
+      background:${bg};
+      border:2px solid ${border};
+      border-radius:50%;
+      display:flex;align-items:center;justify-content:center;
+      font-size:16px;line-height:1;
+      box-shadow:0 2px 6px rgba(0,0,0,0.35);
+      cursor:pointer;
+    ">${emoji}</div>`,
+    iconSize: [34, 34],
+    iconAnchor: [17, 34],
+    popupAnchor: [0, -36],
+  });
+}
+
+function trailPopupHtml(r: TrailReport): string {
+  const label = TRAIL_TYPE_LABELS[r.type] ?? r.type;
+  const loc = r.locationName ? `<div style="font-size:11px;color:#666;margin-top:2px;">${r.locationName}</div>` : "";
+  const desc = r.description ? `<div style="font-size:12px;color:#333;margin-top:5px;">${r.description}</div>` : "";
+  const days = Math.max(0, Math.ceil((new Date(r.createdAt).getTime() + 30 * 86400000 - Date.now()) / 86400000));
+  return `<div style="width:200px;font-family:sans-serif;">
+    <div style="font-weight:700;font-size:13px;color:#1a1a1a;">${label}</div>
+    ${loc}${desc}
+    <div style="margin-top:6px;display:flex;gap:8px;font-size:11px;color:#666;">
+      <span>✋ ${r.stillPresentCount}</span>
+      <span>✅ ${r.notPresentCount}/3</span>
+      <span style="margin-left:auto;">⏱ ${days}g rimasti</span>
+    </div>
+    <a href="/outdoor" style="display:block;margin-top:6px;font-size:11px;color:#22c55e;font-weight:600;text-decoration:none;">Vedi tutte le segnalazioni →</a>
+  </div>`;
+}
 const SPIDERFY_RADIUS_DEG = 0.00012;
 
 interface TreeItem {
@@ -126,10 +190,13 @@ export default function MapPage() {
   const mapRef = useRef<HTMLDivElement>(null);
   const leafletMapRef = useRef<L.Map | null>(null);
   const markersRef = useRef<L.Layer[]>([]);
+  const trailMarkersRef = useRef<L.Layer[]>([]);
   const tileLayerRef = useRef<L.TileLayer | null>(null);
   const [tileLayer, setTileLayer] = useState<"street" | "satellite">("street");
   const [clusterMarkers, setClusterMarkers] = useState<ClusterMarker[]>([]);
   const [individualTrees, setIndividualTrees] = useState<IndividualTree[]>([]);
+  const [trailReports, setTrailReports] = useState<TrailReport[]>([]);
+  const [mapReady, setMapReady] = useState(false);
   const [mode, setMode] = useState<"cluster" | "individual">("cluster");
   const [isLoading, setIsLoading] = useState(true);
   const [precision, setPrecision] = useState(2);
@@ -153,10 +220,19 @@ export default function MapPage() {
     } finally { setIsLoading(false); }
   }, []);
 
+  const fetchTrailReports = useCallback(async () => {
+    try {
+      const res = await fetch("/api/outdoor/reports");
+      if (res.ok) setTrailReports(await res.json());
+    } catch {}
+  }, []);
+
   useEffect(() => {
     if (mode === "cluster") fetchClusters(precision);
     else fetchIndividual();
   }, [mode, precision, fetchClusters, fetchIndividual]);
+
+  useEffect(() => { fetchTrailReports(); }, [fetchTrailReports]);
 
 
   useEffect(() => {
@@ -182,7 +258,8 @@ export default function MapPage() {
       if (newMode === "cluster") setPrecision((prev) => { const p = zoomToPrecision(z); return p !== prev ? p : prev; });
     });
 
-    return () => { map.remove(); leafletMapRef.current = null; };
+    setMapReady(true);
+    return () => { map.remove(); leafletMapRef.current = null; setMapReady(false); };
   }, []);
 
   useEffect(() => {
@@ -263,6 +340,23 @@ export default function MapPage() {
       markersRef.current.push(lm);
     });
   }, [individualTrees, mode, navigate, attachPopupHandlers]);
+
+  // ── Trail report markers (always visible, independent of zoom) ───────────────
+  useEffect(() => {
+    const map = leafletMapRef.current;
+    if (!map || !mapReady) return;
+
+    trailMarkersRef.current.forEach((m) => m.remove());
+    trailMarkersRef.current = [];
+
+    trailReports.forEach((report) => {
+      const icon = trailIcon(report.type);
+      const lm = L.marker([report.latitude, report.longitude], { icon })
+        .bindPopup(trailPopupHtml(report), { maxWidth: 230 })
+        .addTo(map);
+      trailMarkersRef.current.push(lm);
+    });
+  }, [trailReports, mapReady]);
 
   const totalCount = mode === "cluster"
     ? clusterMarkers.reduce((s, m) => s + m.count, 0)

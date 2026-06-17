@@ -188,6 +188,22 @@ export default function Layout({ children }: LayoutProps) {
   // ── Voci di navigazione ───────────────────────────────────────────────────
   const navItems = [
     {
+      path: "/outdoor",
+      label: t.nav.outdoor,
+      icon: (
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <polyline points="2,20 8,8 11,14 14,10 22,20" opacity="0.5" />
+          <circle cx="6" cy="17" r="3" />
+          <circle cx="18" cy="17" r="3" />
+          <path d="M6 17 L10 10 L18 17" />
+          <path d="M10 10 L14 10 L18 17" />
+          <path d="M15 10 h3 l1 -2" />
+          <path d="M8 10 h3" />
+          <circle cx="16" cy="7" r="1.5" />
+        </svg>
+      ),
+    },
+    {
       path: "/feed",
       label: t.nav.feed,
       icon: (

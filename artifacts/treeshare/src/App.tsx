@@ -32,6 +32,7 @@ const PrivateSignupPage = lazy(() => import("@/pages/PrivateSignupPage"));
 const SignInPage = lazy(() => import("@/pages/SignInPage"));
 const CampaignsPage = lazy(() => import("@/pages/CampaignsPage"));
 const Co2Page = lazy(() => import("@/pages/Co2Page"));
+const OutdoorPage = lazy(() => import("@/pages/OutdoorPage"));
 const AdoptableTreesPage = lazy(() => import("@/pages/AdoptableTreesPage"));
 const AdoptableTreeDetailPage = lazy(() => import("@/pages/AdoptableTreeDetailPage"));
 const CreateAdoptableTreePage = lazy(() => import("@/pages/CreateAdoptableTreePage"));
@@ -365,6 +366,7 @@ function AuthProviderWithRoutes() {
               <Route path="/settings" component={() => <ProtectedRoute component={SettingsPage} />} />
               <Route path="/campaigns" component={CampaignsPage} />
               <Route path="/co2" component={Co2Page} />
+              <Route path="/outdoor" component={OutdoorPage} />
               <Route path="/adopt" component={AdoptableTreesPage} />
               <Route path="/adopt/create" component={() => <ProtectedRoute component={CreateAdoptableTreePage} />} />
               <Route path="/adopt/manage" component={() => <ProtectedRoute component={OrgAdoptionsPage} />} />
