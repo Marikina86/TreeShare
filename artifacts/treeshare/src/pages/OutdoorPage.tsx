@@ -12,6 +12,7 @@ interface TrailReport {
   userId: string;
   type: ReportType;
   description: string | null;
+  photoUrl: string | null;
   latitude: number;
   longitude: number;
   locationName: string | null;
@@ -19,6 +20,11 @@ interface TrailReport {
   stillPresentCount: number;
   notPresentCount: number;
   userConfirmation?: "still_present" | "not_present" | null;
+}
+
+function resolvePhotoUrl(url: string | null | undefined): string | null {
+  if (!url) return null;
+  return url.startsWith("/objects/") ? `/api/storage${url}` : url;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -96,6 +102,14 @@ function ReportCard({
         </div>
       </div>
 
+      {report.photoUrl && (
+        <img
+          src={resolvePhotoUrl(report.photoUrl)!}
+          alt="Foto segnalazione"
+          className="w-full h-40 object-cover rounded-lg"
+        />
+      )}
+
       {report.description && (
         <p className="text-sm text-foreground">{report.description}</p>
       )}
@@ -154,8 +168,12 @@ function CreateReportModal({
   const [lng, setLng] = useState("");
   const [locationName, setLocationName] = useState("");
   const [description, setDescription] = useState("");
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const [uploadedPhotoUrl, setUploadedPhotoUrl] = useState<string | null>(null);
+  const [photoUploading, setPhotoUploading] = useState(false);
   const [locating, setLocating] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
 
   const handleGps = () => {
     if (!navigator.geolocation) { toast({ title: "GPS non disponibile" }); return; }
@@ -171,11 +189,45 @@ function CreateReportModal({
     );
   };
 
+  const handleCameraCapture = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setPhotoPreview(URL.createObjectURL(file));
+    setPhotoUploading(true);
+    try {
+      const urlRes = await fetch("/api/storage/uploads/request-url", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: file.name || "photo.jpg", size: file.size, contentType: file.type || "image/jpeg" }),
+      });
+      if (!urlRes.ok) throw new Error();
+      const { uploadURL } = await urlRes.json() as { uploadURL: string };
+
+      const uploadRes = await fetch(uploadURL, {
+        method: "PUT",
+        body: file,
+        headers: { "Content-Type": file.type || "image/jpeg" },
+      });
+      if (!uploadRes.ok) throw new Error();
+      const { finalObjectPath } = await uploadRes.json() as { finalObjectPath: string };
+      setUploadedPhotoUrl(finalObjectPath);
+    } catch {
+      toast({ title: "Errore caricamento foto", description: "Riprova", variant: "destructive" });
+      setPhotoPreview(null);
+      setUploadedPhotoUrl(null);
+    } finally {
+      setPhotoUploading(false);
+      e.target.value = "";
+    }
+  };
+
   const handleSubmit = async () => {
     if (!type) return;
     const latNum = parseFloat(lat);
     const lngNum = parseFloat(lng);
     if (isNaN(latNum) || isNaN(lngNum)) { toast({ title: "Inserisci coordinate valide" }); return; }
+    if (photoUploading) { toast({ title: "Attendi il caricamento della foto" }); return; }
 
     setSubmitting(true);
     try {
@@ -183,7 +235,14 @@ function CreateReportModal({
       const res = await fetch("/api/outdoor/reports", {
         method: "POST",
         headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-        body: JSON.stringify({ type, latitude: latNum, longitude: lngNum, locationName: locationName || undefined, description: description || undefined }),
+        body: JSON.stringify({
+          type,
+          latitude: latNum,
+          longitude: lngNum,
+          locationName: locationName || undefined,
+          description: description || undefined,
+          photoUrl: uploadedPhotoUrl || undefined,
+        }),
       });
       if (!res.ok) throw new Error("Errore nella segnalazione");
       toast({ title: "Segnalazione inviata", description: "Grazie per il contributo!" });
@@ -315,14 +374,71 @@ function CreateReportModal({
 
         {step === "details" && (
           <div className="p-4 space-y-4">
-            <p className="text-sm font-medium text-foreground">Descrizione (opzionale)</p>
-            <textarea
-              placeholder="Descrivi il problema: dimensioni, pericolosità, accesso alternativo…"
-              value={description} onChange={(e) => setDescription(e.target.value)}
-              rows={4} maxLength={500}
-              className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm resize-none focus:outline-none focus:ring-2 focus:ring-ring"
-            />
-            <p className="text-xs text-muted-foreground text-right">{description.length}/500</p>
+            {/* Camera capture */}
+            <div>
+              <p className="text-sm font-medium text-foreground mb-2">Foto del problema (opzionale)</p>
+              <input
+                ref={cameraInputRef}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                className="hidden"
+                onChange={handleCameraCapture}
+              />
+              {photoPreview ? (
+                <div className="relative rounded-xl overflow-hidden">
+                  <img src={photoPreview} alt="Anteprima" className="w-full h-48 object-cover" />
+                  {photoUploading && (
+                    <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                      <div className="text-white text-sm font-medium flex items-center gap-2">
+                        <svg className="animate-spin" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <circle cx="12" cy="12" r="10" strokeOpacity="0.3" /><path d="M12 2a10 10 0 0 1 10 10" />
+                        </svg>
+                        Caricamento…
+                      </div>
+                    </div>
+                  )}
+                  {!photoUploading && (
+                    <button
+                      onClick={() => { setPhotoPreview(null); setUploadedPhotoUrl(null); }}
+                      className="absolute top-2 right-2 bg-black/60 text-white rounded-full w-7 h-7 flex items-center justify-center hover:bg-black/80 transition-colors"
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                        <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+                      </svg>
+                    </button>
+                  )}
+                  {!photoUploading && uploadedPhotoUrl && (
+                    <div className="absolute bottom-2 left-2 bg-emerald-500/90 text-white text-xs font-medium px-2 py-1 rounded-full">
+                      ✓ Caricata
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <button
+                  onClick={() => cameraInputRef.current?.click()}
+                  className="w-full h-32 rounded-xl border-2 border-dashed border-border flex flex-col items-center justify-center gap-2 text-muted-foreground hover:bg-muted/50 transition-colors"
+                >
+                  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+                    <circle cx="12" cy="13" r="4" />
+                  </svg>
+                  <span className="text-sm font-medium">Scatta foto</span>
+                  <span className="text-xs">Apre la fotocamera</span>
+                </button>
+              )}
+            </div>
+
+            <div>
+              <p className="text-sm font-medium text-foreground mb-2">Descrizione (opzionale)</p>
+              <textarea
+                placeholder="Descrivi il problema: dimensioni, pericolosità, accesso alternativo…"
+                value={description} onChange={(e) => setDescription(e.target.value)}
+                rows={3} maxLength={500}
+                className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm resize-none focus:outline-none focus:ring-2 focus:ring-ring"
+              />
+              <p className="text-xs text-muted-foreground text-right mt-1">{description.length}/500</p>
+            </div>
 
             <div className="rounded-xl bg-muted/60 p-3 text-xs text-muted-foreground space-y-1">
               <p><strong>Tipo:</strong> {type ? TYPE_CONFIG[type].label : ""}</p>

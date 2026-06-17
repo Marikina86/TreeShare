@@ -547,6 +547,7 @@ export const trailReportsTable = pgTable("trail_reports", {
   userId: text("user_id").notNull(),
   type: text("type").notNull(), // fallen_tree | landslide | path_interrupted | bridge_damaged | garbage
   description: text("description"),
+  photoUrl: text("photo_url"),
   latitude: real("latitude").notNull(),
   longitude: real("longitude").notNull(),
   locationName: text("location_name"),
