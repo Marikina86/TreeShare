@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import Layout from "@/components/Layout";
 import { useAuth, useUser } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
+import { resizeToBlob } from "@/lib/imageUtils";
 
 // ── Tipi ─────────────────────────────────────────────────────────────────────
 
@@ -196,18 +197,22 @@ function CreateReportModal({
     setPhotoPreview(URL.createObjectURL(file));
     setPhotoUploading(true);
     try {
+      const compressed = await resizeToBlob(file);
+      const ext = compressed.type === "image/webp" ? "webp" : "jpg";
+      const baseName = (file.name || "photo").replace(/\.[^.]+$/, "");
+
       const urlRes = await fetch("/api/storage/uploads/request-url", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: file.name || "photo.jpg", size: file.size, contentType: file.type || "image/jpeg" }),
+        body: JSON.stringify({ name: `${baseName}.${ext}`, size: compressed.size, contentType: compressed.type }),
       });
       if (!urlRes.ok) throw new Error();
       const { uploadURL } = await urlRes.json() as { uploadURL: string };
 
       const uploadRes = await fetch(uploadURL, {
         method: "PUT",
-        body: file,
-        headers: { "Content-Type": file.type || "image/jpeg" },
+        body: compressed,
+        headers: { "Content-Type": compressed.type },
       });
       if (!uploadRes.ok) throw new Error();
       const { finalObjectPath } = await uploadRes.json() as { finalObjectPath: string };
