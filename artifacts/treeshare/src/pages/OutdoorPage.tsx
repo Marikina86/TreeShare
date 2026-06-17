@@ -196,9 +196,10 @@ function CreateReportModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 z-50 flex items-end md:items-center justify-center p-4" onClick={onClose}>
+    <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4" onClick={onClose}>
       <div
-        className="bg-card rounded-2xl w-full max-w-md max-h-[90vh] overflow-y-auto shadow-xl"
+        className="bg-card rounded-2xl w-full max-w-md overflow-y-auto shadow-xl"
+        style={{ maxHeight: "min(90vh, 680px)" }}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between p-4 border-b border-border">
@@ -551,22 +552,25 @@ export default function OutdoorPage() {
 
 export function OutdoorIcon({ size = 22, className = "" }: { size?: number; className?: string }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className={className}>
-      {/* Montagna sullo sfondo */}
-      <polyline points="2,20 8,8 11,14 14,10 22,20" opacity="0.5" />
-      {/* Ruota posteriore */}
-      <circle cx="6" cy="17" r="3" />
-      {/* Ruota anteriore */}
-      <circle cx="18" cy="17" r="3" />
-      {/* Telaio bici */}
-      <path d="M6 17 L10 10 L18 17" />
-      <path d="M10 10 L14 10 L18 17" />
-      {/* Manubrio */}
-      <path d="M15 10 h3 l1 -2" />
-      {/* Sellino */}
-      <path d="M8 10 h3" />
-      {/* Omino stilizzato - testa */}
-      <circle cx="16" cy="7" r="1.5" />
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      {/* ruote */}
+      <circle cx="5" cy="17" r="3.5" />
+      <circle cx="19" cy="17" r="3.5" />
+      {/* telaio a diamante */}
+      <polyline points="5,17 12,14 9,10 5,17" />
+      <line x1="9" y1="10" x2="16" y2="10" />
+      <line x1="12" y1="14" x2="16" y2="10" />
+      <line x1="16" y1="10" x2="19" y2="17" />
+      {/* sellino */}
+      <line x1="7.5" y1="9.5" x2="10.5" y2="9.5" />
+      {/* manubrio */}
+      <path d="M16,10 L16.5,8 L18,8" />
+      {/* omino: testa */}
+      <circle cx="10" cy="5.5" r="1.8" />
+      {/* omino: busto */}
+      <line x1="10" y1="7.3" x2="9.2" y2="9.8" />
+      {/* omino: braccio al manubrio */}
+      <line x1="10" y1="8.3" x2="16.5" y2="8" />
     </svg>
   );
 }
