@@ -16,6 +16,7 @@ router.get("/stats/global", async (_req, res) => {
         .from(treesTable)
         .where(sql`${treesTable.createdAt} > ${thirtyDaysAgo} AND ${treesTable.photoStatus} = 'approved'`),
     ]);
+    res.setHeader("Cache-Control", "public, max-age=120, stale-while-revalidate=600");
     res.json({
       totalTrees: Number(totalTrees),
       totalUsers: Number(totalUsers),
@@ -109,6 +110,7 @@ router.get("/map/markers", async (req, res) => {
       trees: entry.trees.slice(0, 30),
     }));
 
+    res.setHeader("Cache-Control", "public, max-age=60, stale-while-revalidate=300");
     res.json(markers);
   } catch (err) {
     (req as any).log?.error?.({ err }, "Error fetching map markers");
@@ -151,6 +153,7 @@ router.get("/map/individual", async (req, res) => {
         species: t.species ?? null,
       }));
 
+    res.setHeader("Cache-Control", "public, max-age=60, stale-while-revalidate=300");
     res.json(result);
   } catch (err) {
     (req as any).log?.error?.({ err }, "Error fetching individual map markers");

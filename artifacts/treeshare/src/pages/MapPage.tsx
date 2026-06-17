@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import Layout from "@/components/Layout";
 import L from "leaflet";
@@ -195,7 +196,6 @@ export default function MapPage() {
   const [tileLayer, setTileLayer] = useState<"street" | "satellite">("street");
   const [clusterMarkers, setClusterMarkers] = useState<ClusterMarker[]>([]);
   const [individualTrees, setIndividualTrees] = useState<IndividualTree[]>([]);
-  const [trailReports, setTrailReports] = useState<TrailReport[]>([]);
   const [mapReady, setMapReady] = useState(false);
   const [mode, setMode] = useState<"cluster" | "individual">("cluster");
   const [isLoading, setIsLoading] = useState(true);
@@ -220,19 +220,19 @@ export default function MapPage() {
     } finally { setIsLoading(false); }
   }, []);
 
-  const fetchTrailReports = useCallback(async () => {
-    try {
+  const { data: trailReports = [] } = useQuery<TrailReport[]>({
+    queryKey: ["trail-reports"],
+    queryFn: async () => {
       const res = await fetch("/api/outdoor/reports");
-      if (res.ok) setTrailReports(await res.json());
-    } catch {}
-  }, []);
+      if (!res.ok) throw new Error();
+      return res.json();
+    },
+  });
 
   useEffect(() => {
     if (mode === "cluster") fetchClusters(precision);
     else fetchIndividual();
   }, [mode, precision, fetchClusters, fetchIndividual]);
-
-  useEffect(() => { fetchTrailReports(); }, [fetchTrailReports]);
 
 
   useEffect(() => {

@@ -558,6 +558,7 @@ export const trailReportsTable = pgTable("trail_reports", {
 }, (table) => [
   index("trail_reports_status_idx").on(table.status),
   index("trail_reports_created_at_idx").on(table.createdAt),
+  index("trail_reports_status_created_idx").on(table.status, table.createdAt),
 ]);
 
 export const trailReportConfirmationsTable = pgTable("trail_report_confirmations", {

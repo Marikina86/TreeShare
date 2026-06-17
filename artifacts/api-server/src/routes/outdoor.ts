@@ -24,6 +24,7 @@ const ConfirmSchema = z.object({
 });
 
 // GET /api/outdoor/reports — public
+// Single LEFT JOIN + conditional COUNT replaces 2N correlated subqueries
 router.get("/outdoor/reports", async (req, res) => {
   try {
     const reports = await db
@@ -37,19 +38,16 @@ router.get("/outdoor/reports", async (req, res) => {
         longitude: trailReportsTable.longitude,
         locationName: trailReportsTable.locationName,
         createdAt: trailReportsTable.createdAt,
-        stillPresentCount: sql<number>`(
-          SELECT COUNT(*)::int FROM trail_report_confirmations
-          WHERE report_id = ${trailReportsTable.id} AND type = 'still_present'
-        )`,
-        notPresentCount: sql<number>`(
-          SELECT COUNT(*)::int FROM trail_report_confirmations
-          WHERE report_id = ${trailReportsTable.id} AND type = 'not_present'
-        )`,
+        stillPresentCount: sql<number>`COUNT(CASE WHEN ${trailReportConfirmationsTable.type} = 'still_present' THEN 1 END)::int`,
+        notPresentCount: sql<number>`COUNT(CASE WHEN ${trailReportConfirmationsTable.type} = 'not_present' THEN 1 END)::int`,
       })
       .from(trailReportsTable)
+      .leftJoin(trailReportConfirmationsTable, eq(trailReportConfirmationsTable.reportId, trailReportsTable.id))
       .where(eq(trailReportsTable.status, "active"))
+      .groupBy(trailReportsTable.id)
       .orderBy(desc(trailReportsTable.createdAt));
 
+    res.setHeader("Cache-Control", "public, max-age=60, stale-while-revalidate=300");
     res.json(reports);
   } catch (err) {
     req.log.error({ err }, "Error fetching trail reports");
@@ -57,12 +55,11 @@ router.get("/outdoor/reports", async (req, res) => {
   }
 });
 
-// GET /api/outdoor/reports/:id — public (single report with user confirmation)
+// GET /api/outdoor/reports/:id — public (single report)
+// Single LEFT JOIN + conditional COUNT replaces 2 correlated subqueries
 router.get("/outdoor/reports/:id", async (req, res) => {
   const reportId = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id);
   if (isNaN(reportId)) { res.status(400).json({ error: "ID non valido" }); return; }
-
-  const userId = (req.headers.authorization ?? "").replace("Bearer ", "").trim();
 
   try {
     const [report] = await db
@@ -77,17 +74,13 @@ router.get("/outdoor/reports/:id", async (req, res) => {
         locationName: trailReportsTable.locationName,
         status: trailReportsTable.status,
         createdAt: trailReportsTable.createdAt,
-        stillPresentCount: sql<number>`(
-          SELECT COUNT(*)::int FROM trail_report_confirmations
-          WHERE report_id = ${trailReportsTable.id} AND type = 'still_present'
-        )`,
-        notPresentCount: sql<number>`(
-          SELECT COUNT(*)::int FROM trail_report_confirmations
-          WHERE report_id = ${trailReportsTable.id} AND type = 'not_present'
-        )`,
+        stillPresentCount: sql<number>`COUNT(CASE WHEN ${trailReportConfirmationsTable.type} = 'still_present' THEN 1 END)::int`,
+        notPresentCount: sql<number>`COUNT(CASE WHEN ${trailReportConfirmationsTable.type} = 'not_present' THEN 1 END)::int`,
       })
       .from(trailReportsTable)
+      .leftJoin(trailReportConfirmationsTable, eq(trailReportConfirmationsTable.reportId, trailReportsTable.id))
       .where(eq(trailReportsTable.id, reportId))
+      .groupBy(trailReportsTable.id)
       .limit(1);
 
     if (!report) { res.status(404).json({ error: "Segnalazione non trovata" }); return; }
@@ -130,6 +123,7 @@ router.post("/outdoor/reports", requireAuth, async (req, res) => {
 });
 
 // POST /api/outdoor/reports/:id/confirm — auth required
+// Optimized: upsert + conditional UPDATE in one step (no separate COUNT query)
 router.post("/outdoor/reports/:id/confirm", requireAuth, async (req, res) => {
   const userId = (req as AuthenticatedRequest).userId;
   const reportId = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id);
@@ -162,20 +156,17 @@ router.post("/outdoor/reports/:id/confirm", requireAuth, async (req, res) => {
       });
 
     if (parsed.data.type === "not_present") {
-      const [countResult] = await db
-        .select({ count: sql<number>`COUNT(*)::int` })
-        .from(trailReportConfirmationsTable)
+      // Merge count check + update into one query: no separate SELECT COUNT needed
+      await db
+        .update(trailReportsTable)
+        .set({ status: "archived", archivedAt: new Date(), archivedReason: "resolved" })
         .where(and(
-          eq(trailReportConfirmationsTable.reportId, reportId),
-          eq(trailReportConfirmationsTable.type, "not_present"),
+          eq(trailReportsTable.id, reportId),
+          sql`(
+            SELECT COUNT(*)::int FROM trail_report_confirmations
+            WHERE report_id = ${reportId} AND type = 'not_present'
+          ) >= 3`,
         ));
-
-      if ((countResult?.count ?? 0) >= 3) {
-        await db
-          .update(trailReportsTable)
-          .set({ status: "archived", archivedAt: new Date(), archivedReason: "resolved" })
-          .where(eq(trailReportsTable.id, reportId));
-      }
     }
 
     res.json({ success: true });
@@ -211,7 +202,8 @@ router.delete("/outdoor/reports/:id", requireAuth, async (req, res) => {
   }
 });
 
-// DELETE /api/outdoor/reports/:id/admin — admin only (remove fake reports)
+// DELETE /api/outdoor/reports/:id/admin — admin only
+// Optimized: no preliminary SELECT — RETURNING on DELETE handles 404
 router.delete("/outdoor/reports/:id/admin", requireAuth, async (req, res) => {
   const userId = (req as AuthenticatedRequest).userId;
   const reportId = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id);
@@ -220,16 +212,13 @@ router.delete("/outdoor/reports/:id/admin", requireAuth, async (req, res) => {
   try {
     if (!isAdmin(userId)) { res.status(403).json({ error: "Non autorizzato" }); return; }
 
-    const [report] = await db
-      .select({ id: trailReportsTable.id })
-      .from(trailReportsTable)
-      .where(eq(trailReportsTable.id, reportId))
-      .limit(1);
-
-    if (!report) { res.status(404).json({ error: "Segnalazione non trovata" }); return; }
-
     await db.delete(trailReportConfirmationsTable).where(eq(trailReportConfirmationsTable.reportId, reportId));
-    await db.delete(trailReportsTable).where(eq(trailReportsTable.id, reportId));
+    const [deleted] = await db
+      .delete(trailReportsTable)
+      .where(eq(trailReportsTable.id, reportId))
+      .returning({ id: trailReportsTable.id });
+
+    if (!deleted) { res.status(404).json({ error: "Segnalazione non trovata" }); return; }
 
     res.json({ success: true });
   } catch (err) {

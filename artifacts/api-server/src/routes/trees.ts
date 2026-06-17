@@ -124,6 +124,7 @@ router.get("/trees/feed-meta", async (req, res) => {
     const latestUpd = new Date(latestUpdate).getTime();
     const lastUpdatedAt = new Date(Math.max(latestTree, latestUpd)).toISOString();
 
+    res.setHeader("Cache-Control", "public, max-age=30, stale-while-revalidate=60");
     res.json({ total: Number(treeAgg.cnt), lastUpdatedAt });
   } catch (err) {
     req.log.error({ err }, "Error fetching feed meta");

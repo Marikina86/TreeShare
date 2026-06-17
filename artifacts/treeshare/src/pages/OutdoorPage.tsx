@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Layout from "@/components/Layout";
 import { useAuth, useUser } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
@@ -476,29 +477,26 @@ export default function OutdoorPage() {
   const { user } = useUser();
   const { getToken } = useAuth();
   const { toast } = useToast();
-  const [reports, setReports] = useState<TrailReport[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [showCreate, setShowCreate] = useState(false);
   const [filterType, setFilterType] = useState<ReportType | "all">("all");
   const userConfirmations = useRef<Map<number, "still_present" | "not_present">>(new Map());
 
-  const fetchReports = useCallback(async () => {
-    try {
-      const res = await fetch("/api/outdoor/reports");
-      if (res.ok) {
-        const data: TrailReport[] = await res.json();
-        setReports(data.map((r) => ({
-          ...r,
-          userConfirmation: userConfirmations.current.get(r.id) ?? null,
-        })));
-      }
-    } catch {
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  type RawReport = Omit<TrailReport, "userConfirmation">;
 
-  useEffect(() => { fetchReports(); }, [fetchReports]);
+  const { data: rawReports = [], isLoading: loading } = useQuery<RawReport[]>({
+    queryKey: ["trail-reports"],
+    queryFn: async () => {
+      const res = await fetch("/api/outdoor/reports");
+      if (!res.ok) throw new Error("fetch failed");
+      return res.json();
+    },
+  });
+
+  const reports = useMemo(
+    () => rawReports.map((r) => ({ ...r, userConfirmation: userConfirmations.current.get(r.id) ?? null })),
+    [rawReports],
+  );
 
   const handleConfirm = async (id: number, type: "still_present" | "not_present") => {
     try {
@@ -510,27 +508,23 @@ export default function OutdoorPage() {
       });
       if (!res.ok) throw new Error();
 
+      const prev_conf = userConfirmations.current.get(id);
       userConfirmations.current.set(id, type);
-      setReports((prev) =>
-        prev.map((r) => {
-          if (r.id !== id) return r;
-          const prev_conf = r.userConfirmation;
-          const wasStill = prev_conf === "still_present";
-          const wasNot   = prev_conf === "not_present";
-          return {
-            ...r,
-            userConfirmation: type,
-            stillPresentCount: r.stillPresentCount + (type === "still_present" ? 1 : 0) - (wasStill ? 1 : 0),
-            notPresentCount:   r.notPresentCount   + (type === "not_present"   ? 1 : 0) - (wasNot   ? 1 : 0),
-          };
-        }).filter((r) => {
-          if (type === "not_present" && r.id === id) {
-            const updated = userConfirmations.current.get(id);
-            if (updated === "not_present" && r.notPresentCount >= 3) return false;
-          }
-          return true;
-        }),
-      );
+
+      queryClient.setQueryData<RawReport[]>(["trail-reports"], (prev = []) => {
+        const wasStill = prev_conf === "still_present";
+        const wasNot   = prev_conf === "not_present";
+        return prev
+          .map((r) => {
+            if (r.id !== id) return r;
+            return {
+              ...r,
+              stillPresentCount: r.stillPresentCount + (type === "still_present" ? 1 : 0) - (wasStill ? 1 : 0),
+              notPresentCount:   r.notPresentCount   + (type === "not_present"   ? 1 : 0) - (wasNot   ? 1 : 0),
+            };
+          })
+          .filter((r) => !(r.id === id && type === "not_present" && r.notPresentCount >= 3));
+      });
 
       const msg = type === "still_present" ? "Confermato: ancora presente" : "Grazie! Segnalato come risolto";
       toast({ title: msg });
@@ -547,7 +541,7 @@ export default function OutdoorPage() {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
       if (!res.ok) throw new Error();
-      setReports((prev) => prev.filter((r) => r.id !== id));
+      queryClient.setQueryData<RawReport[]>(["trail-reports"], (prev = []) => prev.filter((r) => r.id !== id));
       toast({ title: "Segnalazione eliminata" });
     } catch {
       toast({ title: "Errore durante l'eliminazione", variant: "destructive" });
@@ -660,7 +654,7 @@ export default function OutdoorPage() {
       {showCreate && (
         <CreateReportModal
           onClose={() => setShowCreate(false)}
-          onCreated={() => { setShowCreate(false); fetchReports(); }}
+          onCreated={() => { setShowCreate(false); queryClient.invalidateQueries({ queryKey: ["trail-reports"] }); }}
           getToken={getToken}
         />
       )}
