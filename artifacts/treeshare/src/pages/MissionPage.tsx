@@ -9,6 +9,7 @@ const content: Record<Lang, {
   p2: string;
   p3: string;
   p4: string;
+  p5: string;
   closing: string;
   join: string;
   learn: string;
@@ -20,6 +21,7 @@ const content: Record<Lang, {
     p2: "La nostra missione è promuovere la sensibilità ambientale attraverso l'azione concreta. Crediamo che documentare e condividere la crescita di alberi e piante aiuti a creare un legame più profondo con la natura e renda visibile l'impatto positivo che ognuno di noi può avere sul territorio.",
     p3: "Per questo abbiamo creato una piattaforma che permette a persone, famiglie, scuole, associazioni e aziende di registrare le proprie piantumazioni, monitorarle nel tempo e contribuire a una mappa collettiva del verde. Ogni foto, ogni aggiornamento e ogni posizione condivisa raccontano una storia di cura, responsabilità e impegno verso l'ambiente.",
     p4: "TreeShare non è solo uno strumento di monitoraggio: è una community che vuole trasformare piccoli gesti individuali in un movimento globale per la sostenibilità, la biodiversità e la tutela del pianeta.",
+    p5: "Prendersi cura del territorio significa anche saperlo ascoltare. Con le Segnalazioni Territoriali, ogni utente può contribuire segnalando alberi caduti, frane, sentieri danneggiati, rifiuti abbandonati, scarichi abusivi e altri problemi riscontrati durante le proprie attività all'aperto. Aggiungendo una foto e la posizione GPS, ogni segnalazione diventa un'informazione concreta e condivisa che aiuta la community a proteggere i luoghi che ama.",
     closing: "Un albero alla volta, una storia alla volta, un futuro più verde per tutti.",
     join: "Unisciti a TreeShare",
     learn: "Scopri di più",
@@ -31,6 +33,7 @@ const content: Record<Lang, {
     p2: "Our mission is to promote environmental awareness through concrete action. We believe that documenting and sharing the growth of trees and plants helps create a deeper connection with nature and makes visible the positive impact each of us can have on our surroundings.",
     p3: "That is why we built a platform that allows individuals, families, schools, associations and businesses to record their plantings, monitor them over time and contribute to a collective map of greenery. Every photo, every update and every shared location tells a story of care, responsibility and commitment to the environment.",
     p4: "TreeShare is more than a monitoring tool: it is a community that wants to transform small individual actions into a global movement for sustainability, biodiversity and the protection of our planet.",
+    p5: "Caring for the land also means knowing how to listen to it. With Territory Reports, every user can contribute by reporting fallen trees, landslides, damaged trails, abandoned waste, illegal dumping and other issues encountered during outdoor activities. By adding a photo and GPS location, each report becomes concrete, shared information that helps the community protect the places it loves.",
     closing: "One tree at a time, one story at a time, a greener future for everyone.",
     join: "Join TreeShare",
     learn: "Learn more",
@@ -42,6 +45,7 @@ const content: Record<Lang, {
     p2: "Notre mission est de promouvoir la sensibilité environnementale par l'action concrète. Nous croyons que documenter et partager la croissance des arbres et des plantes aide à créer un lien plus profond avec la nature et rend visible l'impact positif que chacun de nous peut avoir sur son territoire.",
     p3: "C'est pourquoi nous avons créé une plateforme qui permet aux particuliers, aux familles, aux écoles, aux associations et aux entreprises d'enregistrer leurs plantations, de les suivre dans le temps et de contribuer à une carte collective du vert. Chaque photo, chaque mise à jour et chaque position partagée raconte une histoire de soin, de responsabilité et d'engagement envers l'environnement.",
     p4: "TreeShare n'est pas seulement un outil de suivi : c'est une communauté qui veut transformer de petits gestes individuels en un mouvement mondial pour la durabilité, la biodiversité et la protection de la planète.",
+    p5: "Prendre soin du territoire, c'est aussi savoir l'écouter. Grâce aux Signalements Territoriaux, chaque utilisateur peut contribuer en signalant des arbres tombés, des glissements de terrain, des sentiers endommagés, des déchets abandonnés, des déversements illégaux et d'autres problèmes rencontrés lors d'activités en plein air. En ajoutant une photo et une position GPS, chaque signalement devient une information concrète et partagée qui aide la communauté à protéger les lieux qu'elle aime.",
     closing: "Un arbre à la fois, une histoire à la fois, un avenir plus vert pour tous.",
     join: "Rejoindre TreeShare",
     learn: "En savoir plus",
@@ -53,6 +57,7 @@ const content: Record<Lang, {
     p2: "Nossa missão é promover a sensibilidade ambiental por meio de ações concretas. Acreditamos que documentar e compartilhar o crescimento de árvores e plantas ajuda a criar uma ligação mais profunda com a natureza e torna visível o impacto positivo que cada um de nós pode ter no território.",
     p3: "Por isso criamos uma plataforma que permite a pessoas, famílias, escolas, associações e empresas registrar suas plantações, acompanhá-las ao longo do tempo e contribuir para um mapa coletivo do verde. Cada foto, cada atualização e cada posição compartilhada contam uma história de cuidado, responsabilidade e compromisso com o meio ambiente.",
     p4: "O TreeShare não é apenas uma ferramenta de monitoramento: é uma comunidade que quer transformar pequenos gestos individuais em um movimento global pela sustentabilidade, biodiversidade e proteção do planeta.",
+    p5: "Cuidar do território significa também saber ouvi-lo. Com as Denúncias Territoriais, cada utilizador pode contribuir relatando árvores caídas, deslizamentos, trilhas danificadas, resíduos abandonados, descargas ilegais e outros problemas encontrados durante atividades ao ar livre. Ao adicionar uma foto e a posição GPS, cada denúncia se torna uma informação concreta e partilhada que ajuda a comunidade a proteger os lugares que ama.",
     closing: "Uma árvore de cada vez, uma história de cada vez, um futuro mais verde para todos.",
     join: "Junte-se ao TreeShare",
     learn: "Saiba mais",
@@ -64,6 +69,7 @@ const content: Record<Lang, {
     p2: "Nuestra misión es promover la sensibilidad ambiental a través de la acción concreta. Creemos que documentar y compartir el crecimiento de árboles y plantas ayuda a crear un vínculo más profundo con la naturaleza y hace visible el impacto positivo que cada uno de nosotros puede tener en el territorio.",
     p3: "Por eso hemos creado una plataforma que permite a personas, familias, escuelas, asociaciones y empresas registrar sus plantaciones, monitorearlas a lo largo del tiempo y contribuir a un mapa colectivo del verde. Cada foto, cada actualización y cada posición compartida cuentan una historia de cuidado, responsabilidad y compromiso con el medio ambiente.",
     p4: "TreeShare no es solo una herramienta de seguimiento: es una comunidad que quiere transformar pequeños gestos individuales en un movimiento global por la sostenibilidad, la biodiversidad y la protección del planeta.",
+    p5: "Cuidar el territorio también significa saber escucharlo. Con las Denuncias Territoriales, cada usuario puede contribuir reportando árboles caídos, desprendimientos, senderos dañados, residuos abandonados, vertidos ilegales y otros problemas encontrados durante actividades al aire libre. Al añadir una foto y la posición GPS, cada denuncia se convierte en información concreta y compartida que ayuda a la comunidad a proteger los lugares que ama.",
     closing: "Un árbol a la vez, una historia a la vez, un futuro más verde para todos.",
     join: "Únete a TreeShare",
     learn: "Descubrir más",
@@ -75,6 +81,7 @@ const content: Record<Lang, {
     p2: "私たちのミッションは、具体的な行動を通じて環境への感受性を育てることです。木や植物の成長を記録し共有することで、自然とのより深いつながりが生まれ、私たち一人ひとりが地域に与えられるポジティブな影響が可視化されると信じています。",
     p3: "そのために、個人・家族・学校・団体・企業が自分たちの植樹を記録し、経過を追跡し、緑の集合マップに貢献できるプラットフォームを作りました。すべての写真、すべての更新情報、すべての共有位置情報が、環境への配慮・責任・取り組みの物語を語ります。",
     p4: "TreeShareは単なる監視ツールではありません。個人の小さな行動を、持続可能性・生物多様性・地球保護のためのグローバルムーブメントへと変えたいコミュニティです。",
+    p5: "地域を大切にするということは、地域の声に耳を傾けることでもあります。テリトリーレポート機能を使えば、倒木、地すべり、損傷した登山道、不法投棄、違法排水など、アウトドア活動中に見つけた問題を報告できます。写真とGPS位置情報を添えることで、各レポートはコミュニティ全体で共有される具体的な情報となり、みんなが愛する場所を守る力になります。",
     closing: "一本の木から、一つのストーリーから、みんなのためのより緑豊かな未来へ。",
     join: "TreeShareに参加する",
     learn: "もっと見る",
@@ -86,6 +93,7 @@ const content: Record<Lang, {
     p2: "我们的使命是通过具体行动促进环保意识。我们相信，记录和分享树木与植物的生长，有助于人们与自然建立更深厚的联系，并使每个人对环境的积极影响变得可见。",
     p3: "因此，我们创建了一个平台，让个人、家庭、学校、协会和企业能够记录自己的种植情况，随时间追踪，并为集体绿化地图做出贡献。每一张照片、每一次更新、每一个共享位置，都诉说着一个关于关爱、责任和环保承诺的故事。",
     p4: "TreeShare 不仅仅是一个监测工具：它是一个社区，希望将个人的小小行动转化为全球可持续发展、生物多样性和地球保护运动。",
+    p5: "关爱土地，也意味着倾听土地的声音。通过领土举报功能，每位用户都可以举报倒树、山体滑坡、受损小径、乱丢垃圾、非法排放等户外活动中发现的问题。添加照片和GPS位置后，每条举报都将成为全社区共享的具体信息，帮助大家守护共同热爱的地方。",
     closing: "一棵树，一个故事，为所有人创造更绿色的未来。",
     join: "加入TreeShare",
     learn: "了解更多",
@@ -119,6 +127,7 @@ export default function MissionPage() {
           <p className="text-base leading-relaxed text-muted-foreground">{c.p2}</p>
           <p className="text-base leading-relaxed text-muted-foreground">{c.p3}</p>
           <p className="text-base leading-relaxed text-muted-foreground">{c.p4}</p>
+          <p className="text-base leading-relaxed text-muted-foreground">{c.p5}</p>
           <p className="text-base leading-relaxed font-medium text-foreground">{c.closing}</p>
         </div>
 
