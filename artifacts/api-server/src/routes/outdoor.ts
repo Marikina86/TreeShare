@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { db } from "@workspace/db";
-import { trailReportsTable, trailReportConfirmationsTable } from "@workspace/db";
+import { trailReportsTable, trailReportConfirmationsTable, userNotificationsTable, usersTable } from "@workspace/db";
 import { eq, and, sql, desc, gte, lte } from "drizzle-orm";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth";
 import { isAdmin } from "../middlewares/requireAdmin";
@@ -46,6 +46,7 @@ router.get("/outdoor/reports", async (req, res) => {
       .select({
         id: trailReportsTable.id,
         userId: trailReportsTable.userId,
+        username: usersTable.username,
         type: trailReportsTable.type,
         description: trailReportsTable.description,
         photoUrl: trailReportsTable.photoUrl,
@@ -57,9 +58,10 @@ router.get("/outdoor/reports", async (req, res) => {
         notPresentCount: sql<number>`COUNT(CASE WHEN ${trailReportConfirmationsTable.type} = 'not_present' THEN 1 END)::int`,
       })
       .from(trailReportsTable)
+      .leftJoin(usersTable, eq(usersTable.clerkUserId, trailReportsTable.userId))
       .leftJoin(trailReportConfirmationsTable, eq(trailReportConfirmationsTable.reportId, trailReportsTable.id))
       .where(whereClause)
-      .groupBy(trailReportsTable.id)
+      .groupBy(trailReportsTable.id, usersTable.username)
       .orderBy(desc(trailReportsTable.createdAt));
 
     res.setHeader("Cache-Control", "public, max-age=60, stale-while-revalidate=300");
@@ -218,7 +220,7 @@ router.delete("/outdoor/reports/:id", requireAuth, async (req, res) => {
 });
 
 // DELETE /api/outdoor/reports/:id/admin — admin only
-// Optimized: no preliminary SELECT — RETURNING on DELETE handles 404
+// Deletes the report, sends an in-app notification to the author for T&C violation.
 router.delete("/outdoor/reports/:id/admin", requireAuth, async (req, res) => {
   const userId = (req as AuthenticatedRequest).userId;
   const reportId = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id);
@@ -227,13 +229,37 @@ router.delete("/outdoor/reports/:id/admin", requireAuth, async (req, res) => {
   try {
     if (!isAdmin(userId)) { res.status(403).json({ error: "Non autorizzato" }); return; }
 
-    await db.delete(trailReportConfirmationsTable).where(eq(trailReportConfirmationsTable.reportId, reportId));
-    const [deleted] = await db
-      .delete(trailReportsTable)
+    // Fetch the report author before deletion so we can notify them
+    const [report] = await db
+      .select({ id: trailReportsTable.id, userId: trailReportsTable.userId, type: trailReportsTable.type })
+      .from(trailReportsTable)
       .where(eq(trailReportsTable.id, reportId))
-      .returning({ id: trailReportsTable.id });
+      .limit(1);
 
-    if (!deleted) { res.status(404).json({ error: "Segnalazione non trovata" }); return; }
+    if (!report) { res.status(404).json({ error: "Segnalazione non trovata" }); return; }
+
+    const typeLabels: Record<string, string> = {
+      fallen_tree: "Albero caduto",
+      landslide: "Frana",
+      path_interrupted: "Sentiero interrotto",
+      bridge_damaged: "Ponte danneggiato",
+      garbage: "Rifiuti / Discarica",
+    };
+    const typeLabel = typeLabels[report.type] ?? report.type;
+
+    // Delete confirmations first, then the report
+    await db.delete(trailReportConfirmationsTable).where(eq(trailReportConfirmationsTable.reportId, reportId));
+    await db.delete(trailReportsTable).where(eq(trailReportsTable.id, reportId));
+
+    // Send in-app notification to the report author
+    await db.insert(userNotificationsTable).values({
+      userId: report.userId,
+      title: "Segnalazione rimossa",
+      message: `La tua segnalazione outdoor "${typeLabel}" è stata rimossa dall'amministratore per violazione dei Termini e Condizioni.`,
+      type: "outdoor_report_removed",
+      relatedId: reportId,
+      isRead: false,
+    });
 
     res.json({ success: true });
   } catch (err) {

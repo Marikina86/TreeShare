@@ -377,6 +377,7 @@ export default function AdminPage() {
   interface AdminTrailReport {
     id: number;
     userId: string;
+    username: string | null;
     type: string;
     description: string | null;
     photoUrl: string | null;
@@ -1093,8 +1094,8 @@ export default function AdminPage() {
     try {
       const res = await authFetch("/api/outdoor/reports");
       if (res.ok) {
-        const data = await res.json() as { reports: AdminTrailReport[] };
-        setOutdoorReports(data.reports ?? []);
+        const data = await res.json();
+        setOutdoorReports(Array.isArray(data) ? data : []);
       }
     } catch { toast({ title: T.errors.load, variant: "destructive" }); }
     finally { setOutdoorLoading(false); }
@@ -3548,6 +3549,11 @@ export default function AdminPage() {
                               #{report.id}
                             </span>
                           </div>
+                          {report.username && (
+                            <p className="text-xs text-emerald-600 dark:text-emerald-400 font-medium">
+                              👤 @{report.username}
+                            </p>
+                          )}
                           <p className="text-xs text-muted-foreground">
                             📍 {report.latitude.toFixed(4)}, {report.longitude.toFixed(4)}
                             {report.locationName && ` — ${report.locationName}`}
