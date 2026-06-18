@@ -11,8 +11,8 @@ export const TERMS_HTML = `<p>Benvenuto/a su TreeShare, una piattaforma social d
 <li>Visualizzare alberi su mappa geolocalizzata</li>
 <li>Partecipare e condividere eventi ambientali</li>
 <li>Accedere a un marketplace per servizi, prodotti e iniziative ambientali</li>
-<li>Promuovere e aderire a campagne (secondo le condizioni di cui all'art. 10)</li>
-<li>Adottare alberi (secondo le condizioni di cui all'art. 11)</li>
+<li>Promuovere e aderire a campagne (secondo le condizioni di cui all'art. 11)</li>
+<li>Adottare alberi (secondo le condizioni di cui all'art. 12)</li>
 <li>Ricevere notifiche (accessi, consigli, aggiornamenti)</li>
 </ul>
 </section>
@@ -52,7 +52,24 @@ export const TERMS_HTML = `<p>Benvenuto/a su TreeShare, una piattaforma social d
 </section>
 
 <section>
-<h2>6. Condivisione su servizi esterni e responsabilità</h2>
+<h2>6. Moderazione dei contenuti e diritto di rimozione</h2>
+<p>Al fine di garantire il corretto funzionamento della Piattaforma, la sicurezza degli utenti e il rispetto delle presenti Condizioni d'Uso, il Titolare si riserva il diritto, a propria esclusiva discrezione, di esaminare, limitare, oscurare, sospendere o rimuovere qualsiasi contenuto pubblicato dagli utenti che risulti, o sia ragionevolmente ritenuto:</p>
+<ul>
+<li>contrario alle presenti Condizioni d'Uso;</li>
+<li>illecito o in violazione di norme di legge;</li>
+<li>falso, ingannevole o fraudolento;</li>
+<li>offensivo, diffamatorio, discriminatorio o lesivo dei diritti di terzi;</li>
+<li>non pertinente alle finalità della Piattaforma;</li>
+<li>duplicato, spam o pubblicato con finalità promozionali non autorizzate;</li>
+<li>idoneo a compromettere il corretto utilizzo della Piattaforma o l'esperienza degli altri utenti.</li>
+</ul>
+<p>Il Titolare potrà procedere alla rimozione dei contenuti, alla sospensione temporanea o alla disattivazione dell'account dell'utente responsabile senza obbligo di preavviso, qualora ritenga che il comportamento dell'utente o il contenuto pubblicato possa arrecare danno alla Piattaforma, agli altri utenti o a terzi.</p>
+<p>La rimozione di contenuti o l'adozione di misure nei confronti di un account non comporta alcun diritto a indennizzi, rimborsi o risarcimenti da parte dell'utente interessato.</p>
+<p>Il Titolare non è tenuto a monitorare preventivamente tutti i contenuti pubblicati dagli utenti, ma si riserva la facoltà di intervenire in qualsiasi momento qualora venga a conoscenza di possibili violazioni delle presenti Condizioni d'Uso.</p>
+</section>
+
+<section>
+<h2>7. Condivisione su servizi esterni e responsabilità</h2>
 <h3>Condivisione su piattaforme di terze parti</h3>
 <p>La piattaforma consente la condivisione di contenuti su servizi di terze parti (es. Facebook) <strong>esclusivamente su iniziativa e richiesta dell'utente</strong>.</p>
 <h3>Responsabilità dell'utente nella condivisione</h3>
@@ -64,17 +81,17 @@ export const TERMS_HTML = `<p>Benvenuto/a su TreeShare, una piattaforma social d
 </section>
 
 <section>
-<h2>7. Verifica dei contenuti (AI)</h2>
+<h2>8. Verifica dei contenuti (AI)</h2>
 <p>La piattaforma può utilizzare sistemi di intelligenza artificiale per verificare autenticità e conformità dei contenuti.</p>
 </section>
 
 <section>
-<h2>8. Geolocalizzazione</h2>
+<h2>9. Geolocalizzazione</h2>
 <p>Alcune funzionalità utilizzano dati di geolocalizzazione. L'utente è responsabile della correttezza dei dati inseriti.</p>
 </section>
 
 <section>
-<h2>9. Pagamenti e servizi di terze parti</h2>
+<h2>10. Pagamenti e servizi di terze parti</h2>
 <p>I pagamenti sono gestiti da provider esterni (es. Stripe, PayPal).</p>
 <ul>
 <li>TreeShare non conserva dati completi di pagamento</li>
@@ -84,17 +101,17 @@ export const TERMS_HTML = `<p>Benvenuto/a su TreeShare, una piattaforma social d
 </section>
 
 <section>
-<h2>10. Campagne (utenti con Partita IVA)</h2>
+<h2>11. Campagne (utenti con Partita IVA)</h2>
 <p>La creazione di campagne è riservata a utenti con Partita IVA. L'utente è responsabile di contenuti, gestione economica e conformità normativa. TreeShare non è parte delle transazioni.</p>
 </section>
 
 <section>
-<h2>11. Adozione alberi (utenti con Partita IVA)</h2>
+<h2>12. Adozione alberi (utenti con Partita IVA)</h2>
 <p>Solo utenti con Partita IVA possono proporre alberi in adozione. Il proponente è responsabile dell'esistenza degli alberi, delle informazioni fornite e della gestione dell'adozione. TreeShare è solo intermediario tecnologico.</p>
 </section>
 
 <section>
-<h2>12. Limitazione responsabilità su prodotti</h2>
+<h2>13. Limitazione responsabilità su prodotti</h2>
 <ul>
 <li>TreeShare non è responsabile per spedizione o qualità dei prodotti</li>
 <li>I beni alimentari non sono rimborsabili salvo difetti (rotti/scaduti)</li>
@@ -103,12 +120,12 @@ export const TERMS_HTML = `<p>Benvenuto/a su TreeShare, una piattaforma social d
 </section>
 
 <section>
-<h2>13. Limitazione responsabilità su eventi e campagne</h2>
+<h2>14. Limitazione responsabilità su eventi e campagne</h2>
 <p>TreeShare non organizza né controlla eventi o campagne. La partecipazione avviene sotto responsabilità dell'utente. TreeShare non è responsabile per danni, incidenti o controversie.</p>
 </section>
 
 <section>
-<h2>14. Diritto di recesso</h2>
+<h2>15. Diritto di recesso</h2>
 <p>Ai sensi della normativa UE:</p>
 <ul>
 <li>Il diritto di recesso può non applicarsi a contenuti digitali già fruiti</li>
@@ -117,67 +134,67 @@ export const TERMS_HTML = `<p>Benvenuto/a su TreeShare, una piattaforma social d
 </section>
 
 <section>
-<h2>15. Servizio fornito "così com'è"</h2>
+<h2>16. Servizio fornito "così com'è"</h2>
 <p>La piattaforma è fornita <strong>"così com'è"</strong> senza garanzie di continuità, affidabilità o assenza di errori.</p>
 </section>
 
 <section>
-<h2>16. Sospensione e interruzione del servizio</h2>
+<h2>17. Sospensione e interruzione del servizio</h2>
 <p>TreeShare può sospendere account o interrompere il servizio in qualsiasi momento, senza obbligo di indennizzo.</p>
 </section>
 
 <section>
-<h2>17. Manleva</h2>
+<h2>18. Manleva</h2>
 <p>L'utente si impegna a manlevare TreeShare da qualsiasi responsabilità derivante da uso improprio della piattaforma, violazioni di legge, e contenuti pubblicati o condivisi su piattaforme esterne.</p>
 </section>
 
 <section>
-<h2>18. Dati e responsabilità utenti business</h2>
+<h2>19. Dati e responsabilità utenti business</h2>
 <p>Gli utenti con Partita IVA agiscono come titolari autonomi dei dati trattati nell'ambito delle loro attività.</p>
 </section>
 
 <section>
-<h2>19. Trasferimento dati</h2>
+<h2>20. Trasferimento dati</h2>
 <p>Alcuni servizi possono comportare trasferimento di dati fuori dall'Unione Europea.</p>
 </section>
 
 <section>
-<h2>20. Proprietà intellettuale</h2>
+<h2>21. Proprietà intellettuale</h2>
 <p>Tutti i diritti sulla piattaforma appartengono a TreeShareapp.</p>
 </section>
 
 <section>
-<h2>21. Modello di business</h2>
+<h2>22. Modello di business</h2>
 <p>La piattaforma può generare ricavi attraverso servizi a pagamento, commissioni sulle transazioni e attività promozionali con soggetti terzi selezionati, nel rispetto della normativa applicabile.</p>
 </section>
 
 <section>
-<h2>22. Limitazione sull'uso dei dati</h2>
+<h2>23. Limitazione sull'uso dei dati</h2>
 <p>I dati personali degli utenti sono trattati in conformità al <strong>GDPR</strong> e alle disposizioni della Privacy Policy di TreeShare. I dati non vengono ceduti a terzi in modo incompatibile con le finalità ivi indicate. Per maggiori informazioni consulta la <a href="/privacy">Privacy Policy</a>.</p>
 </section>
 
 <section>
-<h2>23. Classifiche, ranking e indicatori ambientali</h2>
+<h2>24. Classifiche, ranking e indicatori ambientali</h2>
 <p>La piattaforma genera classifiche e statistiche basate sulle attività degli utenti (es. classifica CO₂ per comuni). Tali classifiche hanno finalità informative ed educative, si basano su modelli di calcolo stimati e non certificati. TreeShare non garantisce l'accuratezza scientifica dei dati ambientali né la loro utilizzabilità per certificazioni o crediti di carbonio.</p>
 </section>
 
 <section>
-<h2>24. Dichiarazioni ambientali (Green Claims)</h2>
+<h2>25. Dichiarazioni ambientali (Green Claims)</h2>
 <p>Le informazioni e metriche ambientali hanno finalità informative e divulgative. Non costituiscono dichiarazioni ambientali certificate e non devono essere utilizzate per finalità commerciali o legali senza adeguata verifica indipendente. L'utente è l'unico responsabile dell'eventuale utilizzo di tali informazioni al di fuori della piattaforma.</p>
 </section>
 
 <section>
-<h2>25. Modifiche ai Termini</h2>
+<h2>26. Modifiche ai Termini</h2>
 <p>I Termini possono essere modificati in qualsiasi momento.</p>
 </section>
 
 <section>
-<h2>26. Legge applicabile</h2>
+<h2>27. Legge applicabile</h2>
 <p>Legge italiana – Foro competente: Cuneo.</p>
 </section>
 
 <section>
-<h2>27. Contatti</h2>
+<h2>28. Contatti</h2>
 <p>Email: <a href="mailto:treeshare@treeshareapp.com">treeshare@treeshareapp.com</a></p>
 </section>`;
 
@@ -433,4 +450,4 @@ export const COOKIE_HTML = `<p>La presente Cookie Policy descrive come TreeShare
 </section>`;
 
 /** The initial version string used for the seed */
-export const SEED_VERSION = "2026-05-02";
+export const SEED_VERSION = "2026-06-18";
