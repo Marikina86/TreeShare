@@ -131,36 +131,43 @@ export default function LandingPage() {
       { title: "Documenta ogni pianta", desc: "Condividi foto degli alberi che pianti con specie, posizione e note. Guarda come crescono nel tempo." },
       { title: "Mappa mondiale", desc: "Vedi ogni albero su una mappa interattiva mondiale con coordinate GPS verificate nel tempo." },
       { title: "Community", desc: "Connettiti con piantatori da tutto il mondo. Segui la crescita, condividi scoperte, costruisci un pianeta più verde. Contribuisci concretamente alla riduzione del CO2." },
+      { title: "Ambiente sicuro", desc: "I contenuti pubblicati vengono monitorati per garantire una community autentica e rispettosa. Contenuti non conformi vengono rimossi per proteggere tutti i membri." },
     ],
     en: [
       { title: "Document every tree", desc: "Share photos of trees you plant with species, location, and notes. Watch them grow over time." },
       { title: "World map", desc: "See every tree on an interactive world map with GPS-precise coordinates verified over time." },
       { title: "Community", desc: "Connect with planters around the world. Follow growth, share discoveries, build a greener planet. Contribute concretely to reducing CO2." },
+      { title: "Safe environment", desc: "Published content is monitored to ensure an authentic and respectful community. Non-compliant content is removed to protect all members." },
     ],
     fr: [
       { title: "Documentez chaque plante", desc: "Partagez des photos des arbres que vous plantez avec espèce, position et notes. Regardez-les pousser dans le temps." },
       { title: "Carte mondiale", desc: "Voyez chaque arbre sur une carte interactive mondiale avec des coordonnées GPS vérifiées dans le temps." },
       { title: "Communauté", desc: "Connectez-vous avec des planteurs du monde entier. Suivez la croissance, partagez des découvertes, construisez une planète plus verte." },
+      { title: "Environnement sûr", desc: "Les contenus publiés sont surveillés pour garantir une communauté authentique et respectueuse. Les contenus non conformes sont supprimés pour protéger tous les membres." },
     ],
     pt: [
       { title: "Documente cada planta", desc: "Compartilhe fotos das árvores que você planta com espécie, localização e notas. Veja como crescem ao longo do tempo." },
       { title: "Mapa mundial", desc: "Veja cada árvore em um mapa interativo mundial com coordenadas GPS verificadas ao longo do tempo." },
       { title: "Comunidade", desc: "Conecte-se com plantadores de todo o mundo. Acompanhe o crescimento, compartilhe descobertas, construa um planeta mais verde." },
+      { title: "Ambiente seguro", desc: "Os conteúdos publicados são monitorados para garantir uma comunidade autêntica e respeitosa. Conteúdos inadequados são removidos para proteger todos os membros." },
     ],
     es: [
       { title: "Documenta cada planta", desc: "Comparte fotos de los árboles que plantas con especie, ubicación y notas. Mira cómo crecen con el tiempo." },
       { title: "Mapa mundial", desc: "Ve cada árbol en un mapa interativo mundial con coordenadas GPS verificadas a lo largo del tiempo." },
       { title: "Comunidad", desc: "Conéctate con plantadores de todo el mundo. Sigue el crecimiento, comparte descubrimientos, construye un planeta más verde." },
+      { title: "Entorno seguro", desc: "Los contenidos publicados se supervisan para garantizar una comunidad auténtica y respetuosa. El contenido no conforme se elimina para proteger a todos los miembros." },
     ],
     ja: [
       { title: "すべての植物を記録", desc: "植えた木の写真を種類、位置、メモとともに共有しましょう。成長の様子を時系列で見られます。" },
       { title: "ワールドマップ", desc: "時系列で検証されたGPS座標とともに、インタラクティブな世界地図ですべての木を見ることができます。" },
       { title: "コミュニティ", desc: "世界中のプランターとつながりましょう。成長を追い、発見を共有し、より緑豊かな地球を築きましょう。" },
+      { title: "安全な環境", desc: "投稿されたコンテンツは、信頼性と敬意あるコミュニティを保つために監視されています。不適切なコンテンツはすべてのメンバーを守るために削除されます。" },
     ],
     zh: [
       { title: "记录每棵植物", desc: "分享您种下的树木照片，附上树种、位置和备注。见证它们随时间生长。" },
       { title: "世界地图", desc: "在互动世界地图上查看每一棵树，附有经时间验证的精准GPS坐标。" },
       { title: "社区", desc: "与全球种树人相连。跟踪生长、分享发现、共建更绿色的地球。为减少CO2做出实际贡献。" },
+      { title: "安全环境", desc: "发布的内容受到监控，以确保社区真实、友善。不符合规定的内容将被删除，以保护所有成员。" },
     ],
   } as Record<string, { title: string; desc: string }[]>)[lang];
 
@@ -328,7 +335,7 @@ export default function LandingPage() {
 
       {/* Features */}
       <section className="px-6 py-12 bg-muted/40">
-        <div className="max-w-4xl mx-auto grid md:grid-cols-3 gap-8 text-center">
+        <div className="max-w-4xl mx-auto grid sm:grid-cols-2 lg:grid-cols-4 gap-8 text-center">
           {featuresContent.map((feat, i) => (
             <div key={i} className="p-6">
               <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
@@ -348,6 +355,12 @@ export default function LandingPage() {
                   <svg width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" className="text-primary">
                     <circle cx="12" cy="8" r="4"/>
                     <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/>
+                  </svg>
+                )}
+                {i === 3 && (
+                  <svg width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" className="text-primary">
+                    <path d="M12 3L4 7v5c0 5 3.5 9.5 8 11 4.5-1.5 8-6 8-11V7l-8-4z" strokeLinejoin="round"/>
+                    <path d="M9 12l2 2 4-4" strokeLinecap="round" strokeLinejoin="round"/>
                   </svg>
                 )}
               </div>
